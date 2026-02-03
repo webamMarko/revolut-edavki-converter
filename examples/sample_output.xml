@@ -1,0 +1,62 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Envelope xmlns="http://edavki.durs.si/Documents/Schemas/Doh_KDVP_9.xsd">
+  <Header>
+    <taxpayer_id/>
+    <tax_year>2023</tax_year>
+    <report_type>KDVP</report_type>
+  </Header>
+  <Body>
+    <KDVP>
+      <Item>
+        <ItemID>1</ItemID>
+        <Date>2023-06-15</Date>
+        <Description>Coffee Shop</Description>
+        <Amount>-5.50</Amount>
+        <Currency>EUR</Currency>
+        <Type>CARD_PAYMENT</Type>
+      </Item>
+      <Item>
+        <ItemID>2</ItemID>
+        <Date>2023-06-16</Date>
+        <Description>Salary Payment</Description>
+        <Amount>2500.00</Amount>
+        <Currency>EUR</Currency>
+        <Type>TRANSFER</Type>
+      </Item>
+      <Item>
+        <ItemID>3</ItemID>
+        <Date>2023-06-17</Date>
+        <Description>Grocery Store</Description>
+        <Amount>-85.30</Amount>
+        <Currency>EUR</Currency>
+        <Type>CARD_PAYMENT</Type>
+      </Item>
+      <Item>
+        <ItemID>4</ItemID>
+        <Date>2023-06-18</Date>
+        <Description>ATM Withdrawal</Description>
+        <Amount>-100.00</Amount>
+        <Currency>EUR</Currency>
+        <Type>ATM</Type>
+        <Fee>2.50</Fee>
+      </Item>
+      <Item>
+        <ItemID>5</ItemID>
+        <Date>2023-06-19</Date>
+        <Description>Currency Exchange</Description>
+        <Amount>-200.00</Amount>
+        <Currency>EUR</Currency>
+        <Type>EXCHANGE</Type>
+        <Fee>1.00</Fee>
+      </Item>
+      <Item>
+        <ItemID>6</ItemID>
+        <Date>2023-06-20</Date>
+        <Description>Rent Payment</Description>
+        <Amount>-800.00</Amount>
+        <Currency>EUR</Currency>
+        <Type>TRANSFER</Type>
+      </Item>
+    </KDVP>
+  </Body>
+</Envelope>
