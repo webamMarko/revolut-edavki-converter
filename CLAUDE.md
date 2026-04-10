@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Converts Revolut stock/CFD trading CSV exports into eDavki Doh_KDVP XML format for Slovenian capital gains tax reporting, and provides portfolio analytics with daily granularity.
 
-Two asset classes: **stocks** (holding-period-based tax: 25%→0%) and **CFDs** (flat 40% tax). The `--scope stock|cfd|all` flag filters analytics and tax commands by asset class. In "all" mode, CFD tickers are prefixed with `CFD:` to avoid mixing with stock tickers.
+Four asset classes: **stocks** (holding-period-based tax: 25%→0%), **CFDs** (flat 40% tax), **crypto** (holding-period tax like stocks), and **savings** (money market funds with interest income). The `--scope stock|cfd|crypto|savings|all` flag filters analytics and tax commands by asset class. In "all" mode, tickers are prefixed (`CFD:`, `CRYPTO:`, `SAVINGS:`) to avoid collisions.
 
 ## Commands
 
@@ -18,10 +18,11 @@ pip install -r requirements.txt
 python -m src.cli convert input.csv output.xml --year 2023
 
 # Portfolio analytics workflow
-python -m src.cli import file.csv [file2.csv ...]     # auto-detects stock vs CFD format
+python -m src.cli import file.csv [file2.csv ...]     # auto-detects stock/CFD/crypto/savings
 python -m src.cli sync                                 # fetch yfinance prices + FX rates
-python -m src.cli analytics [--scope stock|cfd|all] [--chart]
-python -m src.cli tax --year 2025 [--scope stock|cfd|all] [--include-unrealized]
+python -m src.cli analytics [--scope stock|cfd|crypto|savings|all] [--chart]
+python -m src.cli tax --year 2025 [--scope stock|cfd|crypto|savings|all] [--include-unrealized]
+python -m src.cli report [--scope stock|cfd|crypto|savings|all] [--output file.html]
 python -m src.cli status
 
 # Run tests (not yet implemented)
@@ -44,11 +45,17 @@ The analytics pipeline is: **CLI -> Importer (`importer.py`) -> DB (`db.py`) -> 
 
 - **XML schema**: Follows `Doh_KDVP_9.xsd` with `EDP-Common-1.xsd` namespaces. Each ticker becomes a `KDVPItem` containing a `Securities` element with `Row` entries. Purchases use `F1`-`F4` fields, sales use `F6`/`F7`/`F9`. `F8` is running balance. All prices are converted from USD to EUR using the transaction's FX rate.
 
-- **Asset class detection** (`importer.py`): Auto-detects stock vs CFD format. CFD CSVs have `Symbol` and `Margin` columns; stock CSVs have `Ticker` and `Price per share`. The `asset_class` column in the DB distinguishes them. CFD tickers have `:CFD` suffix stripped on import.
+- **Asset class detection** (`importer.py`): Auto-detects format from column headers. CFD CSVs have `Symbol`+`Margin`; crypto has `Symbol`+`Value` (no `Margin`); savings has `Description` with fund class info (no `Symbol`/`Ticker`); stocks have `Ticker`+`Price per share`. CFD tickers have `:CFD` suffix stripped on import.
 
-- **CFD valuation** (`analytics.py`): CFDs have no yfinance prices. Open positions use `last_known_price_eur` from the most recent trade. In "all" scope, CFD tickers are prefixed `CFD:` to prevent key collisions with stock tickers.
+- **Crypto** (`analytics.py`, `tax.py`): Long-only FIFO. Types: BUY, SELL, Payment (=sell), Receive (=buy), Staking reward, Learn reward. No yfinance prices — uses `last_known_price_eur` from most recent trade. Rewards added at zero cost, recorded as dividends. Net invested = cumulative buys - cumulative sells.
 
-- **Tax rates** (`tax.py`): Stocks use holding-period-based Slovenian rates (25%/20%/15%/10%/0%). CFDs use a flat 40% rate (`CFD_TAX_RATE`). The `asset_class` field on each transaction determines which rate applies.
+- **Savings** (`importer.py`): Revolut savings CSV has three concatenated sections (USD, GBP, EUR) with shifted column positions for the EUR section. Description contains type + fund ISIN. Types: BUY (deposit), SELL (withdrawal), Interest PAID (daily, → dividends), Service Fee (→ fees), Interest Reinvested (offsets corresponding BUY in invested tracking).
+
+- **CFD valuation** (`analytics.py`): CFDs have no yfinance prices. Open positions use `last_known_price_eur` from the most recent trade. In "all" scope, non-stock tickers are prefixed (`CFD:`, `CRYPTO:`, `SAVINGS:`) to prevent key collisions.
+
+- **Tax rates** (`tax.py`): Stocks/crypto/savings use holding-period-based Slovenian rates (25%/20%/15%/10%/0%). CFDs use a flat 40% rate (`CFD_TAX_RATE`). Tax netting: gains/losses are netted within each rate bucket before applying the rate.
+
+- **HTML reports** (`html_report.py`): Self-contained HTML with Chart.js + zoom plugin. In "all" scope, per-class analytics are computed and embedded so the asset class toggle buttons can recombine daily series client-side without server round-trips.
 
 ### Dependencies
 

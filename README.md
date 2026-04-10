@@ -1,134 +1,126 @@
-# Revolut to eDavki Converter
+# Revolut to eDavki Converter & Portfolio Analytics
 
-A Python tool to convert Revolut transaction exports (CSV/Excel) into eDavki-compliant XML format for Slovenian tax reporting.
+A Python tool that converts Revolut transaction exports into eDavki-compliant XML for Slovenian tax reporting, and provides portfolio analytics with interactive HTML reports.
 
 ## Features
 
-- ✅ Parse Revolut CSV and Excel exports
-- ✅ Generate eDavki XML format
-- ✅ Filter transactions by date range
-- ✅ Filter by currency
-- ✅ Filter completed transactions only
-- ✅ Command-line interface
+- **eDavki XML generation** from Revolut CSV/Excel exports (Doh_KDVP format)
+- **Portfolio analytics** with daily granularity — value tracking, CAGR, TWR, max drawdown, benchmark comparison
+- **Slovenian capital gains tax** computation with holding-period-based rates and FIFO matching
+- **Interactive HTML reports** with Chart.js charts, drag-to-zoom, and asset class filtering
+- **Four asset classes**: stocks, CFDs, crypto, and savings accounts — auto-detected on import
+- Filter by date range, currency, asset class scope
 
 ## Installation
 
-1. Clone the repository or download the source code
-2. Install dependencies:
-
 ```bash
+git clone <repo-url>
+cd revolut-edavki-converter
+python -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
 ## Usage
 
-### Basic Usage
+### eDavki XML Conversion
+
+Convert a Revolut stock trading export to eDavki XML:
 
 ```bash
-python -m src.cli input_file.csv output.xml --year 2023
+python -m src.cli convert transactions.csv output.xml --year 2025
+python -m src.cli convert transactions.csv output.xml --year 2025 --start-date 2025-01-01 --end-date 2025-12-31
+python -m src.cli convert transactions.csv output.xml --year 2025 --currency EUR --completed-only
 ```
 
-### With Filters
+### Portfolio Analytics Workflow
 
-Filter by date range:
 ```bash
-python -m src.cli transactions.csv output.xml --year 2023 \
-  --start-date 2023-01-01 \
-  --end-date 2023-12-31
+# 1. Import Revolut exports (auto-detects stock, CFD, crypto, or savings format)
+python -m src.cli import stocks.csv cfd.csv crypto.csv savings.csv
+
+# 2. Fetch historical prices and FX rates from Yahoo Finance
+python -m src.cli sync
+
+# 3. View analytics in the terminal
+python -m src.cli analytics
+python -m src.cli analytics --scope stock --chart
+python -m src.cli analytics --scope crypto --format json --output analytics.json
+
+# 4. Compute tax liability
+python -m src.cli tax --year 2025
+python -m src.cli tax --year 2025 --scope cfd --include-unrealized
+
+# 5. Generate interactive HTML report
+python -m src.cli report --output report.html
+python -m src.cli report --scope savings --output savings.html
+python -m src.cli report --year 2025 --output 2025.html
+
+# Check database status
+python -m src.cli status
 ```
 
-Filter by currency:
-```bash
-python -m src.cli transactions.csv output.xml --year 2023 --currency EUR
-```
+### Asset Class Scopes
 
-Only completed transactions:
-```bash
-python -m src.cli transactions.csv output.xml --year 2023 --completed-only
-```
+Use `--scope` to filter by asset class:
 
-Verbose output:
-```bash
-python -m src.cli transactions.csv output.xml --year 2023 -v
-```
+| Scope | Description |
+|-------|-------------|
+| `stock` | Revolut stock trading (holding-period tax: 25% down to 0%) |
+| `cfd` | CFD trading (flat 40% tax rate) |
+| `crypto` | Cryptocurrency (holding-period tax, same rates as stocks) |
+| `savings` | Savings accounts / money market funds (interest as income) |
+| `all` | All asset classes combined (default) |
 
-### Command-line Options
+### HTML Report
 
-- `input_file` - Path to Revolut export file (CSV or Excel)
-- `output_file` - Path to output eDavki XML file
-- `--year` - Tax year for the report (required)
-- `--start-date` - Filter transactions from this date (YYYY-MM-DD)
-- `--end-date` - Filter transactions until this date (YYYY-MM-DD)
-- `--currency` - Filter transactions by currency (e.g., EUR, USD)
-- `--completed-only` - Include only completed transactions
-- `--verbose, -v` - Verbose output
+The `report` command generates a self-contained HTML file with:
 
-## Revolut Export Format
+- Summary metrics cards (portfolio value, invested, gains, CAGR, drawdown)
+- Interactive portfolio value chart with drag-to-zoom period selection
+- Benchmark comparison chart (S&P 500, NASDAQ, Dow Jones, FTSE 100)
+- Gains breakdown, positions table, tax summary, transaction history
+- **Asset class toggles** (in "all" scope) — click to show/hide asset classes, charts and metrics update live
 
-To export your Revolut transactions:
+## Revolut Export Formats
 
-1. Open the Revolut app
-2. Go to your account statements
-3. Select the date range
-4. Export as CSV or Excel
+The importer auto-detects the format based on column headers:
 
-Expected columns in the export:
-- Type
-- Product
-- Started Date
-- Completed Date
-- Description
-- Amount
-- Fee
-- Currency
-- State
-- Balance
+| Format | Key Columns | How to Export |
+|--------|-------------|---------------|
+| **Stocks** | `Ticker`, `Price per share`, `FX Rate` | Revolut app > Stocks > Statements |
+| **CFD** | `Symbol`, `Margin` | Revolut app > CFD > Statements |
+| **Crypto** | `Symbol`, `Value`, `Type` (Buy/Sell/Staking reward...) | Revolut app > Crypto > Statements |
+| **Savings** | `Description` with fund class info (e.g. "BUY USD Class R IE000H9J0QX4") | Revolut app > Savings > Statements |
 
-## eDavki XML Format
-
-The generated XML follows the Slovenian eDavki tax reporting format. The XML includes:
-
-- Transaction date
-- Description
-- Amount
-- Currency
-- Transaction type
-- Fees (if applicable)
-
-**Note:** You may need to manually adjust the generated XML to match your specific tax reporting requirements and eDavki schema version.
-
-## Development
-
-### Project Structure
+## Project Structure
 
 ```
 revolut-edavki-converter/
 ├── src/
-│   ├── __init__.py
-│   ├── cli.py              # Command-line interface
-│   ├── revolut_parser.py   # Revolut CSV/Excel parser
-│   └── edavki_generator.py # eDavki XML generator
-├── tests/                  # Unit tests (to be added)
-├── examples/               # Example files
-├── requirements.txt        # Python dependencies
-└── README.md              # This file
+│   ├── cli.py              # Command-line interface (subcommands)
+│   ├── revolut_parser.py   # Revolut CSV/Excel parser (eDavki flow)
+│   ├── edavki_generator.py # eDavki XML generator with FIFO matching
+│   ├── importer.py         # CSV import with auto-detection & deduplication
+│   ├── db.py               # SQLite database schema and connection
+│   ├── price_fetcher.py    # Yahoo Finance price & FX rate sync
+│   ├── analytics.py        # Portfolio analytics engine (daily reconstruction)
+│   ├── tax.py              # Slovenian capital gains tax computation
+│   ├── formatters.py       # Terminal output formatting
+│   └── html_report.py      # Interactive HTML report generator
+├── examples/               # Sample CSV files
+├── requirements.txt
+└── README.md
 ```
 
-### Running Tests
+## Tax Computation Details
 
-```bash
-# To be implemented
-python -m pytest tests/
-```
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues or pull requests.
-
-## License
-
-This project is provided as-is for personal use. Please ensure compliance with local tax regulations.
+- **Stocks & Crypto**: Slovenian holding-period rates — 25% (0-5y), 20% (5-10y), 15% (10-15y), 10% (15-20y), 0% (20y+)
+- **CFDs**: Flat 40% tax rate
+- **Savings**: Interest reported as income; capital gains from fund share sales use holding-period rates
+- **FIFO matching**: Purchases matched to sales in first-in-first-out order
+- **Tax netting**: Gains and losses are netted within each tax rate bucket before applying the rate
 
 ## Disclaimer
 
-This tool is provided for convenience and may require adjustments to match your specific tax reporting needs. Always verify the generated XML against eDavki requirements before submission. Consult with a tax professional if needed.
+This tool is provided for convenience and may require adjustments for your specific situation. Always verify generated XML against eDavki requirements before submission. Consult a tax professional if needed.

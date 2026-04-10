@@ -144,6 +144,55 @@ def cmd_tax(args):
         conn.close()
 
 
+def cmd_report(args):
+    """Generate HTML portfolio report."""
+    from .db import get_connection
+    from .analytics import compute_analytics
+    from .tax import compute_tax_report
+    from .html_report import generate_html_report, query_transactions
+
+    conn = get_connection()
+    try:
+        analytics = compute_analytics(
+            conn, year=args.year, start_date=args.start_date,
+            end_date=args.end_date, scope=args.scope,
+        )
+
+        tax = None
+        tax_year = args.year or (args.end_date.year if args.end_date else datetime.now().year)
+        try:
+            tax = compute_tax_report(conn, year=tax_year, include_unrealized=True, scope=args.scope)
+        except Exception:
+            pass
+
+        transactions = query_transactions(conn, scope=args.scope, year=args.year,
+                                          start_date=args.start_date, end_date=args.end_date)
+
+        # Per-asset-class analytics for the "all" scope filter UI
+        per_class = {}
+        if args.scope == "all":
+            asset_classes = [r[0] for r in conn.execute(
+                "SELECT DISTINCT asset_class FROM transactions"
+            ).fetchall()]
+            for ac in asset_classes:
+                try:
+                    per_class[ac] = compute_analytics(
+                        conn, year=args.year, start_date=args.start_date,
+                        end_date=args.end_date, scope=ac,
+                    )
+                except Exception:
+                    pass
+
+        html = generate_html_report(analytics, tax, transactions, per_class=per_class)
+
+        output = args.output or f"portfolio_report_{analytics.start_date}_{analytics.end_date}.html"
+        with open(output, "w", encoding="utf-8") as f:
+            f.write(html)
+        print(f"Report written to {output}")
+    finally:
+        conn.close()
+
+
 def cmd_status(args):
     """Show database status summary."""
     from .db import get_connection, DB_PATH
@@ -239,7 +288,7 @@ Examples:
     p_analytics.add_argument("--format", choices=["text", "json", "csv"], default="text")
     p_analytics.add_argument("--output", help="Output file (default: stdout)")
     p_analytics.add_argument("--chart", action="store_true", help="Show performance chart")
-    p_analytics.add_argument("--scope", choices=["stock", "cfd", "all"], default="all",
+    p_analytics.add_argument("--scope", choices=["stock", "cfd", "crypto", "savings", "all"], default="all",
                              help="Asset class scope (default: all)")
     p_analytics.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_analytics.set_defaults(func=cmd_analytics)
@@ -249,10 +298,21 @@ Examples:
     p_tax.add_argument("--year", type=int, required=True, help="Fiscal year")
     p_tax.add_argument("--include-unrealized", action="store_true",
                        help="Include unrealized tax liability")
-    p_tax.add_argument("--scope", choices=["stock", "cfd", "all"], default="all",
+    p_tax.add_argument("--scope", choices=["stock", "cfd", "crypto", "savings", "all"], default="all",
                        help="Asset class scope (default: all)")
     p_tax.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_tax.set_defaults(func=cmd_tax)
+
+    # --- report ---
+    p_report = subparsers.add_parser("report", help="Generate HTML portfolio report")
+    p_report.add_argument("--year", type=int, help="Limit to a specific year")
+    p_report.add_argument("--from", dest="start_date", type=parse_date, help="Start date")
+    p_report.add_argument("--to", dest="end_date", type=parse_date, help="End date")
+    p_report.add_argument("--scope", choices=["stock", "cfd", "crypto", "savings", "all"], default="all",
+                          help="Asset class scope (default: all)")
+    p_report.add_argument("--output", "-o", help="Output HTML file path")
+    p_report.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    p_report.set_defaults(func=cmd_report)
 
     # --- status ---
     p_status = subparsers.add_parser("status", help="Show database status")

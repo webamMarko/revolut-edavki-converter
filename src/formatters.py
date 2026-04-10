@@ -31,7 +31,7 @@ def format_analytics(result, fmt: str = "text", output: str | None = None,
 
 def _print_analytics_text(result, verbose: bool = False):
     """Print analytics as formatted terminal tables."""
-    scope_label = {"stock": "STOCKS", "cfd": "CFD", "all": "ALL"}.get(result.scope, "ALL")
+    scope_label = {"stock": "STOCKS", "cfd": "CFD", "crypto": "CRYPTO", "savings": "SAVINGS", "all": "ALL"}.get(result.scope, "ALL")
     print("=" * 60)
     print(f"PORTFOLIO ANALYTICS — {scope_label}")
     print(f"Period: {result.start_date} to {result.end_date}")
@@ -149,7 +149,7 @@ def _analytics_to_dict(result) -> dict:
 
 def format_tax(report, verbose: bool = False):
     """Print tax report as formatted terminal output."""
-    scope_label = {"stock": "STOCKS", "cfd": "CFD", "all": "ALL"}.get(report.scope, "ALL")
+    scope_label = {"stock": "STOCKS", "cfd": "CFD", "crypto": "CRYPTO", "savings": "SAVINGS", "all": "ALL"}.get(report.scope, "ALL")
     print("=" * 60)
     print(f"SLOVENIAN CAPITAL GAINS TAX — {report.year} — {scope_label}")
     print("=" * 60)

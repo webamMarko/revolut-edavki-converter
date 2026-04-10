@@ -90,7 +90,7 @@ def _get_price(price_cache: dict, ticker: str, date_str: str, conn: sqlite3.Conn
 def _build_holdings_timeline(conn: sqlite3.Connection, scope: str = "all") -> list[dict]:
     """Query all transactions and return sorted list of dicts.
 
-    scope: 'stock', 'cfd', or 'all'
+    scope: 'stock', 'cfd', 'crypto', or 'all'
     """
     if scope == "all":
         rows = conn.execute(
@@ -188,6 +188,8 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     last_known_price_eur = {}  # ticker -> price_per_share_eur
 
     is_cfd = scope == "cfd"
+    is_crypto = scope == "crypto"
+    is_savings = scope == "savings"
 
     fx_cache = {}
     price_cache = {}
@@ -214,10 +216,16 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             fx = tx["fx_rate"] or 1.0
             pps = tx["price_per_share"] or 0
 
-            # In 'all' scope, prefix CFD tickers to avoid mixing with stocks
+            # In 'all' scope, prefix CFD/crypto/savings tickers to avoid mixing with stocks
             is_cfd_tx = tx.get("asset_class") == "cfd"
+            is_crypto_tx = tx.get("asset_class") == "crypto"
+            is_savings_tx = tx.get("asset_class") == "savings"
             if scope == "all" and is_cfd_tx and ticker:
                 ticker = f"CFD:{ticker}"
+            elif scope == "all" and is_crypto_tx and ticker:
+                ticker = f"CRYPTO:{ticker}"
+            elif scope == "all" and is_savings_tx and ticker:
+                ticker = f"SAVINGS:{ticker}"
 
             amount_eur = abs(amount) / fx if fx > 0 else abs(amount)
             pps_eur = pps / fx if fx > 0 else pps
@@ -254,6 +262,26 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                     holdings[ticker] += remaining
                     cost_basis[ticker] += remaining * pps_eur
                     fifo_lots[ticker].append((remaining, pps_eur, tx["date"][:10]))
+
+            elif ("BUY" in tx_type or tx_type == "RECEIVE") and ticker and (is_crypto or is_crypto_tx):
+                # Crypto BUY/RECEIVE: opens a long
+                holdings[ticker] += qty
+                cost_basis[ticker] += amount_eur
+                fifo_lots[ticker].append((qty, pps_eur, tx["date"][:10]))
+                cash_flows.append((date_str, -amount_eur))
+                if "BUY" in tx_type and amount_eur > 0:
+                    total_invested += amount_eur
+                if pps_eur > 0:
+                    last_known_price_eur[ticker] = pps_eur
+
+            elif tx_type == "BUY" and ticker and (is_savings or is_savings_tx):
+                # Savings BUY: deposit into money market fund (shares at 1.00)
+                holdings[ticker] += qty
+                cost_basis[ticker] += amount_eur
+                fifo_lots[ticker].append((qty, pps_eur, tx["date"][:10]))
+                cash_flows.append((date_str, -amount_eur))
+                total_invested += amount_eur
+                last_known_price_eur[ticker] = pps_eur if pps_eur > 0 else 1.0
 
             elif "BUY" in tx_type and ticker:
                 # Stock BUY: always opens a long
@@ -302,6 +330,57 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                     holdings[ticker] -= remaining
                     short_lots[ticker].append((remaining, pps_eur, tx["date"][:10]))
 
+            elif ("SELL" in tx_type or tx_type == "PAYMENT") and ticker and (is_crypto or is_crypto_tx):
+                # Crypto SELL/PAYMENT: closes a long (FIFO)
+                holdings[ticker] -= qty
+                remaining = qty
+                sell_proceeds_eur = amount_eur
+                cost_of_sold = 0.0
+                new_lots = []
+                for lot_qty, lot_cost, lot_date in fifo_lots.get(ticker, []):
+                    if remaining <= 0:
+                        new_lots.append((lot_qty, lot_cost, lot_date))
+                        continue
+                    if lot_qty <= remaining:
+                        cost_of_sold += lot_qty * lot_cost
+                        remaining -= lot_qty
+                    else:
+                        cost_of_sold += remaining * lot_cost
+                        new_lots.append((lot_qty - remaining, lot_cost, lot_date))
+                        remaining = 0
+                fifo_lots[ticker] = new_lots
+                cost_basis[ticker] -= cost_of_sold
+                total_realized_gain += sell_proceeds_eur - cost_of_sold
+                cash_flows.append((date_str, sell_proceeds_eur))
+                total_invested -= sell_proceeds_eur
+                if pps_eur > 0:
+                    last_known_price_eur[ticker] = pps_eur
+
+            elif tx_type == "SELL" and ticker and (is_savings or is_savings_tx):
+                # Savings SELL: withdrawal from money market fund (FIFO)
+                holdings[ticker] -= qty
+                remaining = qty
+                sell_proceeds_eur = amount_eur
+                cost_of_sold = 0.0
+                new_lots = []
+                for lot_qty, lot_cost, lot_date in fifo_lots.get(ticker, []):
+                    if remaining <= 0:
+                        new_lots.append((lot_qty, lot_cost, lot_date))
+                        continue
+                    if lot_qty <= remaining:
+                        cost_of_sold += lot_qty * lot_cost
+                        remaining -= lot_qty
+                    else:
+                        cost_of_sold += remaining * lot_cost
+                        new_lots.append((lot_qty - remaining, lot_cost, lot_date))
+                        remaining = 0
+                fifo_lots[ticker] = new_lots
+                cost_basis[ticker] -= cost_of_sold
+                total_realized_gain += sell_proceeds_eur - cost_of_sold
+                cash_flows.append((date_str, sell_proceeds_eur))
+                total_invested -= sell_proceeds_eur
+                last_known_price_eur[ticker] = pps_eur if pps_eur > 0 else 1.0
+
             elif "SELL" in tx_type and ticker:
                 # Stock SELL: always closes a long
                 holdings[ticker] -= qty
@@ -349,6 +428,32 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
 
             elif tx_type in ("DIVIDEND", "BOND COUPON") and amount:
                 total_dividends += amount_eur
+
+            elif tx_type in ("STAKING REWARD", "LEARN REWARD") and ticker:
+                # Crypto rewards: add to holdings at zero cost (income recorded as dividend)
+                if qty and qty > 0:
+                    holdings[ticker] += qty
+                    fifo_lots[ticker].append((qty, 0.0, tx["date"][:10]))
+                if amount_eur > 0:
+                    total_dividends += amount_eur
+
+            elif tx_type == "INTEREST PAID" and (is_savings or is_savings_tx):
+                # Savings interest: record as dividend income
+                if amount_eur > 0:
+                    total_dividends += amount_eur
+
+            elif tx_type == "SERVICE FEE" and (is_savings or is_savings_tx):
+                # Savings service fee: record as fee (negative amount = cost)
+                total_fees -= amount_eur  # amount_eur is abs value, fees are costs
+
+            elif tx_type == "INTEREST REINVESTED" and (is_savings or is_savings_tx):
+                # Interest reinvested: the corresponding BUY adds to total_invested,
+                # so subtract here to offset — reinvested interest is profit, not new cash.
+                total_invested -= amount_eur
+
+            elif tx_type == "INTEREST WITHDRAWN" and (is_savings or is_savings_tx):
+                # Interest withdrawn: cash payout, already counted in INTEREST PAID.
+                pass
 
             elif tx_type in ("COMMISSION CHARGE", "OVERNIGHT FEE"):
                 # Use actual signed amount (negative = cost, positive = income)
@@ -411,9 +516,17 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             if is_cfd:
                 continue  # already handled above
 
-            if ticker.startswith("CFD:"):
-                # Mark-to-market for CFD positions in 'all' mode
+            if ticker.startswith("CFD:") or ticker.startswith("CRYPTO:") or ticker.startswith("SAVINGS:"):
+                # Mark-to-market using last known trade price
                 if abs(qty) < 1e-10:
+                    continue
+                price_eur = last_known_price_eur.get(ticker, 0)
+                portfolio_value += qty * price_eur
+                continue
+
+            if is_crypto or is_savings:
+                # Crypto/savings scope: use last known trade price
+                if qty <= 1e-10:
                     continue
                 price_eur = last_known_price_eur.get(ticker, 0)
                 portfolio_value += qty * price_eur
@@ -489,6 +602,12 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 # Short: unrealized = entry_value - current_liability
                 entry_value = sum(sq * sp for sq, sp, _ in short_lots.get(ticker, []))
                 total_unrealized += entry_value - abs(qty) * price_eur
+        elif is_crypto or ticker.startswith("CRYPTO:"):
+            price_eur = last_known_price_eur.get(ticker, 0)
+            total_unrealized += qty * price_eur - cost_basis.get(ticker, 0)
+        elif is_savings or ticker.startswith("SAVINGS:"):
+            price_eur = last_known_price_eur.get(ticker, 0)
+            total_unrealized += qty * price_eur - cost_basis.get(ticker, 0)
         else:
             total_unrealized += (qty * _get_current_value_eur(
                 ticker, period_end if period_end <= today else today, conn, fx_cache, price_cache
@@ -509,6 +628,14 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 # Short position: entry value is what we sold for
                 cb = sum(sq * sp for sq, sp, _ in short_lots.get(ticker, []))
                 mv = abs(qty) * price_eur
+        elif is_crypto or ticker.startswith("CRYPTO:"):
+            price_eur = last_known_price_eur.get(ticker, 0)
+            mv = qty * price_eur
+            cb = cost_basis.get(ticker, 0)
+        elif is_savings or ticker.startswith("SAVINGS:"):
+            price_eur = last_known_price_eur.get(ticker, 0)
+            mv = qty * price_eur
+            cb = cost_basis.get(ticker, 0)
         else:
             mv = qty * _get_current_value_eur(
                 ticker, period_end if period_end <= today else today, conn, fx_cache, price_cache,
@@ -527,8 +654,8 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             weight_pct=mv / total_val * 100,
         ))
 
-    # Benchmark comparisons (skip for CFD-only scope)
-    if is_cfd:
+    # Benchmark comparisons (skip for CFD/savings scope)
+    if is_cfd or is_savings:
         benchmarks, benchmark_series = [], {}
     else:
         benchmarks, benchmark_series = _compute_benchmarks(conn, daily_df, period_start, period_end, fx_cache, price_cache)

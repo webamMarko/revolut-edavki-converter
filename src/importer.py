@@ -40,15 +40,222 @@ def _parse_amount(value) -> float | None:
 
 
 def _detect_asset_class(df: pd.DataFrame) -> str:
-    """Detect whether a file contains stock or CFD transactions.
+    """Detect whether a file contains stock, CFD, crypto, or savings transactions.
 
-    CFD files have a 'Symbol' column (with :CFD suffixed tickers) and 'Margin'/'Fees' columns.
+    CFD files have 'Symbol' and 'Margin' columns.
+    Crypto files have 'Symbol' and 'Value' columns but no 'Margin'.
+    Savings files have 'Description' column with fund class info (no 'Symbol'/'Ticker').
     Stock files have a 'Ticker' column and 'Price per share'.
     """
     columns = set(df.columns)
     if "Symbol" in columns and "Margin" in columns:
         return "cfd"
+    if "Symbol" in columns and "Value" in columns and "Ticker" not in columns:
+        return "crypto"
+    if "Description" in columns and "Symbol" not in columns and "Ticker" not in columns:
+        # Savings: Description contains fund class info like "BUY USD Class R IE000H9J0QX4"
+        if df["Description"].str.contains("Class", na=False).any():
+            return "savings"
     return "stock"
+
+
+def _parse_eur_amount(value) -> float | None:
+    """Parse an EUR amount like '€100.00' or '€8,636.57' or '1.30 PLN' to float."""
+    if pd.isna(value) or value == "":
+        return None
+    s = str(value).strip()
+    # Remove € prefix
+    s = s.replace("€", "").replace(",", "").strip()
+    # Remove currency suffix like ' PLN'
+    s = re.sub(r"\s+[A-Z]{2,4}$", "", s)
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _parse_crypto_date(date_str: str) -> str | None:
+    """Parse crypto date format like 'Feb 21, 2020, 9:00:16 AM' to ISO format."""
+    from datetime import datetime as dt
+    if pd.isna(date_str) or not date_str:
+        return None
+    s = str(date_str).strip().strip('"')
+    for fmt in ("%b %d, %Y, %I:%M:%S %p", "%b %d, %Y, %H:%M:%S"):
+        try:
+            return dt.strptime(s, fmt).strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_savings_row(row) -> dict | None:
+    """Parse a row from the savings CSV format into transaction fields.
+
+    The savings CSV has three sections (USD, GBP, EUR) concatenated with re-header
+    rows. Column mapping varies by currency class:
+    - USD/GBP: Value in 'Value, USD'/'Value, GBP' col, EUR value in 'Value, EUR', FX Rate, PPS, Qty
+    - EUR: Value in 'Value, USD' col (positional), PPS in 'Value, EUR' col, Qty in 'FX Rate' col
+
+    Description contains type + currency + fund: "BUY USD Class R IE000H9J0QX4"
+    """
+    date_str = row.get("Date", "")
+    if pd.isna(date_str) or not date_str or date_str == "Date":
+        return None  # skip re-header rows
+
+    date = _parse_crypto_date(date_str)  # same date format as crypto
+    if not date:
+        return None
+
+    desc = str(row.get("Description", ""))
+    if not desc:
+        return None
+
+    # Extract type and currency from description
+    # e.g. "BUY USD Class R IE000H9J0QX4", "Interest PAID EUR Class R IE000AZVL3K0"
+    # "Service Fee Charged USD Class IE000H9J0QX4", "Interest Reinvested Class R USD IE000H9J0QX4"
+    import re as _re
+    # Determine currency class from description
+    if " EUR " in desc or desc.endswith(" EUR"):
+        currency = "EUR"
+    elif " GBP " in desc or desc.endswith(" GBP"):
+        currency = "GBP"
+    else:
+        currency = "USD"
+
+    # Extract type
+    type_patterns = [
+        ("BUY", "BUY"),
+        ("SELL", "SELL"),
+        ("Interest Reinvested", "INTEREST REINVESTED"),
+        ("Interest WITHDRAWN", "INTEREST WITHDRAWN"),
+        ("Interest PAID", "INTEREST PAID"),
+        ("Service Fee Charged", "SERVICE FEE"),
+    ]
+    tx_type = None
+    for pattern, mapped in type_patterns:
+        if desc.startswith(pattern):
+            tx_type = mapped
+            break
+    if not tx_type:
+        return None
+
+    # Extract ISIN from description
+    isin_match = _re.search(r'(IE\w+)', desc)
+    ticker = isin_match.group(1) if isin_match else currency
+
+    # Parse values based on currency class
+    raw_val_usd = row.get("Value, USD")
+    raw_val_eur = row.get("Value, EUR")
+    raw_fx = row.get("FX Rate")
+    raw_pps = row.get("Price per share")
+    raw_qty = row.get("Quantity of shares")
+
+    if currency == "EUR":
+        # EUR section: positional columns are shifted
+        # "Value, USD" col → actual EUR value
+        # "Value, EUR" col → price per share
+        # "FX Rate" col → quantity of shares
+        value_eur = _parse_savings_amount(raw_val_usd)
+        pps = _parse_savings_amount(raw_val_eur)
+        qty = _parse_savings_amount(raw_fx)
+        fx_rate = 1.0
+    elif currency == "GBP":
+        # GBP section: "Value, USD" col → GBP value, "Value, EUR" → EUR value
+        value_eur = _parse_savings_amount(raw_val_eur)
+        pps = _parse_savings_amount(raw_pps)
+        qty = _parse_savings_amount(raw_qty)
+        gbp_val = _parse_savings_amount(raw_val_usd)
+        fx_rate = abs(value_eur / gbp_val) if gbp_val and gbp_val != 0 and value_eur else _parse_savings_amount(raw_fx) or 1.0
+    else:
+        # USD section: standard columns
+        value_eur = _parse_savings_amount(raw_val_eur)
+        pps = _parse_savings_amount(raw_pps)
+        qty = _parse_savings_amount(raw_qty)
+        fx_rate = _parse_savings_amount(raw_fx) or 1.0
+
+    # For EUR class, if no value_eur (interest/fees with only one column), use the positional value
+    if value_eur is None and currency == "EUR":
+        value_eur = _parse_savings_amount(raw_val_usd)
+    # For USD, if no value_eur, compute from USD value and fx_rate
+    if value_eur is None and currency == "USD":
+        usd_val = _parse_savings_amount(raw_val_usd)
+        if usd_val is not None and fx_rate:
+            value_eur = usd_val * fx_rate
+
+    abs_qty = abs(qty) if qty else None
+    abs_value = abs(value_eur) if value_eur else None
+
+    # Price per share in EUR: for non-EUR classes, native PPS is 1.00 but EUR PPS differs
+    if abs_qty and abs_value and abs_qty > 0:
+        pps_eur = abs_value / abs_qty
+    else:
+        pps_eur = 1.0
+
+    return {
+        "date": date,
+        "ticker": ticker,
+        "type": tx_type,
+        "quantity": abs_qty,
+        "price_per_share": pps_eur,
+        "total_amount": abs_value,
+        "currency": "EUR",
+        "fx_rate": 1.0,  # already converted to EUR
+    }
+
+
+def _parse_savings_amount(value) -> float | None:
+    """Parse a savings amount that may have commas as thousands separators."""
+    if pd.isna(value) or value == "" or value is None:
+        return None
+    s = str(value).strip().replace(",", "")
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _parse_crypto_row(row) -> dict | None:
+    """Parse a row from the crypto CSV format into transaction fields."""
+    date = _parse_crypto_date(row.get("Date", ""))
+    if not date:
+        return None
+
+    symbol = row.get("Symbol", None)
+    if pd.isna(symbol):
+        symbol = None
+    ticker = str(symbol) if symbol else None
+
+    tx_type = row.get("Type", "")
+    if pd.isna(tx_type) or not tx_type:
+        return None
+
+    # Map crypto types to standard types
+    type_map = {
+        "Buy": "BUY",
+        "Sell": "SELL",
+        "Staking reward": "STAKING REWARD",
+        "Learn reward": "LEARN REWARD",
+        "Payment": "PAYMENT",
+        "Receive": "RECEIVE",
+        "Stake": "STAKE",
+    }
+    mapped_type = type_map.get(str(tx_type), str(tx_type).upper())
+
+    quantity = _parse_amount(row.get("Quantity"))
+    price = _parse_eur_amount(row.get("Price"))
+    value = _parse_eur_amount(row.get("Value"))
+    fees = _parse_eur_amount(row.get("Fees"))
+
+    return {
+        "date": date,
+        "ticker": ticker,
+        "type": mapped_type,
+        "quantity": quantity,
+        "price_per_share": price,
+        "total_amount": value,
+        "currency": "EUR",
+        "fx_rate": 1.0,
+    }
 
 
 def _parse_cfd_row(row) -> dict | None:
@@ -154,7 +361,7 @@ def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) 
         raise ValueError(f"Unsupported file format: {suffix}")
 
     asset_class = _detect_asset_class(df)
-    parse_row = _parse_cfd_row if asset_class == "cfd" else _parse_stock_row
+    parse_row = {"cfd": _parse_cfd_row, "crypto": _parse_crypto_row, "savings": _parse_savings_row}.get(asset_class, _parse_stock_row)
 
     if verbose:
         print(f"  Detected format: {asset_class}")

@@ -82,7 +82,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                        scope: str = "all") -> TaxReport:
     """Compute Slovenian capital gains tax for a fiscal year.
 
-    scope: 'stock', 'cfd', or 'all'
+    scope: 'stock', 'cfd', 'crypto', or 'all'
     """
     if scope == "all":
         transactions = conn.execute(
@@ -118,10 +118,16 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
         pps = tx["price_per_share"] or 0
         date_str = tx["date"][:10]
 
-        # In 'all' scope, prefix CFD tickers to avoid mixing with stocks
+        # In 'all' scope, prefix CFD/crypto/savings tickers to avoid mixing with stocks
         is_cfd_tx = tx.get("asset_class") == "cfd"
+        is_crypto_tx = tx.get("asset_class") == "crypto"
+        is_savings_tx = tx.get("asset_class") == "savings"
         if scope == "all" and is_cfd_tx and ticker:
             ticker = f"CFD:{ticker}"
+        elif scope == "all" and is_crypto_tx and ticker:
+            ticker = f"CRYPTO:{ticker}"
+        elif scope == "all" and is_savings_tx and ticker:
+            ticker = f"SAVINGS:{ticker}"
 
         pps_eur = pps / fx if fx > 0 else pps
         amount_eur = abs(amount) / fx if fx > 0 else abs(amount)
@@ -169,10 +175,102 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                 holdings[ticker] += remaining
                 fifo_lots[ticker].append((remaining, pps_eur, date_str))
 
+        elif ("BUY" in tx_type or tx_type == "RECEIVE") and ticker and is_crypto_tx:
+            # Crypto BUY/RECEIVE: opens a long
+            holdings[ticker] += qty
+            fifo_lots[ticker].append((qty, pps_eur, date_str))
+
+        elif tx_type == "BUY" and ticker and is_savings_tx:
+            # Savings BUY: deposit into money market fund
+            holdings[ticker] += qty
+            fifo_lots[ticker].append((qty, pps_eur, date_str))
+
         elif "BUY" in tx_type and ticker:
             # Stock BUY: always opens a long
             holdings[ticker] += qty
             fifo_lots[ticker].append((qty, pps_eur, date_str))
+
+        elif ("SELL" in tx_type or tx_type == "PAYMENT") and ticker and is_crypto_tx:
+            # Crypto SELL/PAYMENT: closes a long (FIFO), same as stock
+            holdings[ticker] -= qty
+            sell_date = datetime.strptime(date_str, "%Y-%m-%d")
+
+            remaining = qty
+            total_cost = 0.0
+            weighted_buy_date_sum = 0.0
+
+            new_lots = []
+            for lot_qty, lot_cost, lot_date_str in fifo_lots.get(ticker, []):
+                if remaining <= 0:
+                    new_lots.append((lot_qty, lot_cost, lot_date_str))
+                    continue
+                buy_date = datetime.strptime(lot_date_str, "%Y-%m-%d")
+                if lot_qty <= remaining:
+                    total_cost += lot_qty * lot_cost
+                    weighted_buy_date_sum += lot_qty * (sell_date - buy_date).days
+                    remaining -= lot_qty
+                else:
+                    total_cost += remaining * lot_cost
+                    weighted_buy_date_sum += remaining * (sell_date - buy_date).days
+                    new_lots.append((lot_qty - remaining, lot_cost, lot_date_str))
+                    remaining = 0
+            fifo_lots[ticker] = new_lots
+
+            if sell_date.year == year:
+                sold_qty = qty - remaining
+                if sold_qty > 0:
+                    holding_days = weighted_buy_date_sum / sold_qty if sold_qty > 0 else 0
+                    holding_years = holding_days / 365.25
+                    gain = amount_eur - total_cost
+                    rate = slovenian_tax_rate(holding_years)
+                    tax = max(0, gain * rate)
+                    realized_sales.append(SaleTaxDetail(
+                        ticker=ticker, sell_date=date_str, quantity=qty,
+                        sell_price_eur=amount_eur, cost_basis_eur=total_cost,
+                        gain_eur=gain, holding_years=holding_years,
+                        tax_rate=rate, tax_eur=tax,
+                    ))
+
+        elif tx_type == "SELL" and ticker and is_savings_tx:
+            # Savings SELL: withdrawal from money market fund (FIFO)
+            holdings[ticker] -= qty
+            sell_date = datetime.strptime(date_str, "%Y-%m-%d")
+
+            remaining = qty
+            total_cost = 0.0
+            weighted_buy_date_sum = 0.0
+
+            new_lots = []
+            for lot_qty, lot_cost, lot_date_str in fifo_lots.get(ticker, []):
+                if remaining <= 0:
+                    new_lots.append((lot_qty, lot_cost, lot_date_str))
+                    continue
+                buy_date = datetime.strptime(lot_date_str, "%Y-%m-%d")
+                if lot_qty <= remaining:
+                    total_cost += lot_qty * lot_cost
+                    weighted_buy_date_sum += lot_qty * (sell_date - buy_date).days
+                    remaining -= lot_qty
+                else:
+                    total_cost += remaining * lot_cost
+                    weighted_buy_date_sum += remaining * (sell_date - buy_date).days
+                    new_lots.append((lot_qty - remaining, lot_cost, lot_date_str))
+                    remaining = 0
+            fifo_lots[ticker] = new_lots
+
+            if sell_date.year == year:
+                sold_qty = qty - remaining
+                if sold_qty > 0:
+                    holding_days = weighted_buy_date_sum / sold_qty if sold_qty > 0 else 0
+                    holding_years = holding_days / 365.25
+                    gain = amount_eur - total_cost
+                    rate = slovenian_tax_rate(holding_years)
+                    tax = max(0, gain * rate)
+                    realized_sales.append(SaleTaxDetail(
+                        ticker=ticker, sell_date=date_str, quantity=qty,
+                        sell_price_eur=amount_eur, cost_basis_eur=total_cost,
+                        gain_eur=gain, holding_years=holding_years,
+                        tax_rate=rate, tax_eur=tax,
+                    ))
 
         elif "SELL" in tx_type and ticker and (is_cfd_tx or is_cfd_scope):
             # CFD SELL: can close longs and/or open shorts
@@ -275,6 +373,28 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
             if datetime.strptime(date_str, "%Y-%m-%d").year == year:
                 total_dividends += amount_eur
 
+        elif tx_type in ("STAKING REWARD", "LEARN REWARD") and ticker:
+            # Crypto rewards: add to holdings at zero cost
+            if qty and qty > 0:
+                holdings[ticker] += qty
+                fifo_lots[ticker].append((qty, 0.0, date_str))
+            if amount_eur > 0 and datetime.strptime(date_str, "%Y-%m-%d").year == year:
+                total_dividends += amount_eur
+
+        elif tx_type == "INTEREST PAID" and is_savings_tx:
+            # Savings interest: taxable as dividend income
+            if amount_eur > 0 and datetime.strptime(date_str, "%Y-%m-%d").year == year:
+                total_dividends += amount_eur
+
+        elif tx_type == "SERVICE FEE" and is_savings_tx:
+            # Savings service fee
+            if datetime.strptime(date_str, "%Y-%m-%d").year == year:
+                total_fees -= amount_eur
+
+        elif tx_type in ("INTEREST REINVESTED", "INTEREST WITHDRAWN") and is_savings_tx:
+            # Skip: reinvested is handled by BUY, withdrawn is already counted in INTEREST PAID
+            pass
+
         elif tx_type in ("COMMISSION CHARGE", "OVERNIGHT FEE"):
             if datetime.strptime(date_str, "%Y-%m-%d").year == year:
                 # Use actual signed amount (negative = cost, positive = income)
@@ -369,7 +489,14 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
             total_unrealized_tax += tax
 
     total_realized_gain = sum(s.gain_eur for s in realized_sales)
-    total_realized_tax = sum(s.tax_eur for s in realized_sales)
+
+    # Net gains/losses within each tax rate bucket before applying tax.
+    # This ensures losses offset gains (e.g. CFD net P&L taxed at 40%,
+    # not each profitable trade taxed individually).
+    rate_buckets = defaultdict(float)
+    for s in realized_sales:
+        rate_buckets[s.tax_rate] += s.gain_eur
+    total_realized_tax = sum(max(0, net_gain) * rate for rate, net_gain in rate_buckets.items())
 
     return TaxReport(
         year=year,
