@@ -109,7 +109,9 @@ def sync_stock_prices(conn: sqlite3.Connection, start_date: datetime | None = No
     """Fetch prices for all tickers that appear in the transactions table."""
     tickers = [
         row[0] for row in
-        conn.execute("SELECT DISTINCT ticker FROM transactions WHERE ticker IS NOT NULL").fetchall()
+        conn.execute(
+            "SELECT DISTINCT ticker FROM transactions WHERE ticker IS NOT NULL AND asset_class = 'stock'"
+        ).fetchall()
     ]
 
     if not tickers:

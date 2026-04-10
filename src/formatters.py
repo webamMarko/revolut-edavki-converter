@@ -31,8 +31,9 @@ def format_analytics(result, fmt: str = "text", output: str | None = None,
 
 def _print_analytics_text(result, verbose: bool = False):
     """Print analytics as formatted terminal tables."""
+    scope_label = {"stock": "STOCKS", "cfd": "CFD", "all": "ALL"}.get(result.scope, "ALL")
     print("=" * 60)
-    print("PORTFOLIO ANALYTICS")
+    print(f"PORTFOLIO ANALYTICS — {scope_label}")
     print(f"Period: {result.start_date} to {result.end_date}")
     print("=" * 60)
 
@@ -62,6 +63,8 @@ def _print_analytics_text(result, verbose: bool = False):
         ["Unrealized Gains", f"{result.total_unrealized_gain_eur:,.2f} EUR"],
         ["Dividends", f"{result.total_dividends_eur:,.2f} EUR"],
     ]
+    if result.total_fees_eur != 0:
+        gains.append(["Fees (Commissions + Overnight)", f"{result.total_fees_eur:,.2f} EUR"])
     print(tabulate(gains, tablefmt="plain"))
 
     # Benchmark comparison
@@ -118,6 +121,7 @@ def _analytics_to_dict(result) -> dict:
             "realized_eur": round(result.total_realized_gain_eur, 2),
             "unrealized_eur": round(result.total_unrealized_gain_eur, 2),
             "dividends_eur": round(result.total_dividends_eur, 2),
+            "fees_eur": round(result.total_fees_eur, 2),
         },
         "benchmarks": [
             {
@@ -145,8 +149,9 @@ def _analytics_to_dict(result) -> dict:
 
 def format_tax(report, verbose: bool = False):
     """Print tax report as formatted terminal output."""
+    scope_label = {"stock": "STOCKS", "cfd": "CFD", "all": "ALL"}.get(report.scope, "ALL")
     print("=" * 60)
-    print(f"SLOVENIAN CAPITAL GAINS TAX — {report.year}")
+    print(f"SLOVENIAN CAPITAL GAINS TAX — {report.year} — {scope_label}")
     print("=" * 60)
 
     # Realized sales
@@ -179,6 +184,8 @@ def format_tax(report, verbose: bool = False):
         ["Total Tax on Realized", f"{report.total_realized_tax_eur:,.2f} EUR"],
         ["Dividend Income", f"{report.total_dividends_eur:,.2f} EUR"],
     ]
+    if report.total_fees_eur != 0:
+        summary.append(["Fees (Commissions + Overnight)", f"{report.total_fees_eur:,.2f} EUR"])
     print(tabulate(summary, tablefmt="plain"))
 
     # Unrealized

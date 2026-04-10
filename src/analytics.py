@@ -44,6 +44,7 @@ class AnalyticsResult:
     total_dividends_eur: float
     total_realized_gain_eur: float
     total_unrealized_gain_eur: float
+    total_fees_eur: float
     # Positions
     positions: list[PositionDetail]
     # Benchmarks
@@ -54,6 +55,8 @@ class AnalyticsResult:
     # Period
     start_date: str
     end_date: str
+    # Scope
+    scope: str
 
 
 def _get_fx_rate(fx_cache: dict, date_str: str, conn: sqlite3.Connection) -> float:
@@ -84,13 +87,24 @@ def _get_price(price_cache: dict, ticker: str, date_str: str, conn: sqlite3.Conn
     return None
 
 
-def _build_holdings_timeline(conn: sqlite3.Connection) -> list[dict]:
-    """Query all transactions and return sorted list of dicts."""
-    rows = conn.execute(
-        """SELECT date, ticker, type, quantity, price_per_share, total_amount,
-                  currency, fx_rate
-           FROM transactions ORDER BY date"""
-    ).fetchall()
+def _build_holdings_timeline(conn: sqlite3.Connection, scope: str = "all") -> list[dict]:
+    """Query all transactions and return sorted list of dicts.
+
+    scope: 'stock', 'cfd', or 'all'
+    """
+    if scope == "all":
+        rows = conn.execute(
+            """SELECT date, ticker, type, quantity, price_per_share, total_amount,
+                      currency, fx_rate, asset_class
+               FROM transactions ORDER BY date"""
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """SELECT date, ticker, type, quantity, price_per_share, total_amount,
+                      currency, fx_rate, asset_class
+               FROM transactions WHERE asset_class = ? ORDER BY date""",
+            (scope,)
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -122,15 +136,18 @@ def _compute_price_adjustments(conn: sqlite3.Connection, transactions: list[dict
 
 def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                       start_date: datetime | None = None,
-                      end_date: datetime | None = None) -> AnalyticsResult:
+                      end_date: datetime | None = None,
+                      scope: str = "all") -> AnalyticsResult:
     """Compute full portfolio analytics.
 
     Holdings are tracked in ORIGINAL CSV quantities (not split-adjusted).
     For daily valuation, we compute each ticker's adjustment factor by comparing
     the last known CSV trade price to yfinance's price on that date, then apply
     that factor to all yfinance prices for that ticker until the next trade.
+
+    scope: 'stock', 'cfd', or 'all'
     """
-    transactions = _build_holdings_timeline(conn)
+    transactions = _build_holdings_timeline(conn, scope=scope)
     if not transactions:
         raise ValueError("No transactions in database. Run 'import' first.")
 
@@ -151,18 +168,26 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     # Walk through all transactions to build holdings state.
     # Holdings use ORIGINAL quantities from the CSV. Stock splits adjust them.
     # For daily valuation, we derive a price correction factor per ticker.
-    holdings = defaultdict(float)  # ticker -> quantity (original CSV terms)
-    cost_basis = defaultdict(float)  # ticker -> total cost in EUR
-    fifo_lots = defaultdict(list)  # ticker -> [(qty, cost_per_share_eur, date)]
+    holdings = defaultdict(float)  # ticker -> signed quantity (positive=long, negative=short)
+    cost_basis = defaultdict(float)  # ticker -> total cost in EUR (long lots only)
+    fifo_lots = defaultdict(list)  # ticker -> [(qty, cost_per_share_eur, date)] for longs
+    short_lots = defaultdict(list)  # ticker -> [(qty, entry_pps_eur, date)] for shorts (CFD)
     total_invested = 0.0
     total_dividends = 0.0
     total_realized_gain = 0.0
+    total_fees = 0.0  # commissions + overnight fees (CFD)
+    cfd_cash = 0.0  # running cash balance for CFD account valuation
     cash_flows = []  # (date, amount_eur) for TWR
 
     # Price correction: for each ticker, store the ratio actual_price / yfinance_price
     # computed at the last trade date. This corrects for yfinance's retroactive
     # split adjustments. Updated on every BUY/SELL with a known price.
     price_correction = {}  # ticker -> factor (multiply yfinance close by this)
+
+    # CFD: track last known price per share in EUR for open position valuation
+    last_known_price_eur = {}  # ticker -> price_per_share_eur
+
+    is_cfd = scope == "cfd"
 
     fx_cache = {}
     price_cache = {}
@@ -189,10 +214,49 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             fx = tx["fx_rate"] or 1.0
             pps = tx["price_per_share"] or 0
 
+            # In 'all' scope, prefix CFD tickers to avoid mixing with stocks
+            is_cfd_tx = tx.get("asset_class") == "cfd"
+            if scope == "all" and is_cfd_tx and ticker:
+                ticker = f"CFD:{ticker}"
+
             amount_eur = abs(amount) / fx if fx > 0 else abs(amount)
             pps_eur = pps / fx if fx > 0 else pps
 
-            if "BUY" in tx_type and ticker:
+            if "BUY" in tx_type and ticker and (is_cfd or is_cfd_tx):
+                # CFD BUY: can close shorts and/or open longs
+                cfd_cash -= amount_eur
+                cash_flows.append((date_str, -amount_eur))
+                if pps_eur > 0:
+                    last_known_price_eur[ticker] = pps_eur
+
+                remaining = qty
+                # Close short positions first (FIFO)
+                if holdings.get(ticker, 0) < 0:
+                    new_shorts = []
+                    for s_qty, s_pps, s_date in short_lots.get(ticker, []):
+                        if remaining <= 0:
+                            new_shorts.append((s_qty, s_pps, s_date))
+                            continue
+                        if s_qty <= remaining:
+                            # Realized gain on short close: entry - exit
+                            total_realized_gain += (s_pps - pps_eur) * s_qty
+                            remaining -= s_qty
+                            holdings[ticker] += s_qty
+                        else:
+                            total_realized_gain += (s_pps - pps_eur) * remaining
+                            new_shorts.append((s_qty - remaining, s_pps, s_date))
+                            holdings[ticker] += remaining
+                            remaining = 0
+                    short_lots[ticker] = new_shorts
+
+                # Open long with any remainder
+                if remaining > 0:
+                    holdings[ticker] += remaining
+                    cost_basis[ticker] += remaining * pps_eur
+                    fifo_lots[ticker].append((remaining, pps_eur, tx["date"][:10]))
+
+            elif "BUY" in tx_type and ticker:
+                # Stock BUY: always opens a long
                 holdings[ticker] += qty
                 cost_basis[ticker] += amount_eur
                 fifo_lots[ticker].append((qty, pps_eur, tx["date"][:10]))
@@ -204,9 +268,43 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                     if yf_data and yf_data[0] > 0:
                         price_correction[ticker] = pps / yf_data[0]
 
+            elif "SELL" in tx_type and ticker and (is_cfd or is_cfd_tx):
+                # CFD SELL: can close longs and/or open shorts
+                cfd_cash += amount_eur
+                cash_flows.append((date_str, amount_eur))
+                if pps_eur > 0:
+                    last_known_price_eur[ticker] = pps_eur
+
+                remaining = qty
+                # Close long positions first (FIFO)
+                if holdings.get(ticker, 0) > 0:
+                    new_lots = []
+                    for l_qty, l_pps, l_date in fifo_lots.get(ticker, []):
+                        if remaining <= 0:
+                            new_lots.append((l_qty, l_pps, l_date))
+                            continue
+                        if l_qty <= remaining:
+                            # Realized gain on long close: exit - entry
+                            total_realized_gain += (pps_eur - l_pps) * l_qty
+                            cost_basis[ticker] -= l_qty * l_pps
+                            remaining -= l_qty
+                            holdings[ticker] -= l_qty
+                        else:
+                            total_realized_gain += (pps_eur - l_pps) * remaining
+                            cost_basis[ticker] -= remaining * l_pps
+                            new_lots.append((l_qty - remaining, l_pps, l_date))
+                            holdings[ticker] -= remaining
+                            remaining = 0
+                    fifo_lots[ticker] = new_lots
+
+                # Open short with any remainder
+                if remaining > 0:
+                    holdings[ticker] -= remaining
+                    short_lots[ticker].append((remaining, pps_eur, tx["date"][:10]))
+
             elif "SELL" in tx_type and ticker:
+                # Stock SELL: always closes a long
                 holdings[ticker] -= qty
-                # FIFO: consume lots to compute realized gain
                 remaining = qty
                 sell_proceeds_eur = amount_eur
                 cost_of_sold = 0.0
@@ -252,6 +350,12 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             elif tx_type in ("DIVIDEND", "BOND COUPON") and amount:
                 total_dividends += amount_eur
 
+            elif tx_type in ("COMMISSION CHARGE", "OVERNIGHT FEE"):
+                # Use actual signed amount (negative = cost, positive = income)
+                fee_eur = amount / fx if fx > 0 else amount
+                total_fees += fee_eur
+                cfd_cash += fee_eur
+
             elif tx_type == "RETURN OF CAPITAL" and ticker and amount:
                 cost_basis[ticker] -= amount_eur
 
@@ -275,25 +379,51 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
 
             elif tx_type == "CASH TOP-UP" and amount:
                 total_invested += amount_eur
+                if is_cfd or is_cfd_tx:
+                    cfd_cash += amount_eur
                 cash_flows.append((date_str, -amount_eur))
 
             elif tx_type == "CASH WITHDRAWAL" and amount:
                 total_invested -= amount_eur
+                if is_cfd or is_cfd_tx:
+                    cfd_cash -= amount_eur
                 cash_flows.append((date_str, amount_eur))
 
         # Compute portfolio value for this date
         portfolio_value = 0.0
         fx_rate = _get_fx_rate(fx_cache, date_str, conn)
 
+        # CFD: portfolio value = cash balance + mark-to-market of open positions
+        # cash balance already includes deposits, trade cash flows, and fees
+        # mark-to-market: long positions add value, short positions subtract
+        if is_cfd:
+            portfolio_value = cfd_cash
+            for ticker, qty in holdings.items():
+                if abs(qty) < 1e-10:
+                    continue
+                price_eur = last_known_price_eur.get(ticker, 0)
+                portfolio_value += qty * price_eur  # positive for longs, negative for shorts
+        elif scope == "all":
+            # In 'all' mode: add CFD cash component for CFD positions
+            portfolio_value += cfd_cash
+
         for ticker, qty in holdings.items():
+            if is_cfd:
+                continue  # already handled above
+
+            if ticker.startswith("CFD:"):
+                # Mark-to-market for CFD positions in 'all' mode
+                if abs(qty) < 1e-10:
+                    continue
+                price_eur = last_known_price_eur.get(ticker, 0)
+                portfolio_value += qty * price_eur
+                continue
+
             if qty <= 1e-10:
                 continue
             price_data = _get_price(price_cache, ticker, date_str, conn)
             if price_data:
                 yf_close, currency = price_data
-                # Apply correction factor: yfinance prices are fully
-                # split-adjusted, so multiply by our correction factor
-                # to get the actual price matching our original quantities.
                 correction = price_correction.get(ticker, 1.0)
                 actual_close = yf_close * correction
                 if currency == "EUR":
@@ -301,7 +431,6 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 else:
                     portfolio_value += qty * actual_close / fx_rate
             else:
-                # Use cost basis as fallback
                 portfolio_value += cost_basis.get(ticker, 0)
 
         if date_str >= period_start:
@@ -349,23 +478,43 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     # Unrealized gains
     total_unrealized = 0.0
     for ticker, qty in holdings.items():
-        if qty <= 1e-10:
+        if abs(qty) < 1e-10:
             continue
-        total_unrealized += (qty * _get_current_value_eur(
-            ticker, period_end if period_end <= today else today, conn, fx_cache, price_cache
-        )) - cost_basis.get(ticker, 0)
+        if is_cfd or ticker.startswith("CFD:"):
+            price_eur = last_known_price_eur.get(ticker, 0)
+            if qty > 0:
+                # Long: unrealized = market_value - cost_basis
+                total_unrealized += qty * price_eur - cost_basis.get(ticker, 0)
+            else:
+                # Short: unrealized = entry_value - current_liability
+                entry_value = sum(sq * sp for sq, sp, _ in short_lots.get(ticker, []))
+                total_unrealized += entry_value - abs(qty) * price_eur
+        else:
+            total_unrealized += (qty * _get_current_value_eur(
+                ticker, period_end if period_end <= today else today, conn, fx_cache, price_cache
+            )) - cost_basis.get(ticker, 0)
 
     # Position details
     positions = []
-    total_val = current_value if current_value > 0 else 1
+    total_val = max(current_value, 1)
     for ticker, qty in sorted(holdings.items()):
-        if qty <= 1e-10:
+        if abs(qty) < 1e-10:
             continue
-        mv = qty * _get_current_value_eur(
-            ticker, period_end if period_end <= today else today, conn, fx_cache, price_cache,
-            per_share=True
-        )
-        cb = cost_basis.get(ticker, 0)
+        if is_cfd or ticker.startswith("CFD:"):
+            price_eur = last_known_price_eur.get(ticker, 0)
+            if qty > 0:
+                mv = qty * price_eur
+                cb = cost_basis.get(ticker, 0)
+            else:
+                # Short position: entry value is what we sold for
+                cb = sum(sq * sp for sq, sp, _ in short_lots.get(ticker, []))
+                mv = abs(qty) * price_eur
+        else:
+            mv = qty * _get_current_value_eur(
+                ticker, period_end if period_end <= today else today, conn, fx_cache, price_cache,
+                per_share=True
+            )
+            cb = cost_basis.get(ticker, 0)
         ug = mv - cb
         ug_pct = (ug / cb * 100) if cb > 0 else 0.0
         positions.append(PositionDetail(
@@ -378,8 +527,11 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             weight_pct=mv / total_val * 100,
         ))
 
-    # Benchmark comparisons
-    benchmarks, benchmark_series = _compute_benchmarks(conn, daily_df, period_start, period_end, fx_cache, price_cache)
+    # Benchmark comparisons (skip for CFD-only scope)
+    if is_cfd:
+        benchmarks, benchmark_series = [], {}
+    else:
+        benchmarks, benchmark_series = _compute_benchmarks(conn, daily_df, period_start, period_end, fx_cache, price_cache)
 
     return AnalyticsResult(
         portfolio_value_eur=current_value,
@@ -394,12 +546,14 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
         total_dividends_eur=total_dividends,
         total_realized_gain_eur=total_realized_gain,
         total_unrealized_gain_eur=total_unrealized,
+        total_fees_eur=total_fees,
         positions=positions,
         benchmarks=benchmarks,
         daily_series=daily_df,
         benchmark_series=benchmark_series,
         start_date=period_start,
         end_date=period_end,
+        scope=scope,
     )
 
 

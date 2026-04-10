@@ -6,7 +6,7 @@ from pathlib import Path
 DB_DIR = Path.home() / ".revolut-edavki"
 DB_PATH = DB_DIR / "portfolio.db"
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS transactions (
@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     total_amount    REAL,
     currency        TEXT NOT NULL,
     fx_rate         REAL NOT NULL DEFAULT 1.0,
+    asset_class     TEXT NOT NULL DEFAULT 'stock',
     source_file     TEXT,
     imported_at     TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(date, ticker, type, quantity, total_amount, currency)
@@ -75,6 +76,12 @@ def _init_schema(conn: sqlite3.Connection):
 
     row = conn.execute("SELECT value FROM metadata WHERE key = 'schema_version'").fetchone()
     current_version = int(row["value"]) if row else 0
+
+    if current_version < 2:
+        # Add asset_class column if missing (migration from v1)
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(transactions)").fetchall()]
+        if "asset_class" not in cols:
+            conn.execute("ALTER TABLE transactions ADD COLUMN asset_class TEXT NOT NULL DEFAULT 'stock'")
 
     if current_version < SCHEMA_VERSION:
         conn.execute(

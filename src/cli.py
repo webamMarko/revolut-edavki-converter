@@ -117,6 +117,7 @@ def cmd_analytics(args):
             year=args.year,
             start_date=args.start_date,
             end_date=args.end_date,
+            scope=args.scope,
         )
         format_analytics(results, fmt=args.format, output=args.output,
                         verbose=args.verbose, chart=args.chart)
@@ -136,6 +137,7 @@ def cmd_tax(args):
             conn,
             year=args.year,
             include_unrealized=args.include_unrealized,
+            scope=args.scope,
         )
         format_tax(report, verbose=args.verbose)
     finally:
@@ -237,6 +239,8 @@ Examples:
     p_analytics.add_argument("--format", choices=["text", "json", "csv"], default="text")
     p_analytics.add_argument("--output", help="Output file (default: stdout)")
     p_analytics.add_argument("--chart", action="store_true", help="Show performance chart")
+    p_analytics.add_argument("--scope", choices=["stock", "cfd", "all"], default="all",
+                             help="Asset class scope (default: all)")
     p_analytics.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_analytics.set_defaults(func=cmd_analytics)
 
@@ -245,6 +249,8 @@ Examples:
     p_tax.add_argument("--year", type=int, required=True, help="Fiscal year")
     p_tax.add_argument("--include-unrealized", action="store_true",
                        help="Include unrealized tax liability")
+    p_tax.add_argument("--scope", choices=["stock", "cfd", "all"], default="all",
+                       help="Asset class scope (default: all)")
     p_tax.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_tax.set_defaults(func=cmd_tax)
 
