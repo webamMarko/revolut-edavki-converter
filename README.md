@@ -60,6 +60,18 @@ python -m src.cli report --year 2025 --output 2025.html
 python -m src.cli status
 ```
 
+### Database
+
+Portfolio data is stored in `~/.revolut-edavki/portfolio.db` (SQLite). Imports are deduplicated by file hash and row uniqueness, so re-running `import` on the same file is safe.
+
+To clear all data and start fresh:
+
+```bash
+rm ~/.revolut-edavki/portfolio.db
+python -m src.cli import stocks.csv cfd.csv crypto.csv savings.csv
+python -m src.cli sync
+```
+
 ### Asset Class Scopes
 
 Use `--scope` to filter by asset class:

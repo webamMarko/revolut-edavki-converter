@@ -71,6 +71,7 @@ def _serialize_report_data(analytics, tax, transactions: list[dict],
             "invested_eur": [round(float(v), 2) for v in daily["invested_eur"]],
             "dividends_eur": [round(float(v), 2) for v in daily["dividends_eur"]],
             "realized_gain_eur": [round(float(v), 2) for v in daily["realized_gain_eur"]],
+            "perf_index": [round(float(v), 2) for v in daily["perf_index"]] if "perf_index" in daily.columns else [],
         },
         "benchmark_series": {},
         "benchmarks": [
@@ -160,6 +161,7 @@ def _serialize_report_data(analytics, tax, transactions: list[dict],
                 "invested_eur": [round(float(v), 2) for v in ac_daily["invested_eur"]],
                 "dividends_eur": [round(float(v), 2) for v in ac_daily["dividends_eur"]],
                 "realized_gain_eur": [round(float(v), 2) for v in ac_daily["realized_gain_eur"]],
+                "perf_index": [round(float(v), 2) for v in ac_daily["perf_index"]] if "perf_index" in ac_daily.columns else [],
                 "summary": {
                     "portfolio_value_eur": round(ac_analytics.portfolio_value_eur, 2),
                     "total_invested_eur": round(ac_analytics.total_invested_eur, 2),
@@ -441,10 +443,11 @@ function buildCombinedSeries() {
       invested_eur: D.daily_series.invested_eur.slice(),
       dividends_eur: D.daily_series.dividends_eur.slice(),
       realized_gain_eur: D.daily_series.realized_gain_eur.slice(),
+      perf_index: (D.daily_series.perf_index || []).slice(),
     };
   }
   if (activeClasses.size === 0) {
-    return {dates:[], value_eur:[], invested_eur:[], dividends_eur:[], realized_gain_eur:[]};
+    return {dates:[], value_eur:[], invested_eur:[], dividends_eur:[], realized_gain_eur:[], perf_index:[]};
   }
   if (activeClasses.size === 1) {
     const ac = [...activeClasses][0];
@@ -455,6 +458,7 @@ function buildCombinedSeries() {
       invested_eur: s.invested_eur.slice(),
       dividends_eur: s.dividends_eur.slice(),
       realized_gain_eur: s.realized_gain_eur.slice(),
+      perf_index: (s.perf_index || []).slice(),
     };
   }
   // Multiple but not all: collect all unique dates, then sum
@@ -494,7 +498,28 @@ function buildCombinedSeries() {
       }
     });
   }
-  return {dates, value_eur, invested_eur, dividends_eur, realized_gain_eur};
+  // Recompute perf_index from combined value series using chain-linking
+  const perf_index = computePerfIndex(value_eur, invested_eur);
+  return {dates, value_eur, invested_eur, dividends_eur, realized_gain_eur, perf_index};
+}
+
+function computePerfIndex(values, invested) {
+  // Chain-linked performance index: daily returns exclude cash flow effects.
+  // Approximation: daily cash flow ≈ change in invested.
+  const n = values.length;
+  const pi = new Array(n);
+  let idx = 100.0;
+  for (let i = 0; i < n; i++) {
+    if (i === 0) { pi[i] = values[0] > 0 ? 100.0 : 0; continue; }
+    const prev = values[i-1];
+    if (prev > 1e-6) {
+      const cashflow = invested[i] - invested[i-1];  // positive = inflow
+      const ret = (values[i] - cashflow) / prev - 1;
+      idx *= (1 + ret);
+    }
+    pi[i] = idx;
+  }
+  return pi;
 }
 
 function getActiveSummary() {
@@ -632,8 +657,11 @@ function buildBenchmarkChart() {
   if(bKeys.length===0) return null;
   document.getElementById('benchmarkSection').style.display='';
   document.getElementById('benchmarkTableCard').style.display='';
-  const inv = ds.invested_eur, val = ds.value_eur;
-  const rebased = val.map((v,i)=>inv[i]>0?(v/inv[i])*100:100);
+  // Use chain-linked performance index: excludes the effect of deposits/withdrawals,
+  // showing pure investment performance comparable to benchmark indexes.
+  const rebased = (ds.perf_index && ds.perf_index.length > 0)
+    ? ds.perf_index.map(v => v > 0 ? v : null)
+    : ds.value_eur.map(() => null);
   const bds=[{label:'Portfolio',data:rebased.map((v,i)=>({x:allDates[i],y:v})),borderColor:'#4285f4',borderWidth:2,pointRadius:0,tension:0.15}];
   const bColors={'S&P 500':'#ea4335','NASDAQ':'#34a853','Dow Jones':'#fbbc04','FTSE 100':'#7c3aed'};
   bKeys.forEach(tk=>{

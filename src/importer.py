@@ -40,14 +40,17 @@ def _parse_amount(value) -> float | None:
 
 
 def _detect_asset_class(df: pd.DataFrame) -> str:
-    """Detect whether a file contains stock, CFD, crypto, or savings transactions.
+    """Detect whether a file contains stock, CFD, crypto, savings, or Ilirika transactions.
 
+    Ilirika files have 'FinancialInstrument' and 'TransactionTypeName' columns.
     CFD files have 'Symbol' and 'Margin' columns.
     Crypto files have 'Symbol' and 'Value' columns but no 'Margin'.
     Savings files have 'Description' column with fund class info (no 'Symbol'/'Ticker').
     Stock files have a 'Ticker' column and 'Price per share'.
     """
     columns = set(df.columns)
+    if "FinancialInstrument" in columns and "TransactionTypeName" in columns:
+        return "ilirika"
     if "Symbol" in columns and "Margin" in columns:
         return "cfd"
     if "Symbol" in columns and "Value" in columns and "Ticker" not in columns:
@@ -299,6 +302,158 @@ def _parse_cfd_row(row) -> dict | None:
     }
 
 
+def _parse_ilirika_date(date_str: str) -> str | None:
+    """Parse Ilirika date format 'D. MM. YYYY HH:MM:SS' or 'DD.MM.YYYY' to ISO format."""
+    from datetime import datetime as dt
+    if pd.isna(date_str) or not date_str:
+        return None
+    s = str(date_str).strip()
+    # Try DateValue format: "22. 11. 2021 15:49:00" or "3. 03. 2021 15:30:00"
+    for fmt in ("%d. %m. %Y %H:%M:%S", "%d.%m.%Y"):
+        try:
+            return dt.strptime(s, fmt).strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_eu_number(value) -> float | None:
+    """Parse European number format with comma decimal separator (e.g. '13,04' -> 13.04)."""
+    if pd.isna(value) or value == "" or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    s = str(value).strip().replace(",", ".")
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _ilirika_ticker_to_standard(instrument: str) -> tuple[str, str]:
+    """Convert Ilirika Bloomberg-style ticker to standard ticker and infer currency.
+
+    'ASTR US' -> ('ASTR', 'USD'), 'SX5EEX GY' -> ('SXR8.DE', 'EUR')
+    """
+    parts = instrument.strip().split()
+    if len(parts) < 2:
+        return instrument, "USD"
+
+    ticker = parts[0]
+    exchange = parts[1].upper()
+
+    # Bloomberg ticker -> yfinance ticker overrides (ETFs with non-standard symbols)
+    bloomberg_overrides = {
+        "SX5EEX": "SXR8",   # iShares Core EURO STOXX 50 UCITS ETF
+        "SX8PEX": "EXSI",   # iShares STOXX Europe 600 UCITS ETF
+    }
+    ticker = bloomberg_overrides.get(ticker, ticker)
+
+    # Map exchange suffix to yfinance ticker suffix and currency
+    exchange_map = {
+        "US": ("", "USD"),
+        "GY": (".DE", "EUR"),    # Germany (Xetra)
+        "GR": (".DE", "EUR"),    # Germany
+        "LN": (".L", "GBP"),     # London
+        "FP": (".PA", "EUR"),    # Paris
+        "IM": (".MI", "EUR"),    # Milan
+        "NA": (".AS", "EUR"),    # Amsterdam
+        "SM": (".MC", "EUR"),    # Madrid
+        "SW": (".SW", "CHF"),    # Switzerland
+        "JP": (".T", "JPY"),     # Tokyo
+    }
+
+    suffix, currency = exchange_map.get(exchange, ("", "USD"))
+    return ticker + suffix, currency
+
+
+def _preprocess_ilirika_splits(df: pd.DataFrame) -> dict[str, float]:
+    """Pre-compute net split quantity changes from paired OLD/new Ilirika rows.
+
+    Returns a dict mapping (date, ticker) -> net quantity change for split events.
+    E.g. ASTR US OLD (-80) + ASTR US (+5) on same date -> net change = -75.
+    """
+    split_deltas: dict[tuple[str, str], float] = {}
+    for _, row in df.iterrows():
+        tx_type_raw = str(row.get("TransactionTypeName", ""))
+        if "Split" not in tx_type_raw:
+            continue
+        instrument = str(row.get("FinancialInstrument", ""))
+        if not instrument:
+            continue
+        date = str(row.get("DateValue") or row.get("SettlementDate", ""))
+        vol = _parse_eu_number(row.get("VolumeValue")) or _parse_eu_number(row.get("Volume")) or 0
+
+        # Normalize: strip " OLD" suffix to group paired rows
+        base_instrument = instrument.replace(" OLD", "").strip()
+        ticker, _ = _ilirika_ticker_to_standard(base_instrument)
+        key = (date, ticker)
+        split_deltas[key] = split_deltas.get(key, 0) + vol
+
+    return split_deltas
+
+
+def _parse_ilirika_row(row, split_deltas: dict | None = None) -> dict | None:
+    """Parse a row from the Ilirika broker CSV format into transaction fields.
+
+    Columns: AccountID, FinancialInstrument, SettlementDate, DateValue,
+    TransactionTypeName, VolumeValue, Volume, PriceValue, Price
+    """
+    date = _parse_ilirika_date(row.get("DateValue") or row.get("SettlementDate", ""))
+    if not date:
+        return None
+
+    instrument = row.get("FinancialInstrument", "")
+    if pd.isna(instrument) or not instrument:
+        return None
+
+    # Skip "OLD" ticker entries (they are the debit side of reverse splits)
+    if " OLD" in str(instrument):
+        return None
+
+    ticker, currency = _ilirika_ticker_to_standard(str(instrument))
+
+    tx_type_raw = str(row.get("TransactionTypeName", ""))
+    # Map Slovenian type names to standard types
+    type_map = {
+        "Nakup": "BUY",
+        "Prodaja": "SELL",
+    }
+    # Handle corporate actions
+    if "Reverse Split" in tx_type_raw:
+        tx_type = "STOCK SPLIT"
+    elif "Merger" in tx_type_raw and "denar" in tx_type_raw:
+        tx_type = "MERGER CASH"
+    elif "Merger" in tx_type_raw:
+        tx_type = "MERGER"
+    elif "Split" in tx_type_raw:
+        tx_type = "STOCK SPLIT"
+    else:
+        tx_type = type_map.get(tx_type_raw, tx_type_raw.upper())
+
+    quantity = abs(_parse_eu_number(row.get("Volume")) or _parse_eu_number(row.get("VolumeValue")) or 0)
+    price = _parse_eu_number(row.get("Price")) or _parse_eu_number(row.get("PriceValue"))
+
+    total_amount = quantity * price if quantity and price else None
+
+    # For STOCK SPLIT, use the pre-computed net delta (OLD + new combined)
+    if tx_type == "STOCK SPLIT" and split_deltas:
+        date_raw = str(row.get("DateValue") or row.get("SettlementDate", ""))
+        key = (date_raw, ticker)
+        quantity = split_deltas.get(key, quantity)
+
+    return {
+        "date": date,
+        "ticker": ticker,
+        "type": tx_type,
+        "quantity": quantity,
+        "price_per_share": price,
+        "total_amount": total_amount,
+        "currency": currency,
+        "fx_rate": 1.0,  # no FX info in Ilirika CSV; prices in instrument currency
+    }
+
+
 def _parse_stock_row(row) -> dict | None:
     """Parse a row from the stock CSV format into transaction fields."""
     date = row.get("Date") or row.get("Started Date", "")
@@ -355,16 +510,30 @@ def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) 
     suffix = path.suffix.lower()
     if suffix == ".csv":
         df = pd.read_csv(path)
+        # If single column or missing expected columns, try semicolon separator (Ilirika format)
+        if len(df.columns) == 1 or (len(df.columns) < 3 and ";" in df.columns[0]):
+            df = pd.read_csv(path, sep=";")
     elif suffix in (".xlsx", ".xls"):
         df = pd.read_excel(path)
     else:
         raise ValueError(f"Unsupported file format: {suffix}")
 
     asset_class = _detect_asset_class(df)
-    parse_row = {"cfd": _parse_cfd_row, "crypto": _parse_crypto_row, "savings": _parse_savings_row}.get(asset_class, _parse_stock_row)
+    # Ilirika is stored as "stock" asset class
+    effective_asset_class = "stock" if asset_class == "ilirika" else asset_class
+
+    if asset_class == "ilirika":
+        split_deltas = _preprocess_ilirika_splits(df)
+        parse_row = lambda row: _parse_ilirika_row(row, split_deltas)
+    else:
+        parse_row = {
+            "cfd": _parse_cfd_row,
+            "crypto": _parse_crypto_row,
+            "savings": _parse_savings_row,
+        }.get(asset_class, _parse_stock_row)
 
     if verbose:
-        print(f"  Detected format: {asset_class}")
+        print(f"  Detected format: {asset_class}" + (f" (stored as {effective_asset_class})" if asset_class != effective_asset_class else ""))
 
     total = len(df)
     new = 0
@@ -385,7 +554,7 @@ def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) 
                 (parsed["date"], parsed["ticker"], parsed["type"],
                  parsed["quantity"], parsed["price_per_share"],
                  parsed["total_amount"], parsed["currency"],
-                 parsed["fx_rate"], asset_class, path.name),
+                 parsed["fx_rate"], effective_asset_class, path.name),
             )
             if conn.execute("SELECT changes()").fetchone()[0] > 0:
                 new += 1

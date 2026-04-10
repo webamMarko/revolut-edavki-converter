@@ -29,6 +29,10 @@ python -m src.cli status
 python -m pytest tests/
 ```
 
+## Database
+
+SQLite database at `~/.revolut-edavki/portfolio.db`. Imports are deduplicated by file SHA-256 hash and row-level UNIQUE constraint. To reset: `rm ~/.revolut-edavki/portfolio.db` then re-import and sync.
+
 ## Architecture
 
 The pipeline is: **CLI (`cli.py`) -> Parser (`revolut_parser.py`) -> Generator (`edavki_generator.py`) -> XML file**

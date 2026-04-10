@@ -95,17 +95,29 @@ def _build_holdings_timeline(conn: sqlite3.Connection, scope: str = "all") -> li
     if scope == "all":
         rows = conn.execute(
             """SELECT date, ticker, type, quantity, price_per_share, total_amount,
-                      currency, fx_rate, asset_class
+                      currency, fx_rate, asset_class, source_file
                FROM transactions ORDER BY date"""
         ).fetchall()
     else:
         rows = conn.execute(
             """SELECT date, ticker, type, quantity, price_per_share, total_amount,
-                      currency, fx_rate, asset_class
+                      currency, fx_rate, asset_class, source_file
                FROM transactions WHERE asset_class = ? ORDER BY date""",
             (scope,)
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def _sources_with_cash_events(conn: sqlite3.Connection) -> set[str]:
+    """Return set of source_file names that contain CASH TOP-UP or CASH WITHDRAWAL events.
+
+    Files with cash events track invested amounts via those events.
+    Files without them (e.g. Ilirika) need BUY/SELL to track invested.
+    """
+    rows = conn.execute(
+        "SELECT DISTINCT source_file FROM transactions WHERE type IN ('CASH TOP-UP', 'CASH WITHDRAWAL')"
+    ).fetchall()
+    return {r[0] for r in rows}
 
 
 def _compute_price_adjustments(conn: sqlite3.Connection, transactions: list[dict]) -> dict:
@@ -151,6 +163,11 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     if not transactions:
         raise ValueError("No transactions in database. Run 'import' first.")
 
+    # Detect which source files have cash events (CASH TOP-UP/WITHDRAWAL).
+    # For sources without cash events (e.g. Ilirika broker), BUY/SELL amounts
+    # are used to track invested capital instead.
+    cash_event_sources = _sources_with_cash_events(conn)
+
     # Determine date range
     first_date = transactions[0]["date"][:10]
     today = datetime.now().strftime("%Y-%m-%d")
@@ -177,6 +194,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     total_realized_gain = 0.0
     total_fees = 0.0  # commissions + overnight fees (CFD)
     cfd_cash = 0.0  # running cash balance for CFD account valuation
+    stock_cash = 0.0  # uninvested cash from CASH TOP-UP (for sources with cash events)
     cash_flows = []  # (date, amount_eur) for TWR
 
     # Price correction: for each ticker, store the ratio actual_price / yfinance_price
@@ -215,6 +233,13 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             amount = tx["total_amount"] or 0
             fx = tx["fx_rate"] or 1.0
             pps = tx["price_per_share"] or 0
+            currency = tx.get("currency", "USD")
+
+            # If fx_rate is 1.0 but currency is not EUR, look up actual FX rate
+            if fx == 1.0 and currency != "EUR" and amount > 0:
+                db_fx = _get_fx_rate(fx_cache, date_str, conn)
+                if db_fx > 0:
+                    fx = db_fx
 
             # In 'all' scope, prefix CFD/crypto/savings tickers to avoid mixing with stocks
             is_cfd_tx = tx.get("asset_class") == "cfd"
@@ -288,7 +313,14 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 holdings[ticker] += qty
                 cost_basis[ticker] += amount_eur
                 fifo_lots[ticker].append((qty, pps_eur, tx["date"][:10]))
-                cash_flows.append((date_str, -amount_eur))
+
+                # For sources without cash events, BUY is the external cash flow
+                source = tx.get("source_file", "")
+                if source not in cash_event_sources:
+                    total_invested += amount_eur
+                    cash_flows.append((date_str, -amount_eur))
+                else:
+                    stock_cash -= amount_eur  # cash moves into stock position
 
                 # Update price correction factor
                 if pps > 0:
@@ -402,7 +434,14 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 fifo_lots[ticker] = new_lots
                 cost_basis[ticker] -= cost_of_sold
                 total_realized_gain += sell_proceeds_eur - cost_of_sold
-                cash_flows.append((date_str, sell_proceeds_eur))
+
+                # For sources without cash events, SELL is the external cash flow
+                source = tx.get("source_file", "")
+                if source not in cash_event_sources:
+                    total_invested -= sell_proceeds_eur
+                    cash_flows.append((date_str, sell_proceeds_eur))
+                else:
+                    stock_cash += sell_proceeds_eur  # cash comes back from stock position
 
                 # Update price correction factor
                 if pps > 0:
@@ -428,6 +467,9 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
 
             elif tx_type in ("DIVIDEND", "BOND COUPON") and amount:
                 total_dividends += amount_eur
+                source = tx.get("source_file", "")
+                if source in cash_event_sources:
+                    stock_cash += amount_eur
 
             elif tx_type in ("STAKING REWARD", "LEARN REWARD") and ticker:
                 # Crypto rewards: add to holdings at zero cost (income recorded as dividend)
@@ -470,7 +512,11 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                     sell_proceeds = amount_eur
                     cost_of_sold = cost_basis.get(ticker, 0)
                     total_realized_gain += sell_proceeds - cost_of_sold
-                    cash_flows.append((date_str, sell_proceeds))
+                    # For sources without cash events, MERGER CASH is an external outflow
+                    source = tx.get("source_file", "")
+                    if source not in cash_event_sources:
+                        total_invested -= sell_proceeds
+                        cash_flows.append((date_str, sell_proceeds))
                 holdings[ticker] = 0
                 cost_basis[ticker] = 0
                 fifo_lots[ticker] = []
@@ -486,17 +532,25 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 total_invested += amount_eur
                 if is_cfd or is_cfd_tx:
                     cfd_cash += amount_eur
+                else:
+                    stock_cash += amount_eur
                 cash_flows.append((date_str, -amount_eur))
 
             elif tx_type == "CASH WITHDRAWAL" and amount:
                 total_invested -= amount_eur
                 if is_cfd or is_cfd_tx:
                     cfd_cash -= amount_eur
+                else:
+                    stock_cash -= amount_eur
                 cash_flows.append((date_str, amount_eur))
 
         # Compute portfolio value for this date
         portfolio_value = 0.0
         fx_rate = _get_fx_rate(fx_cache, date_str, conn)
+
+        # Include uninvested stock cash (from CASH TOP-UP not yet deployed)
+        if stock_cash > 0:
+            portfolio_value += stock_cash
 
         # CFD: portfolio value = cash balance + mark-to-market of open positions
         # cash balance already includes deposits, trade cash flows, and fees
@@ -555,6 +609,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 "realized_gain_eur": total_realized_gain,
             })
 
+        prev_portfolio_value = portfolio_value
         current += timedelta(days=1)
 
     # Build daily DataFrame
@@ -562,6 +617,34 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     if daily_df.empty:
         raise ValueError("No data for the requested period.")
     daily_df.set_index("date", inplace=True)
+
+    # Compute chain-linked performance index (100-based).
+    # Each day's return excludes the effect of cash flows, so deposits/withdrawals
+    # don't cause jumps. Formula: daily_return = (value_today - cashflow_today) / value_yesterday - 1
+    # Then compound: index[i] = index[i-1] * (1 + daily_return)
+    cf_by_date = defaultdict(float)
+    for cf_date, cf_amount in cash_flows:
+        cf_by_date[cf_date] += cf_amount  # negative = inflow (buy/deposit), positive = outflow (sell/withdrawal)
+
+    perf_index = []
+    idx_val = 100.0
+    values = daily_df["value_eur"].values
+    dates = daily_df.index.tolist()
+    for i in range(len(values)):
+        if i == 0:
+            perf_index.append(100.0 if values[0] > 0 else 0.0)
+            continue
+        prev_val = values[i - 1]
+        cur_val = values[i]
+        # Net cash flow on this date (negative = money in, positive = money out)
+        net_cf = cf_by_date.get(dates[i], 0.0)
+        if prev_val > 1e-6:
+            # Daily return: (end_value - net_inflow) / start_value - 1
+            # net_cf is negative for inflows, so subtracting it adds back the inflow
+            daily_ret = (cur_val + net_cf) / prev_val - 1
+            idx_val *= (1 + daily_ret)
+        perf_index.append(idx_val)
+    daily_df["perf_index"] = perf_index
 
     # Current state
     current_value = daily_df["value_eur"].iloc[-1]

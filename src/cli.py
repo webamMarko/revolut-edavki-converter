@@ -193,6 +193,12 @@ def cmd_report(args):
         conn.close()
 
 
+def cmd_web(args):
+    """Start web UI for CSV upload and import."""
+    from .web import start_server
+    start_server(host=args.host, port=args.port, verbose=args.verbose)
+
+
 def cmd_status(args):
     """Show database status summary."""
     from .db import get_connection, DB_PATH
@@ -313,6 +319,13 @@ Examples:
     p_report.add_argument("--output", "-o", help="Output HTML file path")
     p_report.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_report.set_defaults(func=cmd_report)
+
+    # --- web ---
+    p_web = subparsers.add_parser("web", help="Start web UI for CSV upload and import")
+    p_web.add_argument("--host", default="127.0.0.1", help="Bind address (default: 127.0.0.1)")
+    p_web.add_argument("--port", type=int, default=8080, help="Port (default: 8080)")
+    p_web.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    p_web.set_defaults(func=cmd_web)
 
     # --- status ---
     p_status = subparsers.add_parser("status", help="Show database status")
