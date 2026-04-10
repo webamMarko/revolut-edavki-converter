@@ -4,6 +4,8 @@ import pandas as pd
 from datetime import datetime
 from typing import List, Dict, Optional
 from pathlib import Path
+from collections import defaultdict
+import re
 
 
 class RevolutTransaction:
@@ -11,16 +13,23 @@ class RevolutTransaction:
     
     def __init__(self, row: pd.Series):
         """Initialize transaction from a pandas Series."""
+        # Handle both old and new Revolut export formats
         self.type = row.get('Type', '')
         self.product = row.get('Product', '')
         self.started_date = self._parse_date(row.get('Started Date', ''))
-        self.completed_date = self._parse_date(row.get('Completed Date', ''))
+        self.completed_date = self._parse_date(row.get('Completed Date', '') or row.get('Date', ''))
         self.description = row.get('Description', '')
-        self.amount = self._parse_amount(row.get('Amount', 0))
+        self.amount = self._parse_amount(row.get('Amount', 0) or row.get('Total Amount', 0))
         self.fee = self._parse_amount(row.get('Fee', 0))
         self.currency = row.get('Currency', '')
-        self.state = row.get('State', '')
+        self.state = row.get('State', 'COMPLETED')  # New format doesn't have State
         self.balance = self._parse_amount(row.get('Balance', 0))
+        
+        # Stock-specific fields (new format)
+        self.ticker = row.get('Ticker', '')
+        self.quantity = self._parse_amount(row.get('Quantity', 0))
+        self.price_per_share = self._parse_amount(row.get('Price per share', 0))
+        self.fx_rate = self._parse_amount(row.get('FX Rate', 1.0))
     
     def _parse_date(self, date_str: str) -> Optional[datetime]:
         """Parse date string to datetime object."""
@@ -36,9 +45,29 @@ class RevolutTransaction:
         if pd.isna(amount):
             return 0.0
         try:
+            # Handle amounts like "USD 32" or "32"
+            if isinstance(amount, str):
+                # Remove currency prefix
+                amount = re.sub(r'^[A-Z]{3}\s+', '', amount)
             return float(amount)
         except:
             return 0.0
+    
+    def is_stock_transaction(self) -> bool:
+        """Check if this is a stock buy/sell/split transaction."""
+        return bool(self.ticker and ('BUY' in self.type or 'SELL' in self.type or 'STOCK SPLIT' in self.type))
+    
+    def is_buy(self) -> bool:
+        """Check if this is a buy transaction."""
+        return 'BUY' in self.type
+    
+    def is_sell(self) -> bool:
+        """Check if this is a sell transaction."""
+        return 'SELL' in self.type
+    
+    def is_stock_split(self) -> bool:
+        """Check if this is a stock split."""
+        return 'STOCK SPLIT' in self.type
     
     def to_dict(self) -> Dict:
         """Convert transaction to dictionary."""
@@ -52,7 +81,11 @@ class RevolutTransaction:
             'fee': self.fee,
             'currency': self.currency,
             'state': self.state,
-            'balance': self.balance
+            'balance': self.balance,
+            'ticker': self.ticker,
+            'quantity': self.quantity,
+            'price_per_share': self.price_per_share,
+            'fx_rate': self.fx_rate
         }
 
 
@@ -96,3 +129,18 @@ class RevolutParser:
     def filter_by_currency(self, currency: str) -> List[RevolutTransaction]:
         """Filter transactions by currency."""
         return [t for t in self.transactions if t.currency == currency]
+    
+    def filter_stock_transactions(self) -> List[RevolutTransaction]:
+        """Return only stock buy/sell transactions."""
+        return [t for t in self.transactions if t.is_stock_transaction()]
+    
+    def group_by_ticker(self, transactions: List[RevolutTransaction] = None) -> Dict[str, List[RevolutTransaction]]:
+        """Group transactions by ticker symbol."""
+        if transactions is None:
+            transactions = self.transactions
+        
+        grouped = defaultdict(list)
+        for t in transactions:
+            if t.ticker:
+                grouped[t.ticker].append(t)
+        return dict(grouped)
