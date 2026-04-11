@@ -226,7 +226,7 @@ def sync_fx_rates(conn: sqlite3.Connection, start_date: datetime | None = None,
 
 def sync_all(conn: sqlite3.Connection, start_date: datetime | None = None,
              end_date: datetime | None = None, verbose: bool = False):
-    """Run all syncs: stock prices, benchmarks, FX rates."""
+    """Run all syncs: stock prices, benchmarks, FX rates, real estate ETN valuations."""
     print("Syncing stock prices...")
     sync_stock_prices(conn, start_date, end_date, verbose)
 
@@ -235,6 +235,15 @@ def sync_all(conn: sqlite3.Connection, start_date: datetime | None = None,
 
     print("\nSyncing FX rates...")
     sync_fx_rates(conn, start_date, end_date, verbose)
+
+    # Sync real estate valuations from ETN if any properties exist
+    has_props = conn.execute(
+        "SELECT COUNT(*) FROM real_estate_properties"
+    ).fetchone()[0]
+    if has_props:
+        from .realestate import sync_etn_valuations
+        print("\nSyncing real estate ETN valuations...")
+        sync_etn_valuations(conn, verbose=verbose)
 
     # Record sync time
     conn.execute(

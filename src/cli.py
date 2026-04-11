@@ -149,7 +149,7 @@ def cmd_report(args):
     from .db import get_connection
     from .analytics import compute_analytics
     from .tax import compute_tax_report
-    from .html_report import generate_html_report, query_transactions
+    from .html_report import generate_html_report, query_transactions, query_real_estate
 
     conn = get_connection()
     try:
@@ -183,12 +183,64 @@ def cmd_report(args):
                 except Exception:
                     pass
 
-        html = generate_html_report(analytics, tax, transactions, per_class=per_class)
+        re_data = query_real_estate(conn)
+        html = generate_html_report(analytics, tax, transactions, per_class=per_class, real_estate=re_data)
 
         output = args.output or f"portfolio_report_{analytics.start_date}_{analytics.end_date}.html"
         with open(output, "w", encoding="utf-8") as f:
             f.write(html)
         print(f"Report written to {output}")
+    finally:
+        conn.close()
+
+
+def cmd_realestate(args):
+    """Manage real estate properties."""
+    from .db import get_connection
+    from .realestate import (
+        add_property, list_properties, set_manual_valuation,
+        sync_etn_valuations, PROPERTY_TYPE_LABELS,
+    )
+
+    conn = get_connection()
+    try:
+        subcmd = args.subcmd
+
+        if subcmd == "list":
+            props = list_properties(conn)
+            if not props:
+                print("No properties in database. Use 'realestate add' to add one.")
+                return
+            print(f"{'Ticker':<8} {'Name':<30} {'Type':<20} {'Area m²':>8} {'Purchase EUR':>13} {'Est. EUR':>10} {'Est. date':<12}")
+            print("-" * 110)
+            for p in props:
+                est = f"{p['estimated_value_eur']:>10,.0f}" if p['estimated_value_eur'] else "        n/a"
+                edate = p['estimated_date'] or ""
+                print(f"{p['ticker']:<8} {p['name']:<30} {PROPERTY_TYPE_LABELS.get(p['property_type'], p['property_type']):<20} "
+                      f"{p['area_m2']:>8.1f} {p['purchase_price_eur']:>13,.0f} {est} {edate:<12}")
+
+        elif subcmd == "add":
+            ticker = add_property(
+                conn,
+                name=args.name,
+                address=args.address or "",
+                municipality=args.municipality,
+                cadastral_municipality=args.cadastral_municipality or "",
+                property_type=args.property_type,
+                area_m2=args.area_m2,
+                purchase_price_eur=args.purchase_price,
+                purchase_date=args.purchase_date,
+                notes=args.notes or "",
+            )
+            print(f"Property added with ticker {ticker}")
+
+        elif subcmd == "value":
+            set_manual_valuation(conn, args.ticker, args.value_eur, args.date)
+            print(f"{args.ticker}: manual valuation set to {args.value_eur:,.0f} EUR")
+
+        elif subcmd == "sync":
+            sync_etn_valuations(conn, verbose=args.verbose)
+
     finally:
         conn.close()
 
@@ -294,7 +346,7 @@ Examples:
     p_analytics.add_argument("--format", choices=["text", "json", "csv"], default="text")
     p_analytics.add_argument("--output", help="Output file (default: stdout)")
     p_analytics.add_argument("--chart", action="store_true", help="Show performance chart")
-    p_analytics.add_argument("--scope", choices=["stock", "cfd", "crypto", "savings", "all"], default="all",
+    p_analytics.add_argument("--scope", choices=["stock", "cfd", "crypto", "savings", "realestate", "all"], default="all",
                              help="Asset class scope (default: all)")
     p_analytics.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_analytics.set_defaults(func=cmd_analytics)
@@ -304,7 +356,7 @@ Examples:
     p_tax.add_argument("--year", type=int, required=True, help="Fiscal year")
     p_tax.add_argument("--include-unrealized", action="store_true",
                        help="Include unrealized tax liability")
-    p_tax.add_argument("--scope", choices=["stock", "cfd", "crypto", "savings", "all"], default="all",
+    p_tax.add_argument("--scope", choices=["stock", "cfd", "crypto", "savings", "realestate", "all"], default="all",
                        help="Asset class scope (default: all)")
     p_tax.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_tax.set_defaults(func=cmd_tax)
@@ -314,11 +366,44 @@ Examples:
     p_report.add_argument("--year", type=int, help="Limit to a specific year")
     p_report.add_argument("--from", dest="start_date", type=parse_date, help="Start date")
     p_report.add_argument("--to", dest="end_date", type=parse_date, help="End date")
-    p_report.add_argument("--scope", choices=["stock", "cfd", "crypto", "savings", "all"], default="all",
+    p_report.add_argument("--scope", choices=["stock", "cfd", "crypto", "savings", "realestate", "all"], default="all",
                           help="Asset class scope (default: all)")
     p_report.add_argument("--output", "-o", help="Output HTML file path")
     p_report.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_report.set_defaults(func=cmd_report)
+
+    # --- realestate ---
+    p_re = subparsers.add_parser("realestate", help="Manage real estate properties")
+    re_sub = p_re.add_subparsers(dest="subcmd", help="Real estate sub-commands")
+    p_re.set_defaults(func=cmd_realestate)
+
+    # realestate list
+    re_sub.add_parser("list", help="List all properties with latest valuations")
+
+    # realestate add
+    p_re_add = re_sub.add_parser("add", help="Add a new property")
+    p_re_add.add_argument("--name", required=True, help="Property name / label")
+    p_re_add.add_argument("--address", help="Full address")
+    p_re_add.add_argument("--municipality", required=True, help="Municipality (občina) for ETN search")
+    p_re_add.add_argument("--cadastral-municipality", help="Cadastral municipality (katastrska občina)")
+    p_re_add.add_argument("--type", dest="property_type", required=True,
+                          choices=["stanovanje", "hisa", "garaza", "poslovni", "zemljisce"],
+                          help="Property type")
+    p_re_add.add_argument("--area", dest="area_m2", type=float, required=True, help="Area in m²")
+    p_re_add.add_argument("--price", dest="purchase_price", type=float, required=True,
+                          help="Purchase price in EUR")
+    p_re_add.add_argument("--date", dest="purchase_date", required=True, help="Purchase date (YYYY-MM-DD)")
+    p_re_add.add_argument("--notes", help="Optional notes")
+
+    # realestate value
+    p_re_val = re_sub.add_parser("value", help="Set manual valuation for a property")
+    p_re_val.add_argument("ticker", help="Property ticker (e.g. RE001)")
+    p_re_val.add_argument("value_eur", type=float, help="Estimated market value in EUR")
+    p_re_val.add_argument("--date", help="Valuation date (default: today, YYYY-MM-DD)")
+
+    # realestate sync
+    p_re_sync = re_sub.add_parser("sync", help="Sync valuations from ETN database")
+    p_re_sync.add_argument("--verbose", "-v", action="store_true")
 
     # --- web ---
     p_web = subparsers.add_parser("web", help="Start web UI for CSV upload and import")

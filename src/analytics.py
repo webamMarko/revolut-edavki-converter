@@ -96,7 +96,7 @@ def _build_holdings_timeline(conn: sqlite3.Connection, scope: str = "all") -> li
         rows = conn.execute(
             """SELECT date, ticker, type, quantity, price_per_share, total_amount,
                       currency, fx_rate, asset_class, source_file
-               FROM transactions ORDER BY date"""
+               FROM transactions WHERE asset_class != 'realestate' ORDER BY date"""
         ).fetchall()
     else:
         rows = conn.execute(
@@ -208,6 +208,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     is_cfd = scope == "cfd"
     is_crypto = scope == "crypto"
     is_savings = scope == "savings"
+    is_realestate = scope == "realestate"
 
     fx_cache = {}
     price_cache = {}
@@ -229,7 +230,8 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
         for tx in tx_by_date.get(date_str, []):
             tx_type = tx["type"]
             ticker = tx["ticker"]
-            qty = tx["quantity"] or 0
+            qty = tx["quantity"] if tx["quantity"] is not None else 0
+            qty_is_null = tx["quantity"] is None
             amount = tx["total_amount"] or 0
             fx = tx["fx_rate"] or 1.0
             pps = tx["price_per_share"] or 0
@@ -364,6 +366,9 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
 
             elif ("SELL" in tx_type or tx_type == "PAYMENT") and ticker and (is_crypto or is_crypto_tx):
                 # Crypto SELL/PAYMENT: closes a long (FIFO)
+                # NULL quantity means "sell all remaining" (full close-out)
+                if qty_is_null and holdings.get(ticker, 0) > 0:
+                    qty = holdings[ticker]
                 holdings[ticker] -= qty
                 remaining = qty
                 sell_proceeds_eur = amount_eur
@@ -741,8 +746,8 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             weight_pct=mv / total_val * 100,
         ))
 
-    # Benchmark comparisons (skip for CFD/savings scope)
-    if is_cfd or is_savings:
+    # Benchmark comparisons (skip for CFD/savings/realestate scope)
+    if is_cfd or is_savings or is_realestate:
         benchmarks, benchmark_series = [], {}
     else:
         benchmarks, benchmark_series = _compute_benchmarks(conn, daily_df, period_start, period_end, fx_cache, price_cache)

@@ -6,6 +6,79 @@ import sqlite3
 from datetime import datetime
 
 
+def query_real_estate(conn: sqlite3.Connection) -> dict:
+    """Return real estate properties with valuations and price history."""
+    try:
+        props = conn.execute("""
+            SELECT p.*,
+                   dp.close AS estimated_value_eur,
+                   dp.date  AS estimated_date
+            FROM real_estate_properties p
+            LEFT JOIN (
+                SELECT ticker, close, date,
+                       ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY date DESC) AS rn
+                FROM daily_prices WHERE currency = 'EUR'
+            ) dp ON dp.ticker = p.ticker AND dp.rn = 1
+            ORDER BY p.purchase_date
+        """).fetchall()
+    except Exception:
+        return {}
+
+    if not props:
+        return {}
+
+    prop_list = []
+    total_purchase = 0.0
+    total_estimated = 0.0
+
+    for row in props:
+        p = dict(row)
+        purchase = p["purchase_price_eur"] or 0
+        estimated = p["estimated_value_eur"] or purchase
+        gain = estimated - purchase
+        gain_pct = (gain / purchase * 100) if purchase > 0 else 0
+        total_purchase += purchase
+        total_estimated += estimated
+        prop_list.append({
+            "ticker": p["ticker"],
+            "name": p["name"],
+            "address": p.get("address", ""),
+            "municipality": p.get("municipality", ""),
+            "property_type": p["property_type"],
+            "area_m2": p["area_m2"],
+            "purchase_price_eur": round(purchase, 2),
+            "purchase_date": p["purchase_date"],
+            "estimated_value_eur": round(estimated, 2),
+            "estimated_date": p.get("estimated_date") or "",
+            "unrealized_gain_eur": round(gain, 2),
+            "unrealized_gain_pct": round(gain_pct, 2),
+        })
+
+    # Price history per property
+    tickers = [p["ticker"] for p in prop_list]
+    history = {}
+    for ticker in tickers:
+        rows = conn.execute(
+            "SELECT date, close FROM daily_prices WHERE ticker = ? AND currency = 'EUR' ORDER BY date",
+            (ticker,)
+        ).fetchall()
+        if rows:
+            history[ticker] = {
+                "dates": [r[0] for r in rows],
+                "values": [round(r[1], 2) for r in rows],
+            }
+
+    total_gain = total_estimated - total_purchase
+    return {
+        "properties": prop_list,
+        "total_purchase_eur": round(total_purchase, 2),
+        "total_estimated_eur": round(total_estimated, 2),
+        "total_gain_eur": round(total_gain, 2),
+        "total_gain_pct": round(total_gain / total_purchase * 100, 2) if total_purchase > 0 else 0,
+        "history": history,
+    }
+
+
 def query_transactions(conn: sqlite3.Connection, scope: str = "all",
                        year: int | None = None,
                        start_date: datetime | None = None,
@@ -40,7 +113,8 @@ def query_transactions(conn: sqlite3.Connection, scope: str = "all",
 
 
 def _serialize_report_data(analytics, tax, transactions: list[dict],
-                           per_class: dict | None = None) -> dict:
+                           per_class: dict | None = None,
+                           real_estate: dict | None = None) -> dict:
     """Convert analytics/tax results + transactions to JSON-safe dict."""
     daily = analytics.daily_series
     data = {
@@ -197,16 +271,18 @@ def _serialize_report_data(analytics, tax, transactions: list[dict],
                 ),
             }
 
+    data["real_estate"] = real_estate or {}
     return data
 
 
 def generate_html_report(analytics, tax, transactions: list[dict],
-                         per_class: dict | None = None) -> str:
+                         per_class: dict | None = None,
+                         real_estate: dict | None = None) -> str:
     """Generate a self-contained HTML report."""
-    data = _serialize_report_data(analytics, tax, transactions, per_class=per_class)
+    data = _serialize_report_data(analytics, tax, transactions, per_class=per_class, real_estate=real_estate)
     data_json = json.dumps(data, separators=(",", ":"))
 
-    scope_label = {"stock": "Stocks", "cfd": "CFD", "crypto": "Crypto", "savings": "Savings", "all": "All Assets"}.get(data["scope"], "All")
+    scope_label = {"stock": "Stocks", "cfd": "CFD", "crypto": "Crypto", "savings": "Savings", "realestate": "Real Estate", "all": "All Assets"}.get(data["scope"], "All")
     title = f"Portfolio Report — {scope_label}"
 
     return f"""<!DOCTYPE html>
@@ -284,6 +360,15 @@ def generate_html_report(analytics, tax, transactions: list[dict],
     <h2>Current Positions</h2>
     <div class="table-scroll">
       <table id="positionsTable" class="data-table sortable"></table>
+    </div>
+  </section>
+
+  <section class="card" id="realEstateSection">
+    <h2>Real Estate</h2>
+    <div id="reCards" class="card-grid small" style="margin-bottom:1rem"></div>
+    <div class="chart-wrap" style="height:260px;margin-bottom:1rem"><canvas id="reChart"></canvas></div>
+    <div class="table-scroll">
+      <table id="reTable" class="data-table"></table>
     </div>
   </section>
 
@@ -443,6 +528,12 @@ main { max-width: 1240px; margin: 0 auto; padding: 1.5rem 1rem; display: flex; f
 .heatmap-empty { min-width:52px; }
 .heatmap-year-col { border-left:2px solid var(--border); }
 .heatmap-year-cell { border-left:2px solid var(--border); }
+.tag-realestate { background: #fce7f3; color: #9d174d; }
+@media (prefers-color-scheme: dark) {
+  .tag-realestate { background: #4a0026; color: #f9a8d4; }
+  .toggle-realestate { background: #4a0026; color: #f9a8d4; border-color: #db2777; }
+}
+.toggle-realestate { background: #fce7f3; color: #9d174d; border-color: #f472b6; }
 """
 
 
@@ -461,16 +552,23 @@ const sign = v => v==null?'—':(v>=0?'+':'')+fmt(v);
 const perClass = D.per_class || {};
 const classKeys = Object.keys(perClass);
 const hasFilter = classKeys.length > 1;
-let activeClasses = new Set(classKeys);
-const classLabels = {stock:'Stocks',cfd:'CFD',crypto:'Crypto',savings:'Savings'};
+// Real estate starts inactive by default (different time horizon, skews the chart)
+const defaultInactive = new Set(['realestate']);
+let activeClasses = new Set(classKeys.filter(k => !defaultInactive.has(k)));
+const classLabels = {stock:'Stocks',cfd:'CFD',crypto:'Crypto',savings:'Savings',realestate:'Real Estate'};
 
 // Build the active daily series by summing selected asset classes
 // Each per_class entry has dates/value_eur/invested_eur/dividends_eur/realized_gain_eur
 // We need to align them onto a common date grid.
 
+// Keys that are included in the pre-computed "all" daily series (excludes realestate)
+const allSeriesKeys = new Set(classKeys.filter(k => k !== 'realestate'));
+
 function buildCombinedSeries() {
-  if (!hasFilter || activeClasses.size === classKeys.length) {
-    // All selected: use the original "all" series
+  // Use pre-computed "all" series when exactly the financial (non-realestate) classes are active
+  const financialActive = [...activeClasses].filter(k => k !== 'realestate');
+  if (!hasFilter || (financialActive.length === allSeriesKeys.size && !activeClasses.has('realestate'))) {
+    // All financial classes selected and real estate off: use the original "all" series
     return {
       dates: D.daily_series.dates,
       value_eur: D.daily_series.value_eur.slice(),
@@ -556,8 +654,14 @@ function computePerfIndex(values, invested) {
   return pi;
 }
 
+function isDefaultSelection() {
+  // True when selection matches the pre-computed "all" series (financial classes only, no realestate)
+  const financialActive = [...activeClasses].filter(k => k !== 'realestate');
+  return !hasFilter || (financialActive.length === allSeriesKeys.size && !activeClasses.has('realestate'));
+}
+
 function getActiveSummary() {
-  if (!hasFilter || activeClasses.size === classKeys.length) return D.summary;
+  if (isDefaultSelection()) return D.summary;
   if (activeClasses.size === 0) return {portfolio_value_eur:0,total_invested_eur:0,absolute_gain_eur:0,total_return_pct:0,cagr_pct:null,twr_pct:null,max_drawdown_pct:0,max_drawdown_peak_date:'',max_drawdown_trough_date:''};
   if (activeClasses.size === 1) return perClass[[...activeClasses][0]].summary;
   // Sum summaries for selected classes
@@ -581,7 +685,7 @@ function getActiveSummary() {
 }
 
 function getActiveGains() {
-  if (!hasFilter || activeClasses.size === classKeys.length) return D.gains;
+  if (isDefaultSelection()) return D.gains;
   if (activeClasses.size === 0) return {realized_eur:0,unrealized_eur:0,dividends_eur:0,fees_eur:0};
   if (activeClasses.size === 1) return perClass[[...activeClasses][0]].gains;
   let r=0,u=0,d=0,f=0;
@@ -590,7 +694,7 @@ function getActiveGains() {
 }
 
 function getActivePositions() {
-  if (!hasFilter || activeClasses.size === classKeys.length) return D.positions;
+  if (isDefaultSelection()) return D.positions;
   let all = [];
   activeClasses.forEach(ac => { all = all.concat(perClass[ac].positions); });
   // Recalculate weights
@@ -943,7 +1047,7 @@ const txFilterEl=document.getElementById('txFilter');
 function getDateFilteredTx() {
   let txs = D.transactions;
   // Filter by active asset classes
-  if (hasFilter && activeClasses.size < classKeys.length) {
+  if (hasFilter && !isDefaultSelection()) {
     txs = txs.filter(t => activeClasses.has(t.asset_class));
   }
   if (!isZoomed) return txs;
@@ -1116,5 +1220,84 @@ function buildHeatmap() {
 // --- Initial render ---
 updateAll();
 buildHeatmap();
+
+// --- Real Estate section (runs after main render so any error here is isolated) ---
+try {
+  const RE = D.real_estate;
+  if (RE && RE.properties && RE.properties.length > 0) {
+    document.getElementById('realEstateSection').style.display = '';
+
+    const propTypeLabels = {
+      stanovanje: 'Apartment', hisa: 'House', garaza: 'Garage',
+      poslovni: 'Commercial', zemljisce: 'Land'
+    };
+
+    // Summary cards
+    const cards = [
+      ['Properties', RE.properties.length, ''],
+      ['Purchase Total', fmtEur(RE.total_purchase_eur), ''],
+      ['ETN Estimate', fmtEur(RE.total_estimated_eur), ''],
+      ['Unrealized Gain', sign(RE.total_gain_eur) + ' EUR', cls(RE.total_gain_eur),
+       sign(RE.total_gain_pct) + '%'],
+    ];
+    document.getElementById('reCards').innerHTML = cards.map(([l, v, c, sub]) =>
+      '<div class="metric-card"><div class="label">' + l + '</div><div class="value ' + (c||'') + '">' + v + '</div>' +
+      (sub ? '<div class="sub ' + (c||'') + '">' + sub + '</div>' : '') + '</div>'
+    ).join('');
+
+    // Value history chart
+    const hist = RE.history || {};
+    const reColors = ['#db2777','#f59e0b','#8b5cf6','#06b6d4','#10b981'];
+    const reDatasets = RE.properties.map(function(p, i) {
+      const h = hist[p.ticker];
+      if (!h) return null;
+      return {
+        label: p.name,
+        data: h.dates.map(function(d, j) { return {x: d, y: h.values[j]}; }),
+        borderColor: reColors[i % reColors.length],
+        backgroundColor: reColors[i % reColors.length] + '18',
+        fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2,
+      };
+    }).filter(Boolean);
+
+    if (reDatasets.length > 0 && typeof Chart !== 'undefined') {
+      const ctx = document.getElementById('reChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: { datasets: reDatasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: {mode: 'index', intersect: false},
+          scales: {
+            x: {type: 'time', time: {unit: 'month', tooltipFormat: 'yyyy-MM-dd'}, grid: {display: false}},
+            y: {title: {display: true, text: 'EUR'}, ticks: {callback: function(v){ return v.toLocaleString(); }}}
+          },
+          plugins: {tooltip: {callbacks: {label: function(c){ return c.dataset.label + ': ' + fmt(c.parsed.y) + ' EUR'; }}}}
+        }
+      });
+    }
+
+    // Properties table
+    const pt = document.getElementById('reTable');
+    pt.innerHTML = '<thead><tr><th>Ticker</th><th>Name</th><th>Type</th><th>Area m²</th>' +
+      '<th>Purchase Date</th><th>Purchase EUR</th><th>ETN Value EUR</th>' +
+      '<th>Gain EUR</th><th>Gain %</th><th>ETN Date</th></tr></thead><tbody>' +
+      RE.properties.map(function(p) {
+        return '<tr>' +
+          '<td><strong>' + p.ticker + '</strong></td>' +
+          '<td>' + p.name + (p.address ? '<br><span style="font-size:0.75rem;color:var(--muted)">' + p.address + '</span>' : '') + '</td>' +
+          '<td>' + (propTypeLabels[p.property_type] || p.property_type) + '</td>' +
+          '<td>' + fmt(p.area_m2, 0) + '</td>' +
+          '<td>' + p.purchase_date + '</td>' +
+          '<td>' + fmtEur(p.purchase_price_eur) + '</td>' +
+          '<td>' + fmtEur(p.estimated_value_eur) + '</td>' +
+          '<td class="' + cls(p.unrealized_gain_eur) + '">' + sign(p.unrealized_gain_eur) + ' EUR</td>' +
+          '<td class="' + cls(p.unrealized_gain_pct) + '">' + sign(p.unrealized_gain_pct) + '%</td>' +
+          '<td style="color:var(--muted);font-size:0.8rem">' + (p.estimated_date || '—') + '</td>' +
+          '</tr>';
+      }).join('') + '</tbody>';
+    makeSortable(pt);
+  }
+} catch(e) { console.error('Real estate section error:', e); }
 })();
 """

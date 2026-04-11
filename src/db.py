@@ -6,7 +6,7 @@ from pathlib import Path
 DB_DIR = Path.home() / ".revolut-edavki"
 DB_PATH = DB_DIR / "portfolio.db"
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS transactions (
@@ -56,6 +56,21 @@ CREATE TABLE IF NOT EXISTS metadata (
     key   TEXT PRIMARY KEY,
     value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS real_estate_properties (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker                  TEXT NOT NULL UNIQUE,
+    name                    TEXT NOT NULL,
+    address                 TEXT,
+    municipality            TEXT NOT NULL,
+    cadastral_municipality  TEXT,
+    property_type           TEXT NOT NULL,
+    area_m2                 REAL NOT NULL,
+    purchase_price_eur      REAL NOT NULL,
+    purchase_date           TEXT NOT NULL,
+    notes                   TEXT,
+    created_at              TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -82,6 +97,24 @@ def _init_schema(conn: sqlite3.Connection):
         cols = [r[1] for r in conn.execute("PRAGMA table_info(transactions)").fetchall()]
         if "asset_class" not in cols:
             conn.execute("ALTER TABLE transactions ADD COLUMN asset_class TEXT NOT NULL DEFAULT 'stock'")
+
+    if current_version < 3:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS real_estate_properties (
+                id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker                  TEXT NOT NULL UNIQUE,
+                name                    TEXT NOT NULL,
+                address                 TEXT,
+                municipality            TEXT NOT NULL,
+                cadastral_municipality  TEXT,
+                property_type           TEXT NOT NULL,
+                area_m2                 REAL NOT NULL,
+                purchase_price_eur      REAL NOT NULL,
+                purchase_date           TEXT NOT NULL,
+                notes                   TEXT,
+                created_at              TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+        """)
 
     if current_version < SCHEMA_VERSION:
         conn.execute(
