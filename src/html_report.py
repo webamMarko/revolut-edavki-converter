@@ -815,14 +815,13 @@ let portfolioChart, benchmarkChart;
 function buildPortfolioChart() {
   const ctx1 = document.getElementById('portfolioChart').getContext('2d');
 
-  // All datasets use {x,y} format so the time axis can extend into future dates
-  const portfolioXY = allDates.map((d, i) => ({x: d, y: ds.value_eur[i]}));
-  const investedXY  = allDates.map((d, i) => ({x: d, y: ds.invested_eur[i]}));
-
-  const chartDatasets = [
-    {label:'Portfolio Value', data:portfolioXY, borderColor:'#4285f4', backgroundColor:'rgba(66,133,244,0.08)', fill:true, tension:0.15, pointRadius:0, borderWidth:2},
-    {label:'Cash Invested',   data:investedXY,  borderColor:'#9e9e9e', borderDash:[5,5], fill:false, tension:0.15, pointRadius:0, borderWidth:1.5},
-  ];
+  // Start with the historical labels; extend with future dates if FIRE is configured
+  let chartLabels = allDates.slice();
+  // Historical data arrays (will be extended with nulls for future portion)
+  let portfolioData = ds.value_eur.slice();
+  let investedData  = ds.invested_eur.slice();
+  let fireData      = null;
+  let projData      = null;
 
   if (D.fire != null) {
     const fire = D.fire;
@@ -841,48 +840,51 @@ function buildPortfolioChart() {
       ? Math.ceil(yearsToFire * 12) + 24
       : 36;
 
-    // FIRE target: flat line from portfolio start to end of projection
-    const fireLineData = allDates.map(d => ({x: d, y: fireTarget}));
-    const projData = [{x: allDates[allDates.length - 1], y: currentValue}]; // anchor to today
-
+    // Build future date labels and projection values
+    const futureDates = [];
+    const futureProj  = [currentValue]; // anchor projection to today's value
     for (let m = 1; m <= horizonMonths; m++) {
       const d = new Date(lastDate);
       d.setMonth(d.getMonth() + m);
-      const dStr = d.toISOString().slice(0, 10);
-      fireLineData.push({x: dStr, y: fireTarget});
-      projData.push({x: dStr, y: Math.round(currentValue * Math.pow(1 + nominalCAGR, m / 12))});
+      futureDates.push(d.toISOString().slice(0, 10));
+      futureProj.push(Math.round(currentValue * Math.pow(1 + nominalCAGR, m / 12)));
     }
 
-    chartDatasets.push({
-      label: 'FIRE Target',
-      data: fireLineData,
-      borderColor: '#22c55e',
-      borderDash: [6, 4],
-      fill: false, tension: 0, pointRadius: 0, borderWidth: 2,
-    });
-    chartDatasets.push({
-      label: 'Projected Growth',
-      data: projData,
-      borderColor: '#4285f4',
-      borderDash: [3, 3],
-      fill: false, tension: 0.1, pointRadius: 0, borderWidth: 1.5,
-    });
+    // Extend chart labels and pad historical series with null for future slots
+    chartLabels = allDates.concat(futureDates);
+    const futurePad = new Array(futureDates.length).fill(null);
+    portfolioData = ds.value_eur.concat(futurePad);
+    investedData  = ds.invested_eur.concat(futurePad);
+
+    // FIRE target: flat line across all dates (historical + future)
+    fireData = new Array(chartLabels.length).fill(fireTarget);
+
+    // Projected growth: null for historical, values starting from today
+    projData = new Array(allDates.length - 1).fill(null).concat(futureProj);
+  }
+
+  const chartDatasets = [
+    {label:'Portfolio Value', data:portfolioData, borderColor:'#4285f4', backgroundColor:'rgba(66,133,244,0.08)', fill:true, tension:0.15, pointRadius:0, borderWidth:2},
+    {label:'Cash Invested',   data:investedData,  borderColor:'#9e9e9e', borderDash:[5,5], fill:false, tension:0.15, pointRadius:0, borderWidth:1.5},
+  ];
+  if (fireData) {
+    chartDatasets.push({label:'FIRE Target',     data:fireData, borderColor:'#22c55e', borderDash:[6,4], fill:false, tension:0, pointRadius:0, borderWidth:2});
+    chartDatasets.push({label:'Projected Growth',data:projData, borderColor:'#4285f4', borderDash:[3,3], fill:false, tension:0.1, pointRadius:0, borderWidth:1.5, spanGaps:false});
   }
 
   return new Chart(ctx1, {
-    type: 'line',
-    data: { datasets: chartDatasets },  // no labels — time scale reads x from each point
-    options: {
-      parsing: false,  // all datasets use {x,y} objects
-      responsive: true, maintainAspectRatio: false,
-      interaction: {mode:'index', intersect:false},
-      scales: {
-        x: {type:'time', time:{unit:'month', tooltipFormat:'yyyy-MM-dd'}, grid:{display:false}},
-        y: {title:{display:true, text:'EUR'}, ticks:{callback: v => v.toLocaleString()}}
+    type:'line',
+    data:{ labels: chartLabels, datasets: chartDatasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      scales:{
+        x:{type:'time',time:{unit:'month',tooltipFormat:'yyyy-MM-dd'},grid:{display:false}},
+        y:{title:{display:true,text:'EUR'},ticks:{callback:v=>v.toLocaleString()}}
       },
-      plugins: {
-        tooltip: {callbacks: {label: c => c.parsed.y != null ? c.dataset.label+': '+fmt(c.parsed.y)+' EUR' : ''}},
-        zoom: zoomOpts
+      plugins:{
+        tooltip:{callbacks:{label:c=>c.parsed.y!=null?c.dataset.label+': '+fmt(c.parsed.y)+' EUR':''}},
+        zoom:zoomOpts
       }
     }
   });
