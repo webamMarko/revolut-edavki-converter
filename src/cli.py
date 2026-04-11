@@ -149,7 +149,7 @@ def cmd_report(args):
     from .db import get_connection
     from .analytics import compute_analytics
     from .tax import compute_tax_report
-    from .html_report import generate_html_report, query_transactions, query_real_estate, query_fire_target
+    from .html_report import generate_html_report, query_transactions, query_real_estate, query_fire_config
 
     conn = get_connection()
     try:
@@ -184,9 +184,9 @@ def cmd_report(args):
                     pass
 
         re_data = query_real_estate(conn)
-        fire_target = query_fire_target(conn)
+        fire_cfg = query_fire_config(conn)
         html = generate_html_report(analytics, tax, transactions, per_class=per_class,
-                                     real_estate=re_data, fire_target=fire_target)
+                                     real_estate=re_data, fire_config=fire_cfg)
 
         output = args.output or f"portfolio_report_{analytics.start_date}_{analytics.end_date}.html"
         with open(output, "w", encoding="utf-8") as f:
@@ -211,34 +211,34 @@ def cmd_fire(args):
                          (str(args.annual_income),))
             conn.execute("INSERT OR REPLACE INTO metadata (key, value) VALUES ('fire_withdrawal_rate', ?)",
                          (str(args.withdrawal_rate),))
+            conn.execute("INSERT OR REPLACE INTO metadata (key, value) VALUES ('fire_inflation', ?)",
+                         (str(args.inflation),))
             conn.commit()
             net = args.annual_expenses - args.annual_income
             target = net / (args.withdrawal_rate / 100)
+            real_return = (1 + args.withdrawal_rate / 100) / (1 + args.inflation / 100) - 1
             print(f"FIRE config saved.")
             print(f"  Annual expenses:  €{args.annual_expenses:,.0f}")
             print(f"  Guaranteed income:€{args.annual_income:,.0f}")
             print(f"  Net annual need:  €{net:,.0f}")
             print(f"  Withdrawal rate:  {args.withdrawal_rate:.2f}%")
+            print(f"  Expected inflation:{args.inflation:.1f}%")
             print(f"  FIRE target:      €{target:,.0f}")
 
         elif subcmd == "show":
-            rows = {r[0]: r[1] for r in conn.execute(
-                "SELECT key, value FROM metadata WHERE key LIKE 'fire_%'"
-            ).fetchall()}
-            if not rows:
+            from .html_report import query_fire_config
+            cfg = query_fire_config(conn)
+            if not cfg:
                 print("No FIRE config set. Use: fire set --annual-expenses X --annual-income X")
                 return
-            expenses = float(rows.get("fire_annual_expenses", 0))
-            income   = float(rows.get("fire_annual_income", 0))
-            rate     = float(rows.get("fire_withdrawal_rate", 4.0))
-            net      = expenses - income
-            target   = net / (rate / 100)
+            net = cfg["annual_expenses"] - cfg["annual_income"]
             print(f"FIRE configuration:")
-            print(f"  Annual expenses:  €{expenses:,.0f}")
-            print(f"  Guaranteed income:€{income:,.0f}")
+            print(f"  Annual expenses:  €{cfg['annual_expenses']:,.0f}")
+            print(f"  Guaranteed income:€{cfg['annual_income']:,.0f}")
             print(f"  Net annual need:  €{net:,.0f}")
-            print(f"  Withdrawal rate:  {rate:.2f}%")
-            print(f"  FIRE target:      €{target:,.0f}")
+            print(f"  Withdrawal rate:  {cfg['withdrawal_rate']:.2f}%")
+            print(f"  Expected inflation:{cfg['inflation_rate']:.1f}%")
+            print(f"  FIRE target:      €{cfg['target']:,.0f}")
 
         elif subcmd == "clear":
             conn.execute("DELETE FROM metadata WHERE key LIKE 'fire_%'")
@@ -442,6 +442,8 @@ Examples:
                              help="Guaranteed income offsetting expenses (pension etc.) in EUR (default: 0)")
     p_fire_set.add_argument("--withdrawal-rate", type=float, default=4.0,
                              help="Safe withdrawal rate in %% (default: 4.0)")
+    p_fire_set.add_argument("--inflation", type=float, default=2.5,
+                             help="Expected annual inflation in %% (default: 2.5)")
 
     # fire show
     fire_sub.add_parser("show", help="Show current FIRE config and computed target")

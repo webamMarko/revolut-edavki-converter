@@ -113,19 +113,36 @@ def query_transactions(conn: sqlite3.Connection, scope: str = "all",
 
 
 def query_fire_target(conn: sqlite3.Connection) -> float | None:
-    """Return the FIRE target in EUR from stored config, or None if not configured."""
+    """Backward-compat: return just the FIRE target EUR value, or None."""
+    cfg = query_fire_config(conn)
+    return cfg["target"] if cfg else None
+
+
+def query_fire_config(conn: sqlite3.Connection) -> dict | None:
+    """Return full FIRE config dict or None if not configured.
+
+    Keys: target, annual_expenses, annual_income, withdrawal_rate, inflation_rate
+    """
     try:
         rows = {r[0]: r[1] for r in conn.execute(
             "SELECT key, value FROM metadata WHERE key LIKE 'fire_%'"
         ).fetchall()}
         if "fire_annual_expenses" not in rows:
             return None
-        expenses = float(rows["fire_annual_expenses"])
-        income   = float(rows.get("fire_annual_income", 0))
-        rate     = float(rows.get("fire_withdrawal_rate", 4.0)) / 100
+        expenses  = float(rows["fire_annual_expenses"])
+        income    = float(rows.get("fire_annual_income", 0))
+        rate      = float(rows.get("fire_withdrawal_rate", 4.0))
+        inflation = float(rows.get("fire_inflation", 2.5))
         if rate <= 0:
             return None
-        return round((expenses - income) / rate, 2)
+        target = round((expenses - income) / (rate / 100), 2)
+        return {
+            "target": target,
+            "annual_expenses": expenses,
+            "annual_income": income,
+            "withdrawal_rate": rate,
+            "inflation_rate": inflation,
+        }
     except Exception:
         return None
 
@@ -133,7 +150,8 @@ def query_fire_target(conn: sqlite3.Connection) -> float | None:
 def _serialize_report_data(analytics, tax, transactions: list[dict],
                            per_class: dict | None = None,
                            real_estate: dict | None = None,
-                           fire_target: float | None = None) -> dict:
+                           fire_target: float | None = None,
+                           fire_config: dict | None = None) -> dict:
     """Convert analytics/tax results + transactions to JSON-safe dict."""
     daily = analytics.daily_series
     data = {
@@ -291,17 +309,18 @@ def _serialize_report_data(analytics, tax, transactions: list[dict],
             }
 
     data["real_estate"] = real_estate or {}
-    data["fire_target"] = fire_target  # float or None
+    data["fire"] = fire_config  # full config dict or None (replaces old fire_target)
     return data
 
 
 def generate_html_report(analytics, tax, transactions: list[dict],
                          per_class: dict | None = None,
                          real_estate: dict | None = None,
-                         fire_target: float | None = None) -> str:
+                         fire_target: float | None = None,
+                         fire_config: dict | None = None) -> str:
     """Generate a self-contained HTML report."""
     data = _serialize_report_data(analytics, tax, transactions, per_class=per_class,
-                                  real_estate=real_estate, fire_target=fire_target)
+                                  real_estate=real_estate, fire_config=fire_config)
     data_json = json.dumps(data, separators=(",", ":"))
 
     scope_label = {"stock": "Stocks", "cfd": "CFD", "crypto": "Crypto", "savings": "Savings", "realestate": "Real Estate", "all": "All Assets"}.get(data["scope"], "All")
@@ -795,23 +814,78 @@ let portfolioChart, benchmarkChart;
 
 function buildPortfolioChart() {
   const ctx1 = document.getElementById('portfolioChart').getContext('2d');
+  // Main historical datasets (label-indexed)
   const chartDatasets = [
     {label:'Portfolio Value', data:ds.value_eur, borderColor:'#4285f4', backgroundColor:'rgba(66,133,244,0.08)', fill:true, tension:0.15, pointRadius:0, borderWidth:2},
     {label:'Cash Invested', data:ds.invested_eur, borderColor:'#9e9e9e', borderDash:[5,5], fill:false, tension:0.15, pointRadius:0, borderWidth:1.5},
   ];
-  if (D.fire_target != null) {
+
+  if (D.fire != null) {
+    const fire = D.fire;
+    const fireTarget = fire.target;
+    const inflation = fire.inflation_rate / 100;
+    // Use portfolio CAGR as nominal return estimate; fall back to 8%
+    const nominalCAGR = ((D.summary.cagr_pct != null ? D.summary.cagr_pct : 8)) / 100;
+    const realReturn = (1 + nominalCAGR) / (1 + inflation) - 1;
+
+    const currentValue = ds.value_eur[ds.value_eur.length - 1];
+    const lastDateStr = allDates[allDates.length - 1];
+    const lastDate = new Date(lastDateStr);
+
+    // Years to FIRE in real terms (assumes no new contributions for simplicity)
+    const yearsToFire = realReturn > 0 && currentValue < fireTarget
+      ? Math.log(fireTarget / currentValue) / Math.log(1 + realReturn)
+      : null;
+
+    // Generate future monthly date strings out to FIRE date + 2yr buffer (max 50yr)
+    const horizonMonths = yearsToFire != null && yearsToFire < 50
+      ? Math.ceil(yearsToFire * 12) + 24
+      : 36; // 3yr default if already achieved or no CAGR
+
+    const futureDates = [];
+    const projValues = [];
+    const fireLineXY = allDates.map(d => ({x: d, y: fireTarget}));
+
+    for (let m = 1; m <= horizonMonths; m++) {
+      const d = new Date(lastDate);
+      d.setMonth(d.getMonth() + m);
+      const dStr = d.toISOString().slice(0, 10);
+      futureDates.push(dStr);
+      projValues.push({x: dStr, y: Math.round(currentValue * Math.pow(1 + nominalCAGR, m / 12))});
+      fireLineXY.push({x: dStr, y: fireTarget});
+    }
+
+    // FIRE target line spans historical + future using {x,y} format
     chartDatasets.push({
       label: 'FIRE Target',
-      data: allDates.map(() => D.fire_target),
+      data: fireLineXY,
       borderColor: '#22c55e',
       borderDash: [6, 4],
       fill: false,
       tension: 0,
       pointRadius: 0,
       borderWidth: 2,
+      parsing: false,
       order: 0,
     });
+
+    // Projected growth line (future only)
+    if (projValues.length > 0) {
+      chartDatasets.push({
+        label: 'Projected Growth',
+        data: projValues,
+        borderColor: '#4285f4',
+        borderDash: [3, 3],
+        fill: false,
+        tension: 0.1,
+        pointRadius: 0,
+        borderWidth: 1.5,
+        parsing: false,
+        order: 1,
+      });
+    }
   }
+
   return new Chart(ctx1, {
     type:'line',
     data:{ labels: allDates, datasets: chartDatasets },
@@ -822,7 +896,7 @@ function buildPortfolioChart() {
         x:{type:'time',time:{unit:'month',tooltipFormat:'yyyy-MM-dd'},grid:{display:false}},
         y:{title:{display:true,text:'EUR'},ticks:{callback:v=>v.toLocaleString()}}
       },
-      plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y)+' EUR'}}, zoom:zoomOpts}
+      plugins:{tooltip:{callbacks:{label:c=>c.parsed.y!=null?c.dataset.label+': '+fmt(c.parsed.y)+' EUR':''}}, zoom:zoomOpts}
     }
   });
 }
@@ -977,11 +1051,24 @@ function updateSummary() {
       ['TWR', s.twr_pct!=null?sign(s.twr_pct)+'%':'—', cls(s.twr_pct)],
       ['Max Drawdown', pct(s.max_drawdown_pct), 'neg', s.max_drawdown_peak_date+' → '+s.max_drawdown_trough_date],
     ];
-    if (D.fire_target != null) {
-      const progress = s.portfolio_value_eur / D.fire_target * 100;
-      const remaining = D.fire_target - s.portfolio_value_eur;
-      cards.push(['FIRE Progress', fmt(progress, 1)+'%', progress >= 100 ? 'pos' : '',
-                  (remaining > 0 ? '−'+fmtEur(remaining)+' to go' : '🎉 Achieved!')]);
+    if (D.fire != null) {
+      const fire = D.fire;
+      const fireTarget = fire.target;
+      const progress = s.portfolio_value_eur / fireTarget * 100;
+      const remaining = fireTarget - s.portfolio_value_eur;
+      // Estimate time to FIRE using current CAGR and inflation
+      let fireSub = remaining > 0 ? '−'+fmtEur(remaining)+' to go' : '🎉 Achieved!';
+      if (remaining > 0 && s.cagr_pct != null && s.cagr_pct > 0) {
+        const nominalCAGR = s.cagr_pct / 100;
+        const inflation = fire.inflation_rate / 100;
+        const realReturn = (1 + nominalCAGR) / (1 + inflation) - 1;
+        if (realReturn > 0) {
+          const yearsToFire = Math.log(fireTarget / s.portfolio_value_eur) / Math.log(1 + realReturn);
+          const fireYear = new Date().getFullYear() + Math.ceil(yearsToFire);
+          fireSub = '~' + fmt(yearsToFire, 1) + ' yrs · est. ' + fireYear;
+        }
+      }
+      cards.push(['FIRE Progress', fmt(progress, 1)+'%', progress >= 100 ? 'pos' : '', fireSub]);
     }
     el.innerHTML = cards.map(([l,v,c,sub])=>
       `<div class="metric-card"><div class="label">${l}</div><div class="value ${c||''}">${v}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`
