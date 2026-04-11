@@ -814,89 +814,76 @@ let portfolioChart, benchmarkChart;
 
 function buildPortfolioChart() {
   const ctx1 = document.getElementById('portfolioChart').getContext('2d');
-  // Main historical datasets (label-indexed)
+
+  // All datasets use {x,y} format so the time axis can extend into future dates
+  const portfolioXY = allDates.map((d, i) => ({x: d, y: ds.value_eur[i]}));
+  const investedXY  = allDates.map((d, i) => ({x: d, y: ds.invested_eur[i]}));
+
   const chartDatasets = [
-    {label:'Portfolio Value', data:ds.value_eur, borderColor:'#4285f4', backgroundColor:'rgba(66,133,244,0.08)', fill:true, tension:0.15, pointRadius:0, borderWidth:2},
-    {label:'Cash Invested', data:ds.invested_eur, borderColor:'#9e9e9e', borderDash:[5,5], fill:false, tension:0.15, pointRadius:0, borderWidth:1.5},
+    {label:'Portfolio Value', data:portfolioXY, borderColor:'#4285f4', backgroundColor:'rgba(66,133,244,0.08)', fill:true, tension:0.15, pointRadius:0, borderWidth:2},
+    {label:'Cash Invested',   data:investedXY,  borderColor:'#9e9e9e', borderDash:[5,5], fill:false, tension:0.15, pointRadius:0, borderWidth:1.5},
   ];
 
   if (D.fire != null) {
     const fire = D.fire;
     const fireTarget = fire.target;
     const inflation = fire.inflation_rate / 100;
-    // Use portfolio CAGR as nominal return estimate; fall back to 8%
-    const nominalCAGR = ((D.summary.cagr_pct != null ? D.summary.cagr_pct : 8)) / 100;
+    const nominalCAGR = (D.summary.cagr_pct != null ? D.summary.cagr_pct : 8) / 100;
     const realReturn = (1 + nominalCAGR) / (1 + inflation) - 1;
 
     const currentValue = ds.value_eur[ds.value_eur.length - 1];
-    const lastDateStr = allDates[allDates.length - 1];
-    const lastDate = new Date(lastDateStr);
+    const lastDate = new Date(allDates[allDates.length - 1]);
 
-    // Years to FIRE in real terms (assumes no new contributions for simplicity)
     const yearsToFire = realReturn > 0 && currentValue < fireTarget
       ? Math.log(fireTarget / currentValue) / Math.log(1 + realReturn)
       : null;
-
-    // Generate future monthly date strings out to FIRE date + 2yr buffer (max 50yr)
     const horizonMonths = yearsToFire != null && yearsToFire < 50
       ? Math.ceil(yearsToFire * 12) + 24
-      : 36; // 3yr default if already achieved or no CAGR
+      : 36;
 
-    const futureDates = [];
-    const projValues = [];
-    const fireLineXY = allDates.map(d => ({x: d, y: fireTarget}));
+    // FIRE target: flat line from portfolio start to end of projection
+    const fireLineData = allDates.map(d => ({x: d, y: fireTarget}));
+    const projData = [{x: allDates[allDates.length - 1], y: currentValue}]; // anchor to today
 
     for (let m = 1; m <= horizonMonths; m++) {
       const d = new Date(lastDate);
       d.setMonth(d.getMonth() + m);
       const dStr = d.toISOString().slice(0, 10);
-      futureDates.push(dStr);
-      projValues.push({x: dStr, y: Math.round(currentValue * Math.pow(1 + nominalCAGR, m / 12))});
-      fireLineXY.push({x: dStr, y: fireTarget});
+      fireLineData.push({x: dStr, y: fireTarget});
+      projData.push({x: dStr, y: Math.round(currentValue * Math.pow(1 + nominalCAGR, m / 12))});
     }
 
-    // FIRE target line spans historical + future using {x,y} format
     chartDatasets.push({
       label: 'FIRE Target',
-      data: fireLineXY,
+      data: fireLineData,
       borderColor: '#22c55e',
       borderDash: [6, 4],
-      fill: false,
-      tension: 0,
-      pointRadius: 0,
-      borderWidth: 2,
-      parsing: false,
-      order: 0,
+      fill: false, tension: 0, pointRadius: 0, borderWidth: 2,
     });
-
-    // Projected growth line (future only)
-    if (projValues.length > 0) {
-      chartDatasets.push({
-        label: 'Projected Growth',
-        data: projValues,
-        borderColor: '#4285f4',
-        borderDash: [3, 3],
-        fill: false,
-        tension: 0.1,
-        pointRadius: 0,
-        borderWidth: 1.5,
-        parsing: false,
-        order: 1,
-      });
-    }
+    chartDatasets.push({
+      label: 'Projected Growth',
+      data: projData,
+      borderColor: '#4285f4',
+      borderDash: [3, 3],
+      fill: false, tension: 0.1, pointRadius: 0, borderWidth: 1.5,
+    });
   }
 
   return new Chart(ctx1, {
-    type:'line',
-    data:{ labels: allDates, datasets: chartDatasets },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
-      scales:{
-        x:{type:'time',time:{unit:'month',tooltipFormat:'yyyy-MM-dd'},grid:{display:false}},
-        y:{title:{display:true,text:'EUR'},ticks:{callback:v=>v.toLocaleString()}}
+    type: 'line',
+    data: { datasets: chartDatasets },  // no labels — time scale reads x from each point
+    options: {
+      parsing: false,  // all datasets use {x,y} objects
+      responsive: true, maintainAspectRatio: false,
+      interaction: {mode:'index', intersect:false},
+      scales: {
+        x: {type:'time', time:{unit:'month', tooltipFormat:'yyyy-MM-dd'}, grid:{display:false}},
+        y: {title:{display:true, text:'EUR'}, ticks:{callback: v => v.toLocaleString()}}
       },
-      plugins:{tooltip:{callbacks:{label:c=>c.parsed.y!=null?c.dataset.label+': '+fmt(c.parsed.y)+' EUR':''}}, zoom:zoomOpts}
+      plugins: {
+        tooltip: {callbacks: {label: c => c.parsed.y != null ? c.dataset.label+': '+fmt(c.parsed.y)+' EUR' : ''}},
+        zoom: zoomOpts
+      }
     }
   });
 }
