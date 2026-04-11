@@ -552,8 +552,8 @@ const sign = v => v==null?'—':(v>=0?'+':'')+fmt(v);
 const perClass = D.per_class || {};
 const classKeys = Object.keys(perClass);
 const hasFilter = classKeys.length > 1;
-// Real estate starts inactive by default (different time horizon, skews the chart)
-const defaultInactive = new Set(['realestate']);
+// These classes start inactive by default (different time horizon / skews the main chart)
+const defaultInactive = new Set(['realestate', 'savings']);
 let activeClasses = new Set(classKeys.filter(k => !defaultInactive.has(k)));
 const classLabels = {stock:'Stocks',cfd:'CFD',crypto:'Crypto',savings:'Savings',realestate:'Real Estate'};
 
@@ -561,14 +561,15 @@ const classLabels = {stock:'Stocks',cfd:'CFD',crypto:'Crypto',savings:'Savings',
 // Each per_class entry has dates/value_eur/invested_eur/dividends_eur/realized_gain_eur
 // We need to align them onto a common date grid.
 
-// Keys that are included in the pre-computed "all" daily series (excludes realestate)
+// Keys included in the pre-computed "all" daily series (everything except realestate)
 const allSeriesKeys = new Set(classKeys.filter(k => k !== 'realestate'));
 
 function buildCombinedSeries() {
-  // Use pre-computed "all" series when exactly the financial (non-realestate) classes are active
-  const financialActive = [...activeClasses].filter(k => k !== 'realestate');
-  if (!hasFilter || (financialActive.length === allSeriesKeys.size && !activeClasses.has('realestate'))) {
-    // All financial classes selected and real estate off: use the original "all" series
+  // Use pre-computed "all" series only when ALL non-realestate classes are active
+  // (i.e. savings is on, realestate is off)
+  const nonReActive = [...activeClasses].filter(k => k !== 'realestate');
+  if (!hasFilter || (nonReActive.length === allSeriesKeys.size && !activeClasses.has('realestate'))) {
+    // Matches the pre-computed "all" series exactly
     return {
       dates: D.daily_series.dates,
       value_eur: D.daily_series.value_eur.slice(),
@@ -718,7 +719,8 @@ if (hasFilter) {
   const togglesEl = document.getElementById('assetToggles');
   classKeys.forEach(ac => {
     const btn = document.createElement('div');
-    btn.className = 'toggle-btn toggle-' + ac + ' active';
+    const isActive = activeClasses.has(ac);
+    btn.className = 'toggle-btn toggle-' + ac + (isActive ? ' active' : '');
     btn.textContent = classLabels[ac] || ac;
     btn.dataset.ac = ac;
     btn.addEventListener('click', function() {
