@@ -112,9 +112,28 @@ def query_transactions(conn: sqlite3.Connection, scope: str = "all",
     return [dict(r) for r in rows]
 
 
+def query_fire_target(conn: sqlite3.Connection) -> float | None:
+    """Return the FIRE target in EUR from stored config, or None if not configured."""
+    try:
+        rows = {r[0]: r[1] for r in conn.execute(
+            "SELECT key, value FROM metadata WHERE key LIKE 'fire_%'"
+        ).fetchall()}
+        if "fire_annual_expenses" not in rows:
+            return None
+        expenses = float(rows["fire_annual_expenses"])
+        income   = float(rows.get("fire_annual_income", 0))
+        rate     = float(rows.get("fire_withdrawal_rate", 4.0)) / 100
+        if rate <= 0:
+            return None
+        return round((expenses - income) / rate, 2)
+    except Exception:
+        return None
+
+
 def _serialize_report_data(analytics, tax, transactions: list[dict],
                            per_class: dict | None = None,
-                           real_estate: dict | None = None) -> dict:
+                           real_estate: dict | None = None,
+                           fire_target: float | None = None) -> dict:
     """Convert analytics/tax results + transactions to JSON-safe dict."""
     daily = analytics.daily_series
     data = {
@@ -272,14 +291,17 @@ def _serialize_report_data(analytics, tax, transactions: list[dict],
             }
 
     data["real_estate"] = real_estate or {}
+    data["fire_target"] = fire_target  # float or None
     return data
 
 
 def generate_html_report(analytics, tax, transactions: list[dict],
                          per_class: dict | None = None,
-                         real_estate: dict | None = None) -> str:
+                         real_estate: dict | None = None,
+                         fire_target: float | None = None) -> str:
     """Generate a self-contained HTML report."""
-    data = _serialize_report_data(analytics, tax, transactions, per_class=per_class, real_estate=real_estate)
+    data = _serialize_report_data(analytics, tax, transactions, per_class=per_class,
+                                  real_estate=real_estate, fire_target=fire_target)
     data_json = json.dumps(data, separators=(",", ":"))
 
     scope_label = {"stock": "Stocks", "cfd": "CFD", "crypto": "Crypto", "savings": "Savings", "realestate": "Real Estate", "all": "All Assets"}.get(data["scope"], "All")
@@ -773,15 +795,26 @@ let portfolioChart, benchmarkChart;
 
 function buildPortfolioChart() {
   const ctx1 = document.getElementById('portfolioChart').getContext('2d');
+  const chartDatasets = [
+    {label:'Portfolio Value', data:ds.value_eur, borderColor:'#4285f4', backgroundColor:'rgba(66,133,244,0.08)', fill:true, tension:0.15, pointRadius:0, borderWidth:2},
+    {label:'Cash Invested', data:ds.invested_eur, borderColor:'#9e9e9e', borderDash:[5,5], fill:false, tension:0.15, pointRadius:0, borderWidth:1.5},
+  ];
+  if (D.fire_target != null) {
+    chartDatasets.push({
+      label: 'FIRE Target',
+      data: allDates.map(() => D.fire_target),
+      borderColor: '#22c55e',
+      borderDash: [6, 4],
+      fill: false,
+      tension: 0,
+      pointRadius: 0,
+      borderWidth: 2,
+      order: 0,
+    });
+  }
   return new Chart(ctx1, {
     type:'line',
-    data:{
-      labels: allDates,
-      datasets:[
-        {label:'Portfolio Value', data:ds.value_eur, borderColor:'#4285f4', backgroundColor:'rgba(66,133,244,0.08)', fill:true, tension:0.15, pointRadius:0, borderWidth:2},
-        {label:'Cash Invested', data:ds.invested_eur, borderColor:'#9e9e9e', borderDash:[5,5], fill:false, tension:0.15, pointRadius:0, borderWidth:1.5},
-      ]
-    },
+    data:{ labels: allDates, datasets: chartDatasets },
     options:{
       responsive:true, maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
@@ -944,6 +977,12 @@ function updateSummary() {
       ['TWR', s.twr_pct!=null?sign(s.twr_pct)+'%':'—', cls(s.twr_pct)],
       ['Max Drawdown', pct(s.max_drawdown_pct), 'neg', s.max_drawdown_peak_date+' → '+s.max_drawdown_trough_date],
     ];
+    if (D.fire_target != null) {
+      const progress = s.portfolio_value_eur / D.fire_target * 100;
+      const remaining = D.fire_target - s.portfolio_value_eur;
+      cards.push(['FIRE Progress', fmt(progress, 1)+'%', progress >= 100 ? 'pos' : '',
+                  (remaining > 0 ? '−'+fmtEur(remaining)+' to go' : '🎉 Achieved!')]);
+    }
     el.innerHTML = cards.map(([l,v,c,sub])=>
       `<div class="metric-card"><div class="label">${l}</div><div class="value ${c||''}">${v}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`
     ).join('');

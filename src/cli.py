@@ -149,7 +149,7 @@ def cmd_report(args):
     from .db import get_connection
     from .analytics import compute_analytics
     from .tax import compute_tax_report
-    from .html_report import generate_html_report, query_transactions, query_real_estate
+    from .html_report import generate_html_report, query_transactions, query_real_estate, query_fire_target
 
     conn = get_connection()
     try:
@@ -184,12 +184,69 @@ def cmd_report(args):
                     pass
 
         re_data = query_real_estate(conn)
-        html = generate_html_report(analytics, tax, transactions, per_class=per_class, real_estate=re_data)
+        fire_target = query_fire_target(conn)
+        html = generate_html_report(analytics, tax, transactions, per_class=per_class,
+                                     real_estate=re_data, fire_target=fire_target)
 
         output = args.output or f"portfolio_report_{analytics.start_date}_{analytics.end_date}.html"
         with open(output, "w", encoding="utf-8") as f:
             f.write(html)
         print(f"Report written to {output}")
+    finally:
+        conn.close()
+
+
+def cmd_fire(args):
+    """Manage FIRE (Financial Independence) configuration."""
+    from .db import get_connection
+
+    conn = get_connection()
+    try:
+        subcmd = getattr(args, "subcmd", None)
+
+        if subcmd == "set":
+            conn.execute("INSERT OR REPLACE INTO metadata (key, value) VALUES ('fire_annual_expenses', ?)",
+                         (str(args.annual_expenses),))
+            conn.execute("INSERT OR REPLACE INTO metadata (key, value) VALUES ('fire_annual_income', ?)",
+                         (str(args.annual_income),))
+            conn.execute("INSERT OR REPLACE INTO metadata (key, value) VALUES ('fire_withdrawal_rate', ?)",
+                         (str(args.withdrawal_rate),))
+            conn.commit()
+            net = args.annual_expenses - args.annual_income
+            target = net / (args.withdrawal_rate / 100)
+            print(f"FIRE config saved.")
+            print(f"  Annual expenses:  €{args.annual_expenses:,.0f}")
+            print(f"  Guaranteed income:€{args.annual_income:,.0f}")
+            print(f"  Net annual need:  €{net:,.0f}")
+            print(f"  Withdrawal rate:  {args.withdrawal_rate:.2f}%")
+            print(f"  FIRE target:      €{target:,.0f}")
+
+        elif subcmd == "show":
+            rows = {r[0]: r[1] for r in conn.execute(
+                "SELECT key, value FROM metadata WHERE key LIKE 'fire_%'"
+            ).fetchall()}
+            if not rows:
+                print("No FIRE config set. Use: fire set --annual-expenses X --annual-income X")
+                return
+            expenses = float(rows.get("fire_annual_expenses", 0))
+            income   = float(rows.get("fire_annual_income", 0))
+            rate     = float(rows.get("fire_withdrawal_rate", 4.0))
+            net      = expenses - income
+            target   = net / (rate / 100)
+            print(f"FIRE configuration:")
+            print(f"  Annual expenses:  €{expenses:,.0f}")
+            print(f"  Guaranteed income:€{income:,.0f}")
+            print(f"  Net annual need:  €{net:,.0f}")
+            print(f"  Withdrawal rate:  {rate:.2f}%")
+            print(f"  FIRE target:      €{target:,.0f}")
+
+        elif subcmd == "clear":
+            conn.execute("DELETE FROM metadata WHERE key LIKE 'fire_%'")
+            conn.commit()
+            print("FIRE config cleared.")
+
+        else:
+            print("Usage: fire <set|show|clear>")
     finally:
         conn.close()
 
@@ -371,6 +428,26 @@ Examples:
     p_report.add_argument("--output", "-o", help="Output HTML file path")
     p_report.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_report.set_defaults(func=cmd_report)
+
+    # --- fire ---
+    p_fire = subparsers.add_parser("fire", help="Manage FIRE target configuration")
+    fire_sub = p_fire.add_subparsers(dest="subcmd", help="FIRE sub-commands")
+    p_fire.set_defaults(func=cmd_fire)
+
+    # fire set
+    p_fire_set = fire_sub.add_parser("set", help="Set FIRE parameters")
+    p_fire_set.add_argument("--annual-expenses", type=float, required=True,
+                             help="Total annual expenses in EUR")
+    p_fire_set.add_argument("--annual-income", type=float, default=0.0,
+                             help="Guaranteed income offsetting expenses (pension etc.) in EUR (default: 0)")
+    p_fire_set.add_argument("--withdrawal-rate", type=float, default=4.0,
+                             help="Safe withdrawal rate in %% (default: 4.0)")
+
+    # fire show
+    fire_sub.add_parser("show", help="Show current FIRE config and computed target")
+
+    # fire clear
+    fire_sub.add_parser("clear", help="Remove FIRE configuration")
 
     # --- realestate ---
     p_re = subparsers.add_parser("realestate", help="Manage real estate properties")
