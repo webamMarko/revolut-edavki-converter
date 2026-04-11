@@ -692,6 +692,8 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             price_eur = last_known_price_eur.get(ticker, 0)
             total_unrealized += qty * price_eur - cost_basis.get(ticker, 0)
         else:
+            if qty < 0:
+                continue
             total_unrealized += (qty * _get_current_value_eur(
                 ticker, period_end if period_end <= today else today, conn, fx_cache, price_cache
             )) - cost_basis.get(ticker, 0)
@@ -720,6 +722,8 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             mv = qty * price_eur
             cb = cost_basis.get(ticker, 0)
         else:
+            if qty < 0:
+                continue
             mv = qty * _get_current_value_eur(
                 ticker, period_end if period_end <= today else today, conn, fx_cache, price_cache,
                 per_share=True

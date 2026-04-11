@@ -245,14 +245,28 @@ def generate_html_report(analytics, tax, transactions: list[dict],
   <section class="chart-section">
     <div class="chart-header">
       <h2>Portfolio Value</h2>
+      <div class="range-bar" id="rangeBar">
+        <button class="range-btn" data-days="7">7D</button>
+        <button class="range-btn" data-days="30">30D</button>
+        <button class="range-btn" data-ytd="1">YTD</button>
+        <button class="range-btn" data-days="365">1Y</button>
+        <button class="range-btn" data-days="1095">3Y</button>
+        <button class="range-btn" data-days="1825">5Y</button>
+        <button class="range-btn active" data-days="-1">All</button>
+      </div>
       <span class="chart-hint">Drag to select a period</span>
     </div>
     <div class="chart-wrap"><canvas id="portfolioChart"></canvas></div>
   </section>
 
   <section class="chart-section" id="benchmarkSection" style="display:none">
-    <h2>Performance vs Benchmarks</h2>
+    <h2 id="benchmarkSectionTitle">Performance</h2>
     <div class="chart-wrap"><canvas id="benchmarkChart"></canvas></div>
+  </section>
+
+  <section class="chart-section">
+    <h2>Monthly Performance</h2>
+    <div id="heatmap"></div>
   </section>
 
   <section class="two-col">
@@ -409,6 +423,26 @@ main { max-width: 1240px; margin: 0 auto; padding: 1.5rem 1rem; display: flex; f
   .toggle-crypto { background: #2e1065; color: #c4b5fd; border-color: #8b5cf6; }
   .toggle-savings { background: #064e3b; color: #6ee7b7; border-color: #10b981; }
 }
+.chart-header { display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.5rem; }
+.chart-header h2 { margin-bottom:0; }
+.range-bar { display:flex; gap:0.25rem; flex-wrap:wrap; margin-left:auto; }
+.range-btn {
+  padding:0.2rem 0.6rem; border-radius:4px; font-size:0.75rem; font-weight:600;
+  cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--muted);
+  transition:all 0.15s;
+}
+.range-btn:hover { background:var(--hover); color:var(--text); }
+.range-btn.active { background:var(--blue); color:#fff; border-color:var(--blue); }
+.heatmap-wrap { overflow-x:auto; }
+.heatmap-table { border-collapse:collapse; font-size:0.75rem; }
+.heatmap-table th, .heatmap-table td { padding:0.28rem 0.45rem; text-align:center; white-space:nowrap; }
+.heatmap-table thead th { color:var(--muted); font-weight:600; font-size:0.7rem; text-transform:uppercase; }
+.heatmap-year-label { font-weight:700; text-align:left !important; padding-right:0.75rem !important; color:var(--text); }
+.heatmap-cell { border-radius:3px; min-width:52px; transition:filter 0.1s; }
+.heatmap-cell:hover { filter:brightness(1.15); cursor:default; }
+.heatmap-empty { min-width:52px; }
+.heatmap-year-col { border-left:2px solid var(--border); }
+.heatmap-year-cell { border-left:2px solid var(--border); }
 """
 
 
@@ -605,6 +639,8 @@ function onFilterChange() {
   selStart = 0; selEnd = N - 1; isZoomed = false;
   rebuildCharts();
   updateAll();
+  buildHeatmap();
+  document.querySelectorAll('.range-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.days==='-1' && !b.dataset.ytd); });
 }
 
 // --- Zoom plugin config (shared) ---
@@ -654,9 +690,11 @@ function buildPortfolioChart() {
 
 function buildBenchmarkChart() {
   const bKeys = Object.keys(D.benchmark_series);
-  if(bKeys.length===0) return null;
   document.getElementById('benchmarkSection').style.display='';
-  document.getElementById('benchmarkTableCard').style.display='';
+  if(bKeys.length>0) {
+    document.getElementById('benchmarkTableCard').style.display='';
+    document.getElementById('benchmarkSectionTitle').textContent='Performance vs Benchmarks';
+  }
   // Use chain-linked performance index: excludes the effect of deposits/withdrawals,
   // showing pure investment performance comparable to benchmark indexes.
   const rebased = (ds.perf_index && ds.perf_index.length > 0)
@@ -969,7 +1007,114 @@ function makeSortable(table){
   });
 }
 
+// --- Range buttons ---
+(function(){
+  const bar = document.getElementById('rangeBar');
+  if (!bar) return;
+  bar.addEventListener('click', function(e) {
+    const btn = e.target.closest('.range-btn');
+    if (!btn) return;
+    bar.querySelectorAll('.range-btn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    const days = parseInt(btn.dataset.days);
+    const ytd = btn.dataset.ytd === '1';
+    if (days === -1) {
+      selStart = 0; selEnd = N - 1; isZoomed = false;
+      [portfolioChart, benchmarkChart].forEach(function(c) {
+        if (!c) return;
+        delete c.options.scales.x.min;
+        delete c.options.scales.x.max;
+        c.update();
+      });
+      updateAll();
+      return;
+    }
+    let targetStart;
+    if (ytd) {
+      const lastDate = new Date(allDates[N-1]);
+      targetStart = new Date(lastDate.getFullYear(), 0, 1);
+    } else {
+      const endDate = new Date(allDates[N-1]);
+      targetStart = new Date(endDate.getTime() - days * 86400000);
+    }
+    let si = 0;
+    for (let i = 0; i < N; i++) { if (new Date(allDates[i]) >= targetStart) { si = i; break; } }
+    selStart = si; selEnd = N - 1; isZoomed = true;
+    const startMs = new Date(allDates[si]).getTime();
+    const endMs = new Date(allDates[N-1]).getTime();
+    [portfolioChart, benchmarkChart].forEach(function(c) {
+      if (!c) return;
+      c.options.scales.x.min = startMs;
+      c.options.scales.x.max = endMs;
+      c.update('none');
+    });
+    updateAll();
+  });
+})();
+
+// --- Monthly heatmap ---
+function buildHeatmap() {
+  const el = document.getElementById('heatmap');
+  if (!el || ds.dates.length === 0) return;
+  const dates = ds.dates;
+  const hasPerfIdx = ds.perf_index && ds.perf_index.length === dates.length;
+  const values = hasPerfIdx ? ds.perf_index : ds.value_eur;
+  // Build month -> {si, ei} map
+  const monthMap = {};
+  for (let i = 0; i < dates.length; i++) {
+    const ym = dates[i].substring(0, 7);
+    if (!monthMap[ym]) monthMap[ym] = {si: i, ei: i};
+    else monthMap[ym].ei = i;
+  }
+  // Collect sorted years
+  const yrSet = new Set();
+  const years = [];
+  Object.keys(monthMap).sort().forEach(function(k){ const y=k.substring(0,4); if(!yrSet.has(y)){yrSet.add(y);years.push(y);} });
+  const mNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  // Scale: find max absolute monthly return (cap at 20%)
+  let maxAbs = 5;
+  Object.keys(monthMap).forEach(function(ym){
+    const d = monthMap[ym];
+    if (values[d.si] > 0) { const r = Math.abs((values[d.ei]/values[d.si]-1)*100); if (r > maxAbs) maxAbs = r; }
+  });
+  maxAbs = Math.min(maxAbs, 20);
+  function cellBg(ret) {
+    const intensity = Math.min(Math.abs(ret)/maxAbs, 1);
+    const alpha = (0.12 + 0.78*intensity).toFixed(2);
+    return ret >= 0 ? 'rgba(22,163,74,'+alpha+')' : 'rgba(220,38,38,'+alpha+')';
+  }
+  function cellFg(ret) {
+    return Math.min(Math.abs(ret)/maxAbs,1) > 0.5 ? '#fff' : 'var(--text)';
+  }
+  let h = '<div class="heatmap-wrap"><table class="heatmap-table"><thead><tr><th></th>';
+  mNames.forEach(function(m){ h += '<th>'+m+'</th>'; });
+  h += '<th class="heatmap-year-col">Year</th></tr></thead><tbody>';
+  years.forEach(function(year){
+    h += '<tr><td class="heatmap-year-label">'+year+'</td>';
+    let ySi=null, yEi=null;
+    for (let m=1; m<=12; m++) {
+      const ym = year+'-'+(m<10?'0':'')+m;
+      const d = monthMap[ym];
+      if (!d || values[d.si] <= 0) { h += '<td class="heatmap-empty"></td>'; continue; }
+      const ret = (values[d.ei]/values[d.si]-1)*100;
+      const s = ret>=0?'+':'';
+      h += '<td class="heatmap-cell" style="background:'+cellBg(ret)+';color:'+cellFg(ret)+'" title="'+ym+': '+s+ret.toFixed(2)+'%">'+s+ret.toFixed(1)+'%</td>';
+      if (ySi===null) ySi=d.si;
+      yEi=d.ei;
+    }
+    if (ySi!==null && values[ySi]>0) {
+      const ret = (values[yEi]/values[ySi]-1)*100;
+      const s = ret>=0?'+':'';
+      h += '<td class="heatmap-cell heatmap-year-cell" style="background:'+cellBg(ret)+';color:'+cellFg(ret)+'"><strong>'+s+ret.toFixed(1)+'%</strong></td>';
+    } else { h += '<td></td>'; }
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  el.innerHTML = h;
+}
+
 // --- Initial render ---
 updateAll();
+buildHeatmap();
 })();
 """

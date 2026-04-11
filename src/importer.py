@@ -344,8 +344,8 @@ def _ilirika_ticker_to_standard(instrument: str) -> tuple[str, str]:
 
     # Bloomberg ticker -> yfinance ticker overrides (ETFs with non-standard symbols)
     bloomberg_overrides = {
-        "SX5EEX": "SXR8",   # iShares Core EURO STOXX 50 UCITS ETF
-        "SX8PEX": "EXSI",   # iShares STOXX Europe 600 UCITS ETF
+        "SX5EEX": "EXW1",   # iShares Euro STOXX 50 UCITS ETF DE
+        "SX8PEX": "EXV3",   # iShares STOXX Europe 600 Technology UCITS ETF DE
     }
     ticker = bloomberg_overrides.get(ticker, ticker)
 
