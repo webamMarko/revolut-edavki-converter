@@ -490,6 +490,15 @@ def _parse_stock_row(row) -> dict | None:
     }
 
 
+def _row_hash(parsed: dict, asset_class: str) -> str:
+    """Compute deterministic dedup hash for a parsed transaction row."""
+    from .db import transaction_row_hash
+    return transaction_row_hash(
+        parsed["date"], parsed["ticker"], parsed["type"],
+        parsed["quantity"], parsed["total_amount"], parsed["currency"],
+    )
+
+
 def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) -> ImportResult:
     """Import a Revolut CSV/Excel file into the database with deduplication."""
     path = Path(file_path)
@@ -546,15 +555,16 @@ def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) 
             continue
 
         try:
+            rh = _row_hash(parsed, effective_asset_class)
             conn.execute(
                 """INSERT OR IGNORE INTO transactions
                    (date, ticker, type, quantity, price_per_share, total_amount,
-                    currency, fx_rate, asset_class, source_file)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    currency, fx_rate, asset_class, source_file, row_hash)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (parsed["date"], parsed["ticker"], parsed["type"],
                  parsed["quantity"], parsed["price_per_share"],
                  parsed["total_amount"], parsed["currency"],
-                 parsed["fx_rate"], effective_asset_class, path.name),
+                 parsed["fx_rate"], effective_asset_class, path.name, rh),
             )
             if conn.execute("SELECT changes()").fetchone()[0] > 0:
                 new += 1

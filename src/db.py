@@ -1,12 +1,13 @@
 """SQLite database layer for portfolio analytics."""
 
+import hashlib
 import sqlite3
 from pathlib import Path
 
 DB_DIR = Path.home() / ".revolut-edavki"
 DB_PATH = DB_DIR / "portfolio.db"
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS transactions (
@@ -22,7 +23,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     asset_class     TEXT NOT NULL DEFAULT 'stock',
     source_file     TEXT,
     imported_at     TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(date, ticker, type, quantity, total_amount, currency)
+    row_hash        TEXT UNIQUE
 );
 
 CREATE INDEX IF NOT EXISTS idx_transactions_ticker ON transactions(ticker);
@@ -143,9 +144,52 @@ def _init_schema(conn: sqlite3.Connection):
             );
         """)
 
+    if current_version < 5:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(transactions)").fetchall()]
+        if "row_hash" not in cols:
+            conn.execute("ALTER TABLE transactions ADD COLUMN row_hash TEXT")
+
+        # Remove duplicates created before row_hash existed (keep lowest id per group)
+        conn.execute("""
+            DELETE FROM transactions WHERE id NOT IN (
+                SELECT MIN(id) FROM transactions
+                GROUP BY date, COALESCE(ticker,''), type,
+                         COALESCE(CAST(quantity AS TEXT),''),
+                         COALESCE(CAST(total_amount AS TEXT),''),
+                         currency
+            )
+        """)
+
+        # Backfill row_hash for existing rows
+        rows = conn.execute(
+            "SELECT id, date, ticker, type, quantity, total_amount, currency "
+            "FROM transactions WHERE row_hash IS NULL"
+        ).fetchall()
+        for row in rows:
+            h = transaction_row_hash(row["date"], row["ticker"], row["type"],
+                                     row["quantity"], row["total_amount"], row["currency"])
+            conn.execute("UPDATE transactions SET row_hash = ? WHERE id = ?", (h, row["id"]))
+
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_row_hash ON transactions(row_hash)"
+        )
+
     if current_version < SCHEMA_VERSION:
         conn.execute(
             "INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', ?)",
             (str(SCHEMA_VERSION),)
         )
         conn.commit()
+
+
+def transaction_row_hash(date, ticker, type_, quantity, total_amount, currency) -> str:
+    """Deterministic hash of transaction key fields; NULLs treated as empty string."""
+    parts = [
+        str(date or ''),
+        str(ticker or ''),
+        str(type_ or ''),
+        str(quantity if quantity is not None else ''),
+        str(total_amount if total_amount is not None else ''),
+        str(currency or ''),
+    ]
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()
