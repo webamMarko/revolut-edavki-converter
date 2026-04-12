@@ -350,6 +350,10 @@ def generate_html_report(analytics, tax, transactions: list[dict],
   <span class="filter-label">Asset Classes:</span>
   <div id="assetToggles" class="toggles"></div>
 </div>
+<div id="fireFilter" class="asset-filter" style="display:none">
+  <span class="filter-label">Projections:</span>
+  <div class="toggles"><div id="fireToggleBtn" class="toggle-btn toggle-fire">FIRE</div></div>
+</div>
 
 <div id="selectionBanner" class="selection-banner" style="display:none">
   <span id="selectionLabel"></span>
@@ -573,8 +577,10 @@ main { max-width: 1240px; margin: 0 auto; padding: 1.5rem 1rem; display: flex; f
 @media (prefers-color-scheme: dark) {
   .tag-realestate { background: #4a0026; color: #f9a8d4; }
   .toggle-realestate { background: #4a0026; color: #f9a8d4; border-color: #db2777; }
+  .toggle-fire { background: #052e16; color: #86efac; border-color: #22c55e; }
 }
 .toggle-realestate { background: #fce7f3; color: #9d174d; border-color: #f472b6; }
+.toggle-fire { background: #f0fdf4; color: #15803d; border-color: #22c55e; }
 """
 
 
@@ -597,6 +603,9 @@ const hasFilter = classKeys.length > 1;
 const defaultInactive = new Set(['realestate', 'savings']);
 let activeClasses = new Set(classKeys.filter(k => !defaultInactive.has(k)));
 const classLabels = {stock:'Stocks',cfd:'CFD',crypto:'Crypto',savings:'Savings',realestate:'Real Estate'};
+
+// FIRE projection lines: off by default so they don't skew the chart
+let showFire = false;
 
 // Build the active daily series by summing selected asset classes
 // Each per_class entry has dates/value_eur/invested_eur/dividends_eur/realized_gain_eur
@@ -779,6 +788,18 @@ if (hasFilter) {
   });
 }
 
+// --- FIRE toggle ---
+if (D.fire != null) {
+  document.getElementById('fireFilter').style.display = '';
+  const fireBtn = document.getElementById('fireToggleBtn');
+  // starts inactive (no 'active' class)
+  fireBtn.addEventListener('click', function() {
+    showFire = !showFire;
+    fireBtn.classList.toggle('active', showFire);
+    updateAll();
+  });
+}
+
 function onFilterChange() {
   ds = buildCombinedSeries();
   allDates = ds.dates;
@@ -823,7 +844,7 @@ function buildPortfolioChart() {
   let fireData      = null;
   let projData      = null;
 
-  if (D.fire != null) {
+  if (D.fire != null && showFire) {
     const fire = D.fire;
     const fireTarget = fire.target;
     const inflation = fire.inflation_rate / 100;
