@@ -796,6 +796,7 @@ if (D.fire != null) {
   fireBtn.addEventListener('click', function() {
     showFire = !showFire;
     fireBtn.classList.toggle('active', showFire);
+    rebuildCharts();
     updateAll();
   });
 }
