@@ -6,7 +6,7 @@ from pathlib import Path
 DB_DIR = Path.home() / ".revolut-edavki"
 DB_PATH = DB_DIR / "portfolio.db"
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS transactions (
@@ -71,6 +71,18 @@ CREATE TABLE IF NOT EXISTS real_estate_properties (
     notes                   TEXT,
     created_at              TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS investment_notes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    title       TEXT NOT NULL,
+    summary     TEXT NOT NULL,
+    body        TEXT NOT NULL DEFAULT '',
+    tickers     TEXT NOT NULL DEFAULT '',
+    conviction  TEXT NOT NULL DEFAULT 'medium' CHECK(conviction IN ('high','medium','low')),
+    action      TEXT NOT NULL DEFAULT 'watch'  CHECK(action IN ('buy','watch','avoid','sell')),
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -113,6 +125,21 @@ def _init_schema(conn: sqlite3.Connection):
                 purchase_date           TEXT NOT NULL,
                 notes                   TEXT,
                 created_at              TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+        """)
+
+    if current_version < 4:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS investment_notes (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                title       TEXT NOT NULL,
+                summary     TEXT NOT NULL,
+                body        TEXT NOT NULL DEFAULT '',
+                tickers     TEXT NOT NULL DEFAULT '',
+                conviction  TEXT NOT NULL DEFAULT 'medium' CHECK(conviction IN ('high','medium','low')),
+                action      TEXT NOT NULL DEFAULT 'watch'  CHECK(action IN ('buy','watch','avoid','sell')),
+                created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
             );
         """)
 

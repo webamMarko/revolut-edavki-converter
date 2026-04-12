@@ -149,7 +149,7 @@ def cmd_report(args):
     from .db import get_connection
     from .analytics import compute_analytics
     from .tax import compute_tax_report
-    from .html_report import generate_html_report, query_transactions, query_real_estate, query_fire_config
+    from .html_report import generate_html_report, query_transactions, query_real_estate, query_fire_config, query_investment_notes
 
     conn = get_connection()
     try:
@@ -185,8 +185,10 @@ def cmd_report(args):
 
         re_data = query_real_estate(conn)
         fire_cfg = query_fire_config(conn)
+        notes = query_investment_notes(conn)
         html = generate_html_report(analytics, tax, transactions, per_class=per_class,
-                                     real_estate=re_data, fire_config=fire_cfg)
+                                     real_estate=re_data, fire_config=fire_cfg,
+                                     investment_notes=notes)
 
         output = args.output or f"portfolio_report_{analytics.start_date}_{analytics.end_date}.html"
         with open(output, "w", encoding="utf-8") as f:
@@ -298,6 +300,98 @@ def cmd_realestate(args):
         elif subcmd == "sync":
             sync_etn_valuations(conn, verbose=args.verbose)
 
+    finally:
+        conn.close()
+
+
+def cmd_notes(args):
+    """Manage investment notes."""
+    import sys
+    from .db import get_connection
+    from .notes import add_note, list_notes, get_note, edit_note, delete_note
+
+    conn = get_connection()
+    try:
+        subcmd = getattr(args, "subcmd", None)
+
+        if subcmd == "add":
+            body = ""
+            if args.body_file:
+                body = open(args.body_file, encoding="utf-8").read()
+            elif not sys.stdin.isatty():
+                body = sys.stdin.read()
+            tickers = ",".join(t.strip().upper() for t in (args.tickers or []))
+            note_id = add_note(
+                conn,
+                title=args.title,
+                summary=args.summary,
+                body=body,
+                tickers=tickers,
+                conviction=args.conviction,
+                action=args.action,
+            )
+            print(f"Note #{note_id} added.")
+
+        elif subcmd == "list":
+            notes = list_notes(conn)
+            if not notes:
+                print("No investment notes. Use 'notes add' to create one.")
+                return
+            print(f"{'ID':>3}  {'Conv':<6}  {'Action':<6}  {'Tickers':<20}  Title")
+            print("-" * 70)
+            for n in notes:
+                tickers_str = (n["tickers"] or "—")[:20]
+                print(f"{n['id']:>3}  {n['conviction']:<6}  {n['action']:<6}  {tickers_str:<20}  {n['title']}")
+                print(f"     {n['summary'][:65]}")
+                print()
+
+        elif subcmd == "show":
+            note = get_note(conn, args.id)
+            if not note:
+                print(f"Note #{args.id} not found.", file=sys.stderr)
+                sys.exit(1)
+            print(f"#{note['id']}  {note['title']}")
+            print(f"Tickers:    {note['tickers'] or '—'}")
+            print(f"Conviction: {note['conviction']}   Action: {note['action']}")
+            print(f"Created:    {note['created_at']}   Updated: {note['updated_at']}")
+            print()
+            print(note["summary"])
+            if note["body"]:
+                print()
+                print(note["body"])
+
+        elif subcmd == "edit":
+            body = None
+            if args.body_file:
+                body = open(args.body_file, encoding="utf-8").read()
+            elif not sys.stdin.isatty():
+                body = sys.stdin.read()
+            tickers = ",".join(t.strip().upper() for t in args.tickers) if args.tickers else None
+            updated = edit_note(
+                conn, args.id,
+                title=args.title,
+                summary=args.summary,
+                body=body,
+                tickers=tickers,
+                conviction=args.conviction,
+                action=args.action,
+            )
+            if updated:
+                print(f"Note #{args.id} updated.")
+            else:
+                print(f"Note #{args.id} not found or nothing changed.", file=sys.stderr)
+                sys.exit(1)
+
+        elif subcmd == "delete":
+            deleted = delete_note(conn, args.id)
+            if deleted:
+                print(f"Note #{args.id} deleted.")
+            else:
+                print(f"Note #{args.id} not found.", file=sys.stderr)
+                sys.exit(1)
+
+        else:
+            print("Usage: notes <add|list|show|edit|delete>")
     finally:
         conn.close()
 
@@ -483,6 +577,41 @@ Examples:
     # realestate sync
     p_re_sync = re_sub.add_parser("sync", help="Sync valuations from ETN database")
     p_re_sync.add_argument("--verbose", "-v", action="store_true")
+
+    # --- notes ---
+    p_notes = subparsers.add_parser("notes", help="Manage investment notes")
+    notes_sub = p_notes.add_subparsers(dest="subcmd", help="Notes sub-commands")
+    p_notes.set_defaults(func=cmd_notes)
+
+    # notes add
+    p_notes_add = notes_sub.add_parser("add", help="Add a new investment note")
+    p_notes_add.add_argument("--title", required=True, help="Note title")
+    p_notes_add.add_argument("--summary", required=True, help="One-to-two sentence summary")
+    p_notes_add.add_argument("--tickers", nargs="+", metavar="TICKER", help="Related tickers (space-separated)")
+    p_notes_add.add_argument("--conviction", choices=["high", "medium", "low"], default="medium")
+    p_notes_add.add_argument("--action", choices=["buy", "watch", "avoid", "sell"], default="watch")
+    p_notes_add.add_argument("--body-file", metavar="FILE", help="Markdown body file (or pipe via stdin)")
+
+    # notes list
+    notes_sub.add_parser("list", help="List all investment notes")
+
+    # notes show
+    p_notes_show = notes_sub.add_parser("show", help="Show a note in full")
+    p_notes_show.add_argument("id", type=int, help="Note ID")
+
+    # notes edit
+    p_notes_edit = notes_sub.add_parser("edit", help="Edit fields of an existing note")
+    p_notes_edit.add_argument("id", type=int, help="Note ID")
+    p_notes_edit.add_argument("--title", help="New title")
+    p_notes_edit.add_argument("--summary", help="New summary")
+    p_notes_edit.add_argument("--tickers", nargs="+", metavar="TICKER")
+    p_notes_edit.add_argument("--conviction", choices=["high", "medium", "low"])
+    p_notes_edit.add_argument("--action", choices=["buy", "watch", "avoid", "sell"])
+    p_notes_edit.add_argument("--body-file", metavar="FILE", help="Replace body from file (or pipe via stdin)")
+
+    # notes delete
+    p_notes_del = notes_sub.add_parser("delete", help="Delete a note")
+    p_notes_del.add_argument("id", type=int, help="Note ID")
 
     # --- web ---
     p_web = subparsers.add_parser("web", help="Start web UI for CSV upload and import")

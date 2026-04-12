@@ -147,11 +147,21 @@ def query_fire_config(conn: sqlite3.Connection) -> dict | None:
         return None
 
 
+def query_investment_notes(conn: sqlite3.Connection) -> list[dict]:
+    """Return investment notes enriched with live ticker data."""
+    try:
+        from .notes import query_notes_for_report
+        return query_notes_for_report(conn)
+    except Exception:
+        return []
+
+
 def _serialize_report_data(analytics, tax, transactions: list[dict],
                            per_class: dict | None = None,
                            real_estate: dict | None = None,
                            fire_target: float | None = None,
-                           fire_config: dict | None = None) -> dict:
+                           fire_config: dict | None = None,
+                           investment_notes: list[dict] | None = None) -> dict:
     """Convert analytics/tax results + transactions to JSON-safe dict."""
     daily = analytics.daily_series
     data = {
@@ -310,6 +320,7 @@ def _serialize_report_data(analytics, tax, transactions: list[dict],
 
     data["real_estate"] = real_estate or {}
     data["fire"] = fire_config  # full config dict or None (replaces old fire_target)
+    data["investment_notes"] = investment_notes or []
     return data
 
 
@@ -317,10 +328,12 @@ def generate_html_report(analytics, tax, transactions: list[dict],
                          per_class: dict | None = None,
                          real_estate: dict | None = None,
                          fire_target: float | None = None,
-                         fire_config: dict | None = None) -> str:
+                         fire_config: dict | None = None,
+                         investment_notes: list[dict] | None = None) -> str:
     """Generate a self-contained HTML report."""
     data = _serialize_report_data(analytics, tax, transactions, per_class=per_class,
-                                  real_estate=real_estate, fire_config=fire_config)
+                                  real_estate=real_estate, fire_config=fire_config,
+                                  investment_notes=investment_notes)
     data_json = json.dumps(data, separators=(",", ":"))
 
     scope_label = {"stock": "Stocks", "cfd": "CFD", "crypto": "Crypto", "savings": "Savings", "realestate": "Real Estate", "all": "All Assets"}.get(data["scope"], "All")
@@ -335,6 +348,7 @@ def generate_html_report(analytics, tax, transactions: list[dict],
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <style>
 {_CSS}
 </style>
@@ -406,6 +420,11 @@ def generate_html_report(analytics, tax, transactions: list[dict],
     <div class="table-scroll">
       <table id="positionsTable" class="data-table sortable"></table>
     </div>
+  </section>
+
+  <section class="card" id="notesSection" style="display:none">
+    <h2>Investment Notes</h2>
+    <div id="notesList" class="notes-list"></div>
   </section>
 
   <section class="card" id="realEstateSection">
@@ -581,6 +600,84 @@ main { max-width: 1240px; margin: 0 auto; padding: 1.5rem 1rem; display: flex; f
 }
 .toggle-realestate { background: #fce7f3; color: #9d174d; border-color: #f472b6; }
 .toggle-fire { background: #f0fdf4; color: #15803d; border-color: #22c55e; }
+/* --- Investment Notes --- */
+.notes-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.note-card {
+  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+.note-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.note-header {
+  padding: 0.9rem 1.1rem; cursor: pointer; display: flex; align-items: flex-start;
+  gap: 0.75rem; background: var(--card);
+}
+.note-header:hover { background: var(--hover); }
+.note-meta { flex: 1; min-width: 0; }
+.note-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.2rem; }
+.note-summary { font-size: 0.82rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note-badges { display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+.note-ticker {
+  display: inline-flex; flex-direction: column; align-items: center;
+  padding: 0.2rem 0.55rem; border-radius: 5px; font-size: 0.72rem; font-weight: 700;
+  background: #dbeafe; color: #1d4ed8; line-height: 1.2;
+}
+.note-ticker.held { background: #d1fae5; color: #065f46; }
+.note-ticker .ticker-price { font-weight: 400; font-size: 0.65rem; opacity: 0.85; }
+@media (prefers-color-scheme: dark) {
+  .note-ticker { background: #1e3a5f; color: #93c5fd; }
+  .note-ticker.held { background: #064e3b; color: #6ee7b7; }
+}
+.conviction-chip {
+  padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.conviction-high   { background: #dcfce7; color: #15803d; }
+.conviction-medium { background: #fef9c3; color: #854d0e; }
+.conviction-low    { background: #fee2e2; color: #991b1b; }
+@media (prefers-color-scheme: dark) {
+  .conviction-high   { background: #14532d; color: #86efac; }
+  .conviction-medium { background: #422006; color: #fde68a; }
+  .conviction-low    { background: #450a0a; color: #fca5a5; }
+}
+.action-badge {
+  padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  background: var(--border); color: var(--muted);
+}
+.action-buy   { background: #dbeafe; color: #1d4ed8; }
+.action-sell  { background: #fee2e2; color: #991b1b; }
+.action-avoid { background: #fef3c7; color: #92400e; }
+.action-watch { background: #ede9fe; color: #6d28d9; }
+@media (prefers-color-scheme: dark) {
+  .action-buy   { background: #1e3a5f; color: #93c5fd; }
+  .action-sell  { background: #450a0a; color: #fca5a5; }
+  .action-avoid { background: #451a03; color: #fcd34d; }
+  .action-watch { background: #2e1065; color: #c4b5fd; }
+}
+.note-detail {
+  display: none; border-top: 1px solid var(--border);
+  padding: 1rem 1.25rem; background: var(--bg);
+}
+.note-card.open .note-detail { display: block; }
+.note-card.open .note-chevron { transform: rotate(180deg); }
+.note-chevron { font-size: 0.7rem; color: var(--muted); flex-shrink: 0; margin-top: 0.15rem; transition: transform 0.15s; }
+.note-ticker-cards { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1rem; }
+.note-ticker-card {
+  border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.75rem;
+  background: var(--card); font-size: 0.8rem; min-width: 120px;
+}
+.note-ticker-card .ntc-ticker { font-weight: 700; font-size: 0.9rem; }
+.note-ticker-card .ntc-price  { color: var(--muted); margin-top: 0.1rem; }
+.note-ticker-card .ntc-held   { color: var(--green); font-size: 0.75rem; margin-top: 0.25rem; }
+.note-ticker-card .ntc-pct    { font-size: 0.75rem; margin-top: 0.1rem; }
+.note-body { font-size: 0.875rem; line-height: 1.65; }
+.note-body h1,.note-body h2,.note-body h3 { margin: 0.9rem 0 0.4rem; font-size: 1rem; }
+.note-body h1 { font-size: 1.1rem; }
+.note-body p  { margin: 0.4rem 0; }
+.note-body ul,.note-body ol { margin: 0.4rem 0 0.4rem 1.4rem; }
+.note-body li { margin: 0.2rem 0; }
+.note-body code { font-family: monospace; background: var(--border); padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.82rem; }
+.note-body pre  { background: var(--border); padding: 0.75rem; border-radius: 6px; overflow-x: auto; margin: 0.5rem 0; }
+.note-body blockquote { border-left: 3px solid var(--blue); padding-left: 0.75rem; color: var(--muted); margin: 0.5rem 0; }
+.note-footer { font-size: 0.75rem; color: var(--muted); margin-top: 0.75rem; }
 """
 
 
@@ -1438,5 +1535,83 @@ try {
     makeSortable(pt);
   }
 } catch(e) { console.error('Real estate section error:', e); }
+
+// --- Investment Notes section ---
+try {
+  const notes = D.investment_notes || [];
+  if (notes.length > 0) {
+    const section = document.getElementById('notesSection');
+    section.style.display = '';
+    const listEl = document.getElementById('notesList');
+
+    const convClass = {high:'conviction-high', medium:'conviction-medium', low:'conviction-low'};
+    const actClass  = {buy:'action-buy', sell:'action-sell', avoid:'action-avoid', watch:'action-watch'};
+
+    function renderTickerBadges(details) {
+      return details.map(function(t) {
+        const heldClass = t.held ? ' held' : '';
+        const priceStr = t.price != null ? fmt(t.price, 2) + (t.currency ? ' ' + t.currency : '') : '';
+        return '<span class="note-ticker' + heldClass + '" title="' + t.ticker + (t.held ? ' (held)' : '') + '">' +
+          t.ticker +
+          (priceStr ? '<span class="ticker-price">' + priceStr + '</span>' : '') +
+          '</span>';
+      }).join('');
+    }
+
+    function renderTickerCards(details) {
+      if (!details || details.length === 0) return '';
+      return '<div class="note-ticker-cards">' + details.map(function(t) {
+        const priceStr = t.price != null ? fmt(t.price, 2) + ' ' + (t.currency || '') : 'n/a';
+        let heldHtml = '';
+        if (t.held) {
+          const pctStr = t.unrealized_gain_pct != null
+            ? '<div class="ntc-pct ' + (t.unrealized_gain_pct >= 0 ? 'pos' : 'neg') + '">' + sign(t.unrealized_gain_pct) + '%</div>'
+            : '';
+          heldHtml = '<div class="ntc-held">Held · ' + fmt(t.quantity, 4) + ' · ' + fmtEur(t.cost_basis_eur) + ' cost</div>' + pctStr;
+        }
+        return '<div class="note-ticker-card">' +
+          '<div class="ntc-ticker">' + t.ticker + '</div>' +
+          '<div class="ntc-price">' + priceStr + (t.date ? '<span style="font-size:0.68rem;margin-left:0.3rem;opacity:0.7">' + t.date + '</span>' : '') + '</div>' +
+          heldHtml +
+          '</div>';
+      }).join('') + '</div>';
+    }
+
+    notes.forEach(function(note) {
+      const card = document.createElement('div');
+      card.className = 'note-card';
+
+      const badges = (note.ticker_details || []);
+      const badgeHtml = renderTickerBadges(badges);
+      const convHtml = '<span class="conviction-chip ' + (convClass[note.conviction] || '') + '">' + note.conviction + '</span>';
+      const actHtml  = '<span class="action-badge ' + (actClass[note.action] || '') + '">' + note.action + '</span>';
+
+      card.innerHTML =
+        '<div class="note-header">' +
+          '<div class="note-meta">' +
+            '<div class="note-title">' + note.title + '</div>' +
+            '<div class="note-summary">' + note.summary + '</div>' +
+          '</div>' +
+          '<div class="note-badges">' + badgeHtml + convHtml + actHtml + '</div>' +
+          '<span class="note-chevron">▼</span>' +
+        '</div>' +
+        '<div class="note-detail">' +
+          renderTickerCards(badges) +
+          (note.body
+            ? '<div class="note-body">' + (typeof marked !== "undefined" ? marked.parse(note.body) : '<pre>' + note.body + '</pre>') + '</div>'
+            : '') +
+          '<div class="note-footer">Created ' + note.created_at.slice(0, 10) +
+            (note.updated_at !== note.created_at ? ' · Updated ' + note.updated_at.slice(0, 10) : '') +
+          '</div>' +
+        '</div>';
+
+      card.querySelector('.note-header').addEventListener('click', function() {
+        card.classList.toggle('open');
+      });
+
+      listEl.appendChild(card);
+    });
+  }
+} catch(e) { console.error('Notes section error:', e); }
 })();
 """
