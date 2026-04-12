@@ -197,7 +197,7 @@ class UploadHandler(BaseHTTPRequestHandler):
                 tax = compute_tax_report(conn, year=datetime.now().year, include_unrealized=True, scope="all")
             except Exception:
                 pass
-            transactions = query_transactions(conn, scope="all")
+            transactions = query_transactions(conn)
 
             # Per-class analytics
             per_class = {}

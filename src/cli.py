@@ -155,33 +155,32 @@ def cmd_report(args):
     try:
         analytics = compute_analytics(
             conn, year=args.year, start_date=args.start_date,
-            end_date=args.end_date, scope=args.scope,
+            end_date=args.end_date, scope="all",
         )
 
         tax = None
         tax_year = args.year or (args.end_date.year if args.end_date else datetime.now().year)
         try:
-            tax = compute_tax_report(conn, year=tax_year, include_unrealized=True, scope=args.scope)
+            tax = compute_tax_report(conn, year=tax_year, include_unrealized=True, scope="all")
         except Exception:
             pass
 
-        transactions = query_transactions(conn, scope=args.scope, year=args.year,
+        transactions = query_transactions(conn, year=args.year,
                                           start_date=args.start_date, end_date=args.end_date)
 
-        # Per-asset-class analytics for the "all" scope filter UI
+        # Per-asset-class analytics for the client-side asset class filter UI
         per_class = {}
-        if args.scope == "all":
-            asset_classes = [r[0] for r in conn.execute(
-                "SELECT DISTINCT asset_class FROM transactions"
-            ).fetchall()]
-            for ac in asset_classes:
-                try:
-                    per_class[ac] = compute_analytics(
-                        conn, year=args.year, start_date=args.start_date,
-                        end_date=args.end_date, scope=ac,
-                    )
-                except Exception:
-                    pass
+        asset_classes = [r[0] for r in conn.execute(
+            "SELECT DISTINCT asset_class FROM transactions"
+        ).fetchall()]
+        for ac in asset_classes:
+            try:
+                per_class[ac] = compute_analytics(
+                    conn, year=args.year, start_date=args.start_date,
+                    end_date=args.end_date, scope=ac,
+                )
+            except Exception:
+                pass
 
         re_data = query_real_estate(conn)
         fire_cfg = query_fire_config(conn)
@@ -517,8 +516,6 @@ Examples:
     p_report.add_argument("--year", type=int, help="Limit to a specific year")
     p_report.add_argument("--from", dest="start_date", type=parse_date, help="Start date")
     p_report.add_argument("--to", dest="end_date", type=parse_date, help="End date")
-    p_report.add_argument("--scope", choices=["stock", "cfd", "crypto", "savings", "realestate", "all"], default="all",
-                          help="Asset class scope (default: all)")
     p_report.add_argument("--output", "-o", help="Output HTML file path")
     p_report.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_report.set_defaults(func=cmd_report)

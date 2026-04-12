@@ -30,6 +30,32 @@ function computePeriodMetrics(si, ei) {
   };
 }
 
+// --- Yearly averages (arithmetic mean across calendar years) ---
+function computeYearlyAverages() {
+  if (!allDates || allDates.length < 2) return null;
+  // Build year -> {first, last} index map
+  const yearMap = {};
+  for (let i = 0; i < allDates.length; i++) {
+    const y = allDates[i].slice(0, 4);
+    if (!yearMap[y]) yearMap[y] = { first: i, last: i };
+    else yearMap[y].last = i;
+  }
+  const years = Object.keys(yearMap).sort();
+  if (years.length === 0) return null;
+  const valueGrowths = [], cashAdded = [];
+  for (const y of years) {
+    const { first, last } = yearMap[y];
+    valueGrowths.push(ds.value_eur[last] - ds.value_eur[first]);
+    cashAdded.push(ds.invested_eur[last] - ds.invested_eur[first]);
+  }
+  const avg = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+  return {
+    avgValueGrowth: avg(valueGrowths),
+    avgCashAdded:   avg(cashAdded),
+    numYears:       years.length,
+  };
+}
+
 // --- Summary cards ---
 function updateSummary() {
   const el = document.getElementById('summary');
@@ -57,6 +83,17 @@ function updateSummary() {
       ['TWR', s.twr_pct!=null?sign(s.twr_pct)+'%':'—', cls(s.twr_pct)],
       ['Max Drawdown', pct(s.max_drawdown_pct), 'neg', s.max_drawdown_peak_date+' → '+s.max_drawdown_trough_date],
     ];
+    const yearly = computeYearlyAverages();
+    if (yearly) {
+      const totalYears = allDates.length > 1
+        ? (new Date(allDates[allDates.length-1]) - new Date(allDates[0])) / (365.25 * 86400000)
+        : 1;
+      const sub = yearly.numYears + ' yr avg';
+      cards.push(['Avg Yearly Growth',   sign(yearly.avgValueGrowth)+' EUR',              cls(yearly.avgValueGrowth), sub]);
+      if (s.total_return_pct != null && totalYears > 0)
+        cards.push(['Avg Yearly Return', sign(s.total_return_pct / totalYears)+'%',       cls(s.total_return_pct),    sub]);
+      cards.push(['Avg Yearly Invested', sign(yearly.avgCashAdded)+' EUR',                cls(yearly.avgCashAdded),   sub]);
+    }
     if (D.fire != null) {
       const fire = D.fire;
       const fireTarget = fire.target;

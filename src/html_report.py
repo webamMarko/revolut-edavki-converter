@@ -89,17 +89,13 @@ def query_real_estate(conn: sqlite3.Connection) -> dict:
     }
 
 
-def query_transactions(conn: sqlite3.Connection, scope: str = "all",
+def query_transactions(conn: sqlite3.Connection,
                        year: int | None = None,
                        start_date: datetime | None = None,
                        end_date: datetime | None = None) -> list[dict]:
-    """Query transactions from database with scope/date filtering."""
+    """Query transactions from database with optional date filtering."""
     conditions = []
     params = []
-
-    if scope != "all":
-        conditions.append("asset_class = ?")
-        params.append(scope)
 
     if year:
         conditions.append("date LIKE ?")
@@ -338,13 +334,9 @@ def generate_html_report(analytics, tax, transactions: list[dict],
                                   real_estate=real_estate, fire_config=fire_config,
                                   investment_notes=investment_notes)
 
-    scope_labels = {"stock": "Stocks", "cfd": "CFD", "crypto": "Crypto",
-                    "savings": "Savings", "realestate": "Real Estate", "all": "All Assets"}
-    title = f"Portfolio Report \u2014 {scope_labels.get(data['scope'], 'All')}"
-
     template = _env.get_template("report.html.j2")
     return template.render(
-        title=html.escape(title),
+        title="Portfolio Report",
         start_date=html.escape(data["start_date"]),
         end_date=html.escape(data["end_date"]),
         generated_at=html.escape(data["generated_at"]),
