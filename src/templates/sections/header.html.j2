@@ -1,0 +1,18 @@
+<header>
+  <h1>{{ title }}</h1>
+  <p class="subtitle">{{ start_date }} to {{ end_date }} &middot; Generated {{ generated_at }}</p>
+</header>
+
+<div id="assetFilter" class="asset-filter" style="display:none">
+  <span class="filter-label">Asset Classes:</span>
+  <div id="assetToggles" class="toggles"></div>
+</div>
+<div id="fireFilter" class="asset-filter" style="display:none">
+  <span class="filter-label">Projections:</span>
+  <div class="toggles"><div id="fireToggleBtn" class="toggle-btn toggle-fire">FIRE</div></div>
+</div>
+
+<div id="selectionBanner" class="selection-banner" style="display:none">
+  <span id="selectionLabel"></span>
+  <button onclick="resetZoom()">Reset Zoom</button>
+</div>

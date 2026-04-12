@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<style>
+{% include "assets/styles.css" %}
+{% include "assets/styles_notes.css" %}
+</style>
+</head>
+<body>
+
+{% include "sections/header.html.j2" %}
+
+<main>
+  {% include "sections/summary.html.j2" %}
+  {% include "sections/charts.html.j2" %}
+  {% include "sections/positions.html.j2" %}
+  {% include "sections/notes.html.j2" %}
+  {% include "sections/real_estate.html.j2" %}
+  {% include "sections/tax.html.j2" %}
+  {% include "sections/transactions.html.j2" %}
+</main>
+
+<script>const D={{ data_json }};</script>
+<script>
+{% include "assets/app.js" %}
+{% include "assets/filter.js" %}
+{% include "assets/charts.js" %}
+{% include "assets/heatmap.js" %}
+{% include "assets/tables.js" %}
+{% include "assets/sections/summary.js" %}
+{% include "assets/sections/gains.js" %}
+{% include "assets/sections/positions.js" %}
+{% include "assets/sections/benchmark_table.js" %}
+{% include "assets/sections/tax.js" %}
+{% include "assets/sections/transactions.js" %}
+{% include "assets/sections/real_estate.js" %}
+{% include "assets/sections/notes.js" %}
+// --- Initial render ---
+updateAll();
+buildHeatmap();
+</script>
+</body>
+</html>
