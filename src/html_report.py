@@ -258,6 +258,7 @@ def _serialize_report_data(analytics, tax, transactions: list[dict],
             "realized_sales": [
                 {
                     "ticker": s.ticker,
+                    "asset_class": s.asset_class,
                     "sell_date": s.sell_date,
                     "quantity": round(s.quantity, 4),
                     "sell_price_eur": round(s.sell_price_eur, 2),

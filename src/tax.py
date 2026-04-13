@@ -65,6 +65,7 @@ def standardized_costs(cost_basis_eur: float, proceeds_eur: float, leveraged: bo
 @dataclass
 class SaleTaxDetail:
     ticker: str
+    asset_class: str         # 'stock', 'cfd', 'crypto', 'savings' — used for per-class netting
     sell_date: str
     quantity: float
     sell_price_eur: float
@@ -194,7 +195,8 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                         gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
                         tax = max(0, gain_for_tax * rate)
                         realized_sales.append(SaleTaxDetail(
-                            ticker=ticker, sell_date=date_str, quantity=matched,
+                            ticker=ticker, asset_class=tx["asset_class"] or "stock",
+                            sell_date=date_str, quantity=matched,
                             sell_price_eur=proceeds, cost_basis_eur=basis,
                             gain_eur=gain, std_costs_eur=std_c if gain > 0 else 0.0,
                             holding_years=holding_years, tax_rate=rate, tax_eur=tax,
@@ -266,7 +268,8 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
                     tax = max(0, gain_for_tax * rate)
                     realized_sales.append(SaleTaxDetail(
-                        ticker=ticker, sell_date=date_str, quantity=qty,
+                        ticker=ticker, asset_class="crypto",
+                        sell_date=date_str, quantity=qty,
                         sell_price_eur=amount_eur, cost_basis_eur=total_cost,
                         gain_eur=gain, std_costs_eur=std_c if gain > 0 else 0.0,
                         holding_years=holding_years, tax_rate=rate, tax_eur=tax,
@@ -309,7 +312,8 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
                     tax = max(0, gain_for_tax * rate)
                     realized_sales.append(SaleTaxDetail(
-                        ticker=ticker, sell_date=date_str, quantity=qty,
+                        ticker=ticker, asset_class="savings",
+                        sell_date=date_str, quantity=qty,
                         sell_price_eur=amount_eur, cost_basis_eur=total_cost,
                         gain_eur=gain, std_costs_eur=std_c if gain > 0 else 0.0,
                         holding_years=holding_years, tax_rate=rate, tax_eur=tax,
@@ -341,7 +345,8 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                         gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
                         tax = max(0, gain_for_tax * rate)
                         realized_sales.append(SaleTaxDetail(
-                            ticker=ticker, sell_date=date_str, quantity=matched,
+                            ticker=ticker, asset_class=tx["asset_class"] or "stock",
+                            sell_date=date_str, quantity=matched,
                             sell_price_eur=proceeds, cost_basis_eur=basis,
                             gain_eur=gain, std_costs_eur=std_c if gain > 0 else 0.0,
                             holding_years=holding_years, tax_rate=rate, tax_eur=tax,
@@ -402,7 +407,8 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     tax = max(0, gain_for_tax * rate)
 
                     realized_sales.append(SaleTaxDetail(
-                        ticker=ticker, sell_date=date_str, quantity=qty,
+                        ticker=ticker, asset_class="stock",
+                        sell_date=date_str, quantity=qty,
                         sell_price_eur=amount_eur, cost_basis_eur=total_cost,
                         gain_eur=gain, std_costs_eur=std_c if gain > 0 else 0.0,
                         holding_years=holding_years, tax_rate=rate, tax_eur=tax,
@@ -461,7 +467,8 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                 gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
                 tax = max(0, gain_for_tax * rate)
                 realized_sales.append(SaleTaxDetail(
-                    ticker=ticker, sell_date=date_str, quantity=qty,
+                    ticker=ticker, asset_class=tx["asset_class"] or "stock",
+                    sell_date=date_str, quantity=qty,
                     sell_price_eur=amount_eur, cost_basis_eur=cost,
                     gain_eur=gain, std_costs_eur=std_c if gain > 0 else 0.0,
                     holding_years=0, tax_rate=rate, tax_eur=tax,
@@ -543,14 +550,15 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
 
     total_realized_gain = sum(s.gain_eur for s in realized_sales)
 
-    # Net gains/losses within each tax rate bucket before applying tax.
-    # Standardized costs are only deducted from positive individual gains (per trade),
-    # then gains and losses net against each other within the same rate bucket.
-    rate_buckets = defaultdict(float)
+    # Net gains/losses per asset class — losses within a class offset gains within
+    # the same class, but asset classes never mix (stock losses don't offset CFD gains etc.).
+    # Bucket key is (asset_class, tax_rate) so different holding-period brackets within
+    # the same class also stay separate.
+    buckets: dict[tuple, float] = defaultdict(float)
     for s in realized_sales:
         gain_after_costs = s.gain_eur - s.std_costs_eur if s.gain_eur > 0 else s.gain_eur
-        rate_buckets[s.tax_rate] += gain_after_costs
-    total_realized_tax = sum(max(0, net_gain) * rate for rate, net_gain in rate_buckets.items())
+        buckets[(s.asset_class, s.tax_rate)] += gain_after_costs
+    total_realized_tax = sum(max(0, net) * rate for (_, rate), net in buckets.items())
 
     return TaxReport(
         year=year,
@@ -563,6 +571,6 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
         include_unrealized=include_unrealized,
         total_dividends_eur=total_dividends,
         total_fees_eur=total_fees,
-        total_tax_eur=total_realized_tax + total_unrealized_tax,
+        total_tax_eur=total_realized_tax,  # realized only; unrealized is informational
         scope=scope,
     )

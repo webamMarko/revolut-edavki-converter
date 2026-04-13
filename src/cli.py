@@ -161,7 +161,7 @@ def cmd_report(args):
         tax = None
         tax_year = args.year or (args.end_date.year if args.end_date else datetime.now().year)
         try:
-            tax = compute_tax_report(conn, year=tax_year, include_unrealized=True, scope="all")
+            tax = compute_tax_report(conn, year=tax_year, include_unrealized=False, scope="all")
         except Exception:
             pass
 
