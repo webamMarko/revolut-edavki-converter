@@ -109,6 +109,18 @@ function getActiveSummary() {
   });
   const ret = ti > 0 ? (ag / ti * 100) : 0;
   const cs = buildCombinedSeries();
+  // CAGR: annualised TWR from combined perf_index (DCA-aware).
+  // Guard against haywire perf_index (e.g. when CFD is included in combination).
+  let cagr = null;
+  if (cs.perf_index && cs.perf_index.length > 1 && cs.dates.length > 1) {
+    const pi = cs.perf_index;
+    const firstNZ = pi.find(v => v > 0);
+    const years = (new Date(cs.dates[cs.dates.length-1]) - new Date(cs.dates[0])) / (365.25 * 86400000);
+    if (firstNZ && years >= 0.1 && pi[pi.length-1] > 0) {
+      const ratio = pi[pi.length-1] / firstNZ;
+      if (ratio < 1e5) cagr = (ratio ** (1 / years) - 1) * 100;
+    }
+  }
   let peak = cs.value_eur[0]||0, maxDD = 0, peakDate = cs.dates[0]||'', troughDate = cs.dates[0]||'', curPeakDate = cs.dates[0]||'';
   for (let i = 0; i < cs.dates.length; i++) {
     const v = cs.value_eur[i];
@@ -116,7 +128,7 @@ function getActiveSummary() {
     const dd = peak > 0 ? (v - peak) / peak * 100 : 0;
     if (dd < maxDD) { maxDD = dd; peakDate = curPeakDate; troughDate = cs.dates[i]; }
   }
-  return {portfolio_value_eur:pv, total_invested_eur:ti, absolute_gain_eur:ag, total_return_pct:ret, cagr_pct:null, twr_pct:null, max_drawdown_pct:maxDD, max_drawdown_peak_date:peakDate, max_drawdown_trough_date:troughDate};
+  return {portfolio_value_eur:pv, total_invested_eur:ti, absolute_gain_eur:ag, total_return_pct:ret, cagr_pct:cagr, twr_pct:null, max_drawdown_pct:maxDD, max_drawdown_peak_date:peakDate, max_drawdown_trough_date:troughDate};
 }
 
 function getActiveGains() {

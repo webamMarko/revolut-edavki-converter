@@ -657,13 +657,21 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     absolute_gain = current_value - current_invested + total_dividends + total_realized_gain
     total_return_pct = (absolute_gain / current_invested * 100) if current_invested > 0 else 0.0
 
-    # CAGR
+    # CAGR — annualised TWR (DCA-aware: strips out effect of cash flow timing).
+    # Falls back to simple value/invested CAGR when perf_index is unreliable
+    # (e.g. CFDs, where leveraged swings corrupt the daily return chain).
     n_days = len(daily_df)
     years = n_days / 365.25
-    if years > 0 and current_invested > 0 and current_value > 0:
-        cagr = ((current_value / current_invested) ** (1 / years) - 1) * 100
-    else:
-        cagr = None
+    cagr = None
+    if years >= 0.1:
+        pi = daily_df["perf_index"] if "perf_index" in daily_df.columns else pd.Series(dtype=float)
+        pi_nonzero = pi[pi > 0]
+        if not pi_nonzero.empty and pi.iloc[-1] > 0:
+            ratio = pi.iloc[-1] / pi_nonzero.iloc[0]
+            if 0 < ratio < 1e5:  # guard: reject perf_index when it has gone haywire
+                cagr = (ratio ** (1 / years) - 1) * 100
+        if cagr is None and current_value > 0 and current_invested > 0:
+            cagr = ((current_value / current_invested) ** (1 / years) - 1) * 100
 
     # TWR (time-weighted return)
     twr = _compute_twr(daily_df, cash_flows, period_start)
