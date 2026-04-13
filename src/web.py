@@ -192,9 +192,19 @@ class UploadHandler(BaseHTTPRequestHandler):
         conn = get_connection()
         try:
             analytics = compute_analytics(conn, scope="all")
-            tax = None
+            tax_by_year = {}
             try:
-                tax = compute_tax_report(conn, year=datetime.now().year, include_unrealized=True, scope="all")
+                years_with_tx = [
+                    int(r[0]) for r in conn.execute(
+                        "SELECT DISTINCT strftime('%Y', date) FROM transactions "
+                        "WHERE asset_class != 'realestate' ORDER BY 1"
+                    ).fetchall()
+                ]
+                for yr in years_with_tx:
+                    try:
+                        tax_by_year[yr] = compute_tax_report(conn, year=yr, include_unrealized=False, scope="all")
+                    except Exception:
+                        pass
             except Exception:
                 pass
             transactions = query_transactions(conn)
@@ -210,7 +220,7 @@ class UploadHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
 
-            html = generate_html_report(analytics, tax, transactions, per_class=per_class)
+            html = generate_html_report(analytics, tax_by_year, transactions, per_class=per_class)
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()

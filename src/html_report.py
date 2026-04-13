@@ -157,7 +157,7 @@ def query_investment_notes(conn: sqlite3.Connection) -> list[dict]:
         return []
 
 
-def _serialize_report_data(analytics, tax, transactions: list[dict],
+def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                            per_class: dict | None = None,
                            real_estate: dict | None = None,
                            fire_config: dict | None = None,
@@ -246,15 +246,12 @@ def _serialize_report_data(analytics, tax, transactions: list[dict],
             "values": [round(float(v), 2) for v in series.values],
         }
 
-    # Tax data
-    if tax:
-        data["tax"] = {
-            "year": tax.year,
-            "total_realized_gain_eur": round(tax.total_realized_gain_eur, 2),
-            "total_realized_tax_eur": round(tax.total_realized_tax_eur, 2),
-            "total_dividends_eur": round(tax.total_dividends_eur, 2),
-            "total_fees_eur": round(tax.total_fees_eur, 2),
-            "total_tax_eur": round(tax.total_tax_eur, 2),
+    # Tax data — keyed by year so the client can switch years
+    def _ser_tax(t) -> dict:
+        return {
+            "year": t.year,
+            "total_dividends_eur": round(t.total_dividends_eur, 2),
+            "total_fees_eur": round(t.total_fees_eur, 2),
             "realized_sales": [
                 {
                     "ticker": s.ticker,
@@ -269,9 +266,12 @@ def _serialize_report_data(analytics, tax, transactions: list[dict],
                     "tax_rate": round(s.tax_rate, 2),
                     "tax_eur": round(s.tax_eur, 2),
                 }
-                for s in tax.realized_sales
+                for s in t.realized_sales
             ],
         }
+
+    if tax_by_year:
+        data["tax_by_year"] = {str(yr): _ser_tax(t) for yr, t in tax_by_year.items()}
 
     # Per-asset-class daily series (for the scope filter UI)
     data["per_class"] = {}
@@ -326,13 +326,13 @@ def _serialize_report_data(analytics, tax, transactions: list[dict],
     return data
 
 
-def generate_html_report(analytics, tax, transactions: list[dict],
+def generate_html_report(analytics, tax_by_year, transactions: list[dict],
                          per_class: dict | None = None,
                          real_estate: dict | None = None,
                          fire_config: dict | None = None,
                          investment_notes: list[dict] | None = None) -> str:
     """Generate a self-contained HTML report."""
-    data = _serialize_report_data(analytics, tax, transactions, per_class=per_class,
+    data = _serialize_report_data(analytics, tax_by_year, transactions, per_class=per_class,
                                   real_estate=real_estate, fire_config=fire_config,
                                   investment_notes=investment_notes)
 

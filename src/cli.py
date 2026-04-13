@@ -158,10 +158,21 @@ def cmd_report(args):
             end_date=args.end_date, scope="all",
         )
 
-        tax = None
-        tax_year = args.year or (args.end_date.year if args.end_date else datetime.now().year)
+        # Compute tax for every year that has transactions (excluding real estate)
+        tax_by_year = {}
         try:
-            tax = compute_tax_report(conn, year=tax_year, include_unrealized=False, scope="all")
+            years_with_tx = [
+                int(r[0]) for r in conn.execute(
+                    "SELECT DISTINCT strftime('%Y', date) FROM transactions "
+                    "WHERE asset_class != 'realestate' ORDER BY 1"
+                ).fetchall()
+            ]
+            for yr in years_with_tx:
+                try:
+                    t = compute_tax_report(conn, year=yr, include_unrealized=False, scope="all")
+                    tax_by_year[yr] = t
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -185,7 +196,7 @@ def cmd_report(args):
         re_data = query_real_estate(conn)
         fire_cfg = query_fire_config(conn)
         notes = query_investment_notes(conn)
-        html = generate_html_report(analytics, tax, transactions, per_class=per_class,
+        html = generate_html_report(analytics, tax_by_year, transactions, per_class=per_class,
                                      real_estate=re_data, fire_config=fire_cfg,
                                      investment_notes=notes)
 
