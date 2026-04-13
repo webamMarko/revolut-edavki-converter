@@ -828,11 +828,13 @@ def _compute_benchmarks(conn: sqlite3.Connection, daily_df: pd.DataFrame,
     if len(portfolio_values) < 2:
         return [], {}
 
-    # Find first non-zero value for rebasing
-    first_nonzero = portfolio_values[portfolio_values > 0]
-    if first_nonzero.empty:
+    # Use perf_index (TWR) for portfolio return so it matches the benchmark chart,
+    # which strips out cash flows. Raw value ratio would be inflated by deposits.
+    perf = daily_df["perf_index"] if "perf_index" in daily_df.columns else pd.Series(dtype=float)
+    first_nonzero_perf = perf[perf > 0]
+    if first_nonzero_perf.empty:
         return [], {}
-    portfolio_return = (portfolio_values.iloc[-1] / first_nonzero.iloc[0] - 1) * 100
+    portfolio_return = (perf.iloc[-1] / first_nonzero_perf.iloc[0] - 1) * 100
 
     results = []
     bench_daily = {}
