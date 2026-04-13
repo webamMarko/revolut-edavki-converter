@@ -344,6 +344,8 @@ body {
 .heatmap-empty { min-width: 52px; }
 .heatmap-year-col  { border-left: 2px solid var(--border); }
 .heatmap-year-cell { border-left: 2px solid var(--border); }
+.yearly-heatmap-table td, .yearly-heatmap-table th { text-align: left !important; }
+.yearly-ret-cell { min-width: 110px; text-align: center !important; }
 
 /* ---- Mobile: bottom tab bar ---- */
 @media (max-width: 768px) {

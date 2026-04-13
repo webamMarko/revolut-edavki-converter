@@ -58,3 +58,82 @@ function buildHeatmap() {
   h += '</tbody></table></div>';
   el.innerHTML = h;
 }
+
+// --- Yearly heatmap ---
+function buildYearlyHeatmap() {
+  const el = document.getElementById('yearly-heatmap');
+  if (!el || ds.dates.length === 0) return;
+  const dates = ds.dates;
+  const hasPerfIdx = ds.perf_index && ds.perf_index.length === dates.length;
+  const perfVals = hasPerfIdx ? ds.perf_index : ds.value_eur;
+  const hasInvested = ds.invested_eur && ds.invested_eur.length === dates.length;
+
+  // Build year index map
+  const yearMap = {};
+  for (let i = 0; i < dates.length; i++) {
+    const y = dates[i].substring(0, 4);
+    if (!yearMap[y]) yearMap[y] = {si: i, ei: i};
+    else yearMap[y].ei = i;
+  }
+  const years = Object.keys(yearMap).sort();
+
+  // Color scale based on annual returns
+  let maxAbs = 10;
+  years.forEach(function(y) {
+    const d = yearMap[y];
+    if (perfVals[d.si] > 0) {
+      const r = Math.abs((perfVals[d.ei] / perfVals[d.si] - 1) * 100);
+      if (r > maxAbs) maxAbs = r;
+    }
+  });
+  maxAbs = Math.min(maxAbs, 60);
+
+  function cellBg(ret) {
+    const intensity = Math.min(Math.abs(ret) / maxAbs, 1);
+    const alpha = (0.15 + 0.75 * intensity).toFixed(2);
+    return ret >= 0 ? 'rgba(52,211,153,' + alpha + ')' : 'rgba(248,113,113,' + alpha + ')';
+  }
+  function cellFg(ret) {
+    return Math.min(Math.abs(ret) / maxAbs, 1) > 0.5 ? '#fff' : 'var(--text)';
+  }
+
+  let h = '<div class="heatmap-wrap"><table class="heatmap-table yearly-heatmap-table">';
+  h += '<thead><tr><th>Year</th><th>Annual Return</th><th>Gain / Loss</th><th>Year-end Value</th>';
+  if (hasInvested) h += '<th>Cash Invested</th>';
+  h += '</tr></thead><tbody>';
+
+  years.forEach(function(year) {
+    const d = yearMap[year];
+    const startEur = ds.value_eur[d.si];
+    const endEur = ds.value_eur[d.ei];
+    const gainEur = endEur - startEur;
+
+    let ret = null;
+    if (perfVals[d.si] > 0) ret = (perfVals[d.ei] / perfVals[d.si] - 1) * 100;
+
+    let investedYr = null;
+    if (hasInvested) investedYr = ds.invested_eur[d.ei] - ds.invested_eur[d.si];
+
+    const s = ret !== null && ret >= 0 ? '+' : '';
+    const gs = gainEur >= 0 ? '+' : '';
+
+    h += '<tr>';
+    h += '<td class="heatmap-year-label">' + year + '</td>';
+    if (ret !== null) {
+      h += '<td class="heatmap-cell yearly-ret-cell" style="background:' + cellBg(ret) + ';color:' + cellFg(ret) + '">' +
+           '<strong>' + s + ret.toFixed(2) + '%</strong></td>';
+    } else {
+      h += '<td class="heatmap-empty">—</td>';
+    }
+    h += '<td class="' + (gainEur >= 0 ? 'pos' : 'neg') + '">' + gs + fmt(gainEur) + ' EUR</td>';
+    h += '<td>' + fmt(endEur) + ' EUR</td>';
+    if (hasInvested) {
+      const is = investedYr >= 0 ? '+' : '';
+      h += '<td style="color:var(--muted)">' + is + fmt(investedYr) + ' EUR</td>';
+    }
+    h += '</tr>';
+  });
+
+  h += '</tbody></table></div>';
+  el.innerHTML = h;
+}

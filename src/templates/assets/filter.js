@@ -203,6 +203,7 @@ function onFilterChange() {
   rebuildCharts();
   updateAll();
   buildHeatmap();
+  buildYearlyHeatmap();
   document.querySelectorAll('.range-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.days === '-1' && !b.dataset.ytd);
   });
