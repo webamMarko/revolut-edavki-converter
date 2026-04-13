@@ -1,1 +1,41 @@
-<section id="summary" class="card-grid"></section>
+<div id="selectionBanner" class="selection-banner" style="display:none">
+  <span id="selectionLabel"></span>
+  <button onclick="resetZoom()">Reset</button>
+</div>
+
+<div class="page-stack">
+  <section id="summary" class="card-grid"></section>
+
+  <section class="chart-section">
+    <div class="chart-header">
+      <h2>Portfolio Value</h2>
+      <div class="range-bar" id="rangeBar">
+        <button class="range-btn" data-days="7">7D</button>
+        <button class="range-btn" data-days="30">30D</button>
+        <button class="range-btn" data-ytd="1">YTD</button>
+        <button class="range-btn" data-days="365">1Y</button>
+        <button class="range-btn" data-days="1095">3Y</button>
+        <button class="range-btn" data-days="1825">5Y</button>
+        <button class="range-btn active" data-days="-1">All</button>
+      </div>
+      <span class="chart-hint">Drag to select a period</span>
+    </div>
+    <div class="chart-wrap"><canvas id="portfolioChart"></canvas></div>
+  </section>
+
+  <section class="two-col">
+    <div class="card">
+      <h2>Gains Breakdown</h2>
+      <table id="gainsTable" class="data-table"></table>
+    </div>
+    <div class="card" id="benchmarkTableCard" style="display:none">
+      <h2>Benchmark Comparison</h2>
+      <table id="benchmarkTable" class="data-table"></table>
+    </div>
+  </section>
+
+  <section class="chart-section" id="benchmarkSection" style="display:none">
+    <h2 id="benchmarkSectionTitle">Performance vs Benchmarks</h2>
+    <div class="chart-wrap"><canvas id="benchmarkChart"></canvas></div>
+  </section>
+</div>

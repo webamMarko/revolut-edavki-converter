@@ -64,14 +64,9 @@
 {% include "assets/nav.js" %}
 
 // --- Initial render ---
-// Build charts while page is temporarily rendered (canvas requires visible parent for sizing)
-(function() {
-  var p = document.getElementById('page-charts');
-  p.style.cssText = 'display:block;visibility:hidden;position:absolute;pointer-events:none;width:100%';
-  portfolioChart = buildPortfolioChart();
-  benchmarkChart = buildBenchmarkChart();
-  p.style.cssText = '';
-})();
+// Charts are on the overview page (active by default), so they size correctly without tricks
+portfolioChart = buildPortfolioChart();
+benchmarkChart = buildBenchmarkChart();
 updateAll();
 buildHeatmap();
 </script>

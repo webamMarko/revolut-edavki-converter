@@ -32,11 +32,6 @@
 
       setTimeout(function() {
         next.style.transition = '';
-        // Resize charts when navigating to charts page
-        if (id === 'charts') {
-          if (window.portfolioChart) window.portfolioChart.resize();
-          if (window.benchmarkChart) window.benchmarkChart.resize();
-        }
       }, 130);
 
       currentPage = id;
