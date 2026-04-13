@@ -126,10 +126,6 @@ function rebuildCharts() {
 // Shared benchmark key list (used by benchmark_table.js)
 const bKeys = Object.keys(D.benchmark_series);
 
-// Initial chart build
-portfolioChart = buildPortfolioChart();
-benchmarkChart = buildBenchmarkChart();
-
 // --- Sync zoom between charts ---
 function syncChartZoom(sourceChart) {
   const target = sourceChart === portfolioChart ? benchmarkChart : portfolioChart;

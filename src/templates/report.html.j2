@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ title }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2"></script>
@@ -14,18 +16,35 @@
 </style>
 </head>
 <body>
+<div class="layout">
 
-{% include "sections/header.html.j2" %}
+  {% include "sections/header.html.j2" %}
 
-<main>
-  {% include "sections/summary.html.j2" %}
-  {% include "sections/charts.html.j2" %}
-  {% include "sections/positions.html.j2" %}
-  {% include "sections/notes.html.j2" %}
-  {% include "sections/real_estate.html.j2" %}
-  {% include "sections/tax.html.j2" %}
-  {% include "sections/transactions.html.j2" %}
-</main>
+  <main class="content">
+    <div class="page active" id="page-overview">
+      {% include "sections/summary.html.j2" %}
+    </div>
+    <div class="page" id="page-charts">
+      {% include "sections/charts.html.j2" %}
+    </div>
+    <div class="page" id="page-positions">
+      {% include "sections/positions.html.j2" %}
+    </div>
+    <div class="page" id="page-notes">
+      {% include "sections/notes.html.j2" %}
+    </div>
+    <div class="page" id="page-realestate">
+      {% include "sections/real_estate.html.j2" %}
+    </div>
+    <div class="page" id="page-tax">
+      {% include "sections/tax.html.j2" %}
+    </div>
+    <div class="page" id="page-history">
+      {% include "sections/transactions.html.j2" %}
+    </div>
+  </main>
+
+</div>
 
 <script>const D={{ data_json }};</script>
 <script>
@@ -42,7 +61,17 @@
 {% include "assets/sections/transactions.js" %}
 {% include "assets/sections/real_estate.js" %}
 {% include "assets/sections/notes.js" %}
+{% include "assets/nav.js" %}
+
 // --- Initial render ---
+// Build charts while page is temporarily rendered (canvas requires visible parent for sizing)
+(function() {
+  var p = document.getElementById('page-charts');
+  p.style.cssText = 'display:block;visibility:hidden;position:absolute;pointer-events:none;width:100%';
+  portfolioChart = buildPortfolioChart();
+  benchmarkChart = buildBenchmarkChart();
+  p.style.cssText = '';
+})();
 updateAll();
 buildHeatmap();
 </script>

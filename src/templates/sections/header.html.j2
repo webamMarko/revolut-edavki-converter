@@ -1,18 +1,55 @@
-<header>
-  <h1>{{ title }}</h1>
-  <p class="subtitle">{{ start_date }} to {{ end_date }} &middot; Generated {{ generated_at }}</p>
-</header>
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-title">Portfolio<span class="brand-accent">.</span></div>
+    <div class="brand-dates">{{ start_date }} &ndash; {{ end_date }}</div>
+  </div>
 
-<div id="assetFilter" class="asset-filter" style="display:none">
-  <span class="filter-label">Asset Classes:</span>
-  <div id="assetToggles" class="toggles"></div>
-</div>
-<div id="fireFilter" class="asset-filter" style="display:none">
-  <span class="filter-label">Projections:</span>
-  <div class="toggles"><div id="fireToggleBtn" class="toggle-btn toggle-fire">FIRE</div></div>
-</div>
+  <div id="assetFilter" class="sidebar-filter-block" style="display:none">
+    <div class="filter-label">Assets</div>
+    <div id="assetToggles" class="toggles"></div>
+  </div>
 
-<div id="selectionBanner" class="selection-banner" style="display:none">
-  <span id="selectionLabel"></span>
-  <button onclick="resetZoom()">Reset Zoom</button>
-</div>
+  <div id="fireFilter" class="sidebar-filter-block" style="display:none">
+    <div class="filter-label">Projections</div>
+    <div class="toggles">
+      <div id="fireToggleBtn" class="toggle-btn toggle-fire">FIRE</div>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-item active" data-page="overview">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 11h3v3H2v-3zm4-4h3v7H6V7zm4-4h3v11h-3V3z"/></svg>
+      <span>Overview</span>
+    </div>
+    <div class="nav-item" data-page="charts">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,13 5,7 9,10 15,3"/></svg>
+      <span>Charts</span>
+    </div>
+    <div class="nav-item" data-page="positions">
+      <svg viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+      <span>Positions</span>
+    </div>
+    <div class="nav-item" data-page="notes">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2h10v9l-3 3H3V2z"/><line x1="5" y1="6" x2="11" y2="6"/><line x1="5" y1="9" x2="9" y2="9"/></svg>
+      <span>Notes</span>
+    </div>
+    <div class="nav-divider"></div>
+    <div class="nav-item" data-page="realestate" id="navRealestate" style="display:none">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5L1.5 6.5V14h4v-4.5h5V14h4V6.5L8 1.5z"/></svg>
+      <span>Real Estate</span>
+    </div>
+    <div class="nav-item" data-page="tax">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="5" cy="5" r="1.5"/><circle cx="11" cy="11" r="1.5"/><line x1="13.5" y1="2.5" x2="2.5" y2="13.5"/></svg>
+      <span>Tax</span>
+    </div>
+    <div class="nav-item" data-page="history">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="3" y1="4" x2="13" y2="4"/><line x1="3" y1="8" x2="13" y2="8"/><line x1="3" y1="12" x2="9" y2="12"/></svg>
+      <span>History</span>
+    </div>
+  </nav>
+
+  <div class="sidebar-footer">
+    Generated {{ generated_at }}<br>
+    <kbd>&#8592;</kbd><kbd>&#8594;</kbd> navigate sections
+  </div>
+</nav>

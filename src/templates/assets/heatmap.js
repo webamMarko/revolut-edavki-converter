@@ -27,7 +27,7 @@ function buildHeatmap() {
   function cellBg(ret) {
     const intensity = Math.min(Math.abs(ret)/maxAbs, 1);
     const alpha = (0.12 + 0.78*intensity).toFixed(2);
-    return ret >= 0 ? 'rgba(22,163,74,'+alpha+')' : 'rgba(220,38,38,'+alpha+')';
+    return ret >= 0 ? 'rgba(52,211,153,'+alpha+')' : 'rgba(248,113,113,'+alpha+')';
   }
   function cellFg(ret) {
     return Math.min(Math.abs(ret)/maxAbs, 1) > 0.5 ? '#fff' : 'var(--text)';
