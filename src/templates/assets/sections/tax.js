@@ -20,8 +20,8 @@ function updateTaxTable() {
 
   if (sales.length > 0) {
     const tt = document.getElementById('taxTable');
-    tt.innerHTML = '<thead><tr><th>Ticker</th><th>Date</th><th>Qty</th><th>Proceeds</th><th>Cost Basis</th><th>Gain</th><th>Held</th><th>Rate</th><th>Tax</th></tr></thead><tbody>'+
-      sales.map(s=>`<tr><td>${s.ticker}</td><td>${s.sell_date}</td><td>${fmt(s.quantity,4)}</td><td>${fmtEur(s.sell_price_eur)}</td><td>${fmtEur(s.cost_basis_eur)}</td><td class="${cls(s.gain_eur)}">${sign(s.gain_eur)} EUR</td><td>${fmt(s.holding_years,1)}y</td><td>${Math.round(s.tax_rate*100)}%</td><td>${fmtEur(s.tax_eur)}</td></tr>`).join('')+'</tbody>';
+    tt.innerHTML = '<thead><tr><th>Ticker</th><th>Date</th><th>Qty</th><th>Proceeds</th><th>Cost Basis</th><th>Gain</th><th>Std Costs</th><th>Held</th><th>Rate</th><th>Tax</th></tr></thead><tbody>'+
+      sales.map(s=>`<tr><td>${s.ticker}</td><td>${s.sell_date}</td><td>${fmt(s.quantity,4)}</td><td>${fmtEur(s.sell_price_eur)}</td><td>${fmtEur(s.cost_basis_eur)}</td><td class="${cls(s.gain_eur)}">${sign(s.gain_eur)} EUR</td><td style="color:var(--muted)">${s.std_costs_eur > 0 ? '-'+fmt(s.std_costs_eur)+' EUR' : '—'}</td><td>${fmt(s.holding_years,1)}y</td><td>${Math.round(s.tax_rate*100)}%</td><td>${fmtEur(s.tax_eur)}</td></tr>`).join('')+'</tbody>';
     makeSortable(tt);
   }
 }

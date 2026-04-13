@@ -6,17 +6,14 @@ from dataclasses import dataclass
 from datetime import datetime
 
 
-CFD_TAX_RATE = 0.40
-
-
 def slovenian_tax_rate(holding_years: float) -> float:
-    """Return the Slovenian capital gains tax rate based on holding period.
+    """Return the Slovenian capital gains tax rate for stocks/crypto/savings.
 
-    - 0-5 years: 25%
-    - 5-10 years: 20%
-    - 10-15 years: 15%
-    - 15-20 years: 10%
-    - 20+ years: 0%
+    - 0–5 years:   25%
+    - 5–10 years:  20%
+    - 10–15 years: 15%
+    - 15–20 years: 10%
+    - 20+ years:    0%
     """
     if holding_years >= 20:
         return 0.0
@@ -30,6 +27,41 @@ def slovenian_tax_rate(holding_years: float) -> float:
         return 0.25
 
 
+def slovenian_cfd_tax_rate(holding_years: float) -> float:
+    """Return the Slovenian tax rate for derivative financial instruments (CFDs).
+
+    Source: FURS – Odsvojil sem izvedene finančne instrumente (effective 2020-01-01)
+    - < 1 year:    40%
+    - 1–5 years:   27.5%
+    - 5–10 years:  20%
+    - 10–15 years: 15%
+    - 15–20 years: 10%
+    - 20+ years:    0%
+    """
+    if holding_years >= 20:
+        return 0.0
+    elif holding_years >= 15:
+        return 0.10
+    elif holding_years >= 10:
+        return 0.15
+    elif holding_years >= 5:
+        return 0.20
+    elif holding_years >= 1:
+        return 0.275
+    else:
+        return 0.40
+
+
+def standardized_costs(cost_basis_eur: float, proceeds_eur: float, leveraged: bool) -> float:
+    """Return Slovenian standardized cost allowance that reduces the tax base.
+
+    Source: FURS – 0.25% of acquisition + 0.25% of disposal for leveraged instruments;
+    1% + 1% for regular instruments. Reduces only a positive gain, cannot exceed it.
+    """
+    rate = 0.0025 if leveraged else 0.01
+    return rate * (cost_basis_eur + proceeds_eur)
+
+
 @dataclass
 class SaleTaxDetail:
     ticker: str
@@ -37,10 +69,11 @@ class SaleTaxDetail:
     quantity: float
     sell_price_eur: float
     cost_basis_eur: float
-    gain_eur: float
+    gain_eur: float          # raw gain/loss before standardized costs
+    std_costs_eur: float     # standardized cost allowance (reduces positive gains)
     holding_years: float
     tax_rate: float
-    tax_eur: float
+    tax_eur: float           # per-trade estimate; final tax uses netting (total_realized_tax_eur)
 
 
 @dataclass
@@ -84,11 +117,13 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
 
     scope: 'stock', 'cfd', 'crypto', or 'all'
     """
+    # Real estate (asset_class='realestate') is taxed under a separate Slovenian form
+    # (Doh-Nepremičnine) and must not be included in this Doh-KDVP calculation.
     if scope == "all":
         transactions = conn.execute(
             """SELECT date, ticker, type, quantity, price_per_share, total_amount,
                       currency, fx_rate, asset_class
-               FROM transactions ORDER BY date"""
+               FROM transactions WHERE asset_class != 'realestate' ORDER BY date"""
         ).fetchall()
     else:
         transactions = conn.execute(
@@ -152,13 +187,17 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     holding_years = holding_days / 365.25
 
                     if buy_date.year == year:
-                        rate = CFD_TAX_RATE if is_cfd_tx else slovenian_tax_rate(holding_years)
-                        tax = max(0, gain * rate)
+                        rate = slovenian_cfd_tax_rate(holding_years) if is_cfd_tx else slovenian_tax_rate(holding_years)
+                        proceeds = matched * s_pps
+                        basis = matched * pps_eur
+                        std_c = standardized_costs(basis, proceeds, leveraged=is_cfd_tx)
+                        gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
+                        tax = max(0, gain_for_tax * rate)
                         realized_sales.append(SaleTaxDetail(
                             ticker=ticker, sell_date=date_str, quantity=matched,
-                            sell_price_eur=matched * s_pps, cost_basis_eur=matched * pps_eur,
-                            gain_eur=gain, holding_years=holding_years,
-                            tax_rate=rate, tax_eur=tax,
+                            sell_price_eur=proceeds, cost_basis_eur=basis,
+                            gain_eur=gain, std_costs_eur=std_c if gain > 0 else 0.0,
+                            holding_years=holding_years, tax_rate=rate, tax_eur=tax,
                         ))
 
                     if s_qty <= remaining:
@@ -223,12 +262,14 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     holding_years = holding_days / 365.25
                     gain = amount_eur - total_cost
                     rate = slovenian_tax_rate(holding_years)
-                    tax = max(0, gain * rate)
+                    std_c = standardized_costs(total_cost, amount_eur, leveraged=False)
+                    gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
+                    tax = max(0, gain_for_tax * rate)
                     realized_sales.append(SaleTaxDetail(
                         ticker=ticker, sell_date=date_str, quantity=qty,
                         sell_price_eur=amount_eur, cost_basis_eur=total_cost,
-                        gain_eur=gain, holding_years=holding_years,
-                        tax_rate=rate, tax_eur=tax,
+                        gain_eur=gain, std_costs_eur=std_c if gain > 0 else 0.0,
+                        holding_years=holding_years, tax_rate=rate, tax_eur=tax,
                     ))
 
         elif tx_type == "SELL" and ticker and is_savings_tx:
@@ -264,12 +305,14 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     holding_years = holding_days / 365.25
                     gain = amount_eur - total_cost
                     rate = slovenian_tax_rate(holding_years)
-                    tax = max(0, gain * rate)
+                    std_c = standardized_costs(total_cost, amount_eur, leveraged=False)
+                    gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
+                    tax = max(0, gain_for_tax * rate)
                     realized_sales.append(SaleTaxDetail(
                         ticker=ticker, sell_date=date_str, quantity=qty,
                         sell_price_eur=amount_eur, cost_basis_eur=total_cost,
-                        gain_eur=gain, holding_years=holding_years,
-                        tax_rate=rate, tax_eur=tax,
+                        gain_eur=gain, std_costs_eur=std_c if gain > 0 else 0.0,
+                        holding_years=holding_years, tax_rate=rate, tax_eur=tax,
                     ))
 
         elif "SELL" in tx_type and ticker and (is_cfd_tx or is_cfd_scope):
@@ -291,13 +334,17 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     holding_years = holding_days / 365.25
 
                     if sell_date.year == year:
-                        rate = CFD_TAX_RATE if is_cfd_tx else slovenian_tax_rate(holding_years)
-                        tax = max(0, gain * rate)
+                        rate = slovenian_cfd_tax_rate(holding_years) if is_cfd_tx else slovenian_tax_rate(holding_years)
+                        proceeds = matched * pps_eur
+                        basis = matched * l_pps
+                        std_c = standardized_costs(basis, proceeds, leveraged=is_cfd_tx)
+                        gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
+                        tax = max(0, gain_for_tax * rate)
                         realized_sales.append(SaleTaxDetail(
                             ticker=ticker, sell_date=date_str, quantity=matched,
-                            sell_price_eur=matched * pps_eur, cost_basis_eur=matched * l_pps,
-                            gain_eur=gain, holding_years=holding_years,
-                            tax_rate=rate, tax_eur=tax,
+                            sell_price_eur=proceeds, cost_basis_eur=basis,
+                            gain_eur=gain, std_costs_eur=std_c if gain > 0 else 0.0,
+                            holding_years=holding_years, tax_rate=rate, tax_eur=tax,
                         ))
 
                     if l_qty <= remaining:
@@ -350,13 +397,15 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     holding_years = holding_days / 365.25
                     gain = amount_eur - total_cost
                     rate = slovenian_tax_rate(holding_years)
-                    tax = max(0, gain * rate)
+                    std_c = standardized_costs(total_cost, amount_eur, leveraged=False)
+                    gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
+                    tax = max(0, gain_for_tax * rate)
 
                     realized_sales.append(SaleTaxDetail(
                         ticker=ticker, sell_date=date_str, quantity=qty,
                         sell_price_eur=amount_eur, cost_basis_eur=total_cost,
-                        gain_eur=gain, holding_years=holding_years,
-                        tax_rate=rate, tax_eur=tax,
+                        gain_eur=gain, std_costs_eur=std_c if gain > 0 else 0.0,
+                        holding_years=holding_years, tax_rate=rate, tax_eur=tax,
                     ))
 
         elif "STOCK SPLIT" in tx_type and ticker:
@@ -407,12 +456,15 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                 cost = sum(lq * lc for lq, lc, _ in fifo_lots.get(ticker, []))
                 gain = amount_eur - cost
                 is_cfd_tx = tx.get("asset_class") == "cfd"
-                rate = CFD_TAX_RATE if is_cfd_tx else slovenian_tax_rate(0)
-                tax = max(0, gain * rate)
+                rate = slovenian_cfd_tax_rate(0) if is_cfd_tx else slovenian_tax_rate(0)
+                std_c = standardized_costs(cost, amount_eur, leveraged=is_cfd_tx)
+                gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
+                tax = max(0, gain_for_tax * rate)
                 realized_sales.append(SaleTaxDetail(
                     ticker=ticker, sell_date=date_str, quantity=qty,
                     sell_price_eur=amount_eur, cost_basis_eur=cost,
-                    gain_eur=gain, holding_years=0, tax_rate=rate, tax_eur=tax,
+                    gain_eur=gain, std_costs_eur=std_c if gain > 0 else 0.0,
+                    holding_years=0, tax_rate=rate, tax_eur=tax,
                 ))
             fifo_lots[ticker] = []
 
@@ -476,7 +528,8 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
             total_qty = sum(lq for lq, _, _ in lots)
             avg_years = (weighted_days / total_qty / 365.25) if total_qty > 0 else 0
 
-            rate = CFD_TAX_RATE if is_cfd_scope else slovenian_tax_rate(avg_years)
+            is_cfd_ticker = is_cfd_scope or ticker.startswith("CFD:")
+            rate = slovenian_cfd_tax_rate(avg_years) if is_cfd_ticker else slovenian_tax_rate(avg_years)
             tax = max(0, gain * rate)
 
             unrealized_positions.append(UnrealizedTaxDetail(
@@ -491,11 +544,12 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
     total_realized_gain = sum(s.gain_eur for s in realized_sales)
 
     # Net gains/losses within each tax rate bucket before applying tax.
-    # This ensures losses offset gains (e.g. CFD net P&L taxed at 40%,
-    # not each profitable trade taxed individually).
+    # Standardized costs are only deducted from positive individual gains (per trade),
+    # then gains and losses net against each other within the same rate bucket.
     rate_buckets = defaultdict(float)
     for s in realized_sales:
-        rate_buckets[s.tax_rate] += s.gain_eur
+        gain_after_costs = s.gain_eur - s.std_costs_eur if s.gain_eur > 0 else s.gain_eur
+        rate_buckets[s.tax_rate] += gain_after_costs
     total_realized_tax = sum(max(0, net_gain) * rate for rate, net_gain in rate_buckets.items())
 
     return TaxReport(
