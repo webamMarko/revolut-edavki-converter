@@ -434,7 +434,12 @@ def _parse_ilirika_row(row, split_deltas: dict | None = None) -> dict | None:
     quantity = abs(_parse_eu_number(row.get("Volume")) or _parse_eu_number(row.get("VolumeValue")) or 0)
     price = _parse_eu_number(row.get("Price")) or _parse_eu_number(row.get("PriceValue"))
 
-    total_amount = quantity * price if quantity and price else None
+    # For MERGER CASH the Price column is the total payout, not per-share
+    if tx_type == "MERGER CASH":
+        total_amount = price
+        price = (price / quantity) if quantity else price
+    else:
+        total_amount = quantity * price if quantity and price else None
 
     # For STOCK SPLIT, use the pre-computed net delta (OLD + new combined)
     if tx_type == "STOCK SPLIT" and split_deltas:

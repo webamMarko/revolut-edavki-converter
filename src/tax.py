@@ -458,22 +458,28 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
 
         elif "MERGER" in tx_type and ticker:
             holdings[ticker] = 0
-            if "CASH" in tx_type and datetime.strptime(date_str, "%Y-%m-%d").year == year:
-                cost = sum(lq * lc for lq, lc, _ in fifo_lots.get(ticker, []))
-                gain = amount_eur - cost
-                is_cfd_tx = tx.get("asset_class") == "cfd"
-                rate = slovenian_cfd_tax_rate(0) if is_cfd_tx else slovenian_tax_rate(0)
-                std_c = standardized_costs(cost, amount_eur, leveraged=is_cfd_tx)
-                gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
-                tax = max(0, gain_for_tax * rate)
-                realized_sales.append(SaleTaxDetail(
-                    ticker=ticker, asset_class=tx["asset_class"] or "stock",
-                    sell_date=date_str, quantity=qty,
-                    sell_price_eur=amount_eur, cost_basis_eur=cost,
-                    gain_eur=gain, std_costs_eur=std_c if gain > 0 else 0.0,
-                    holding_years=0, tax_rate=rate, tax_eur=tax,
-                ))
-            fifo_lots[ticker] = []
+            if "CASH" in tx_type:
+                # CASH leg: record the gain/loss using whatever lots remain
+                if datetime.strptime(date_str, "%Y-%m-%d").year == year:
+                    cost = sum(lq * lc for lq, lc, _ in fifo_lots.get(ticker, []))
+                    gain = amount_eur - cost
+                    is_cfd_tx = tx.get("asset_class") == "cfd"
+                    rate = slovenian_cfd_tax_rate(0) if is_cfd_tx else slovenian_tax_rate(0)
+                    std_c = standardized_costs(cost, amount_eur, leveraged=is_cfd_tx)
+                    gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
+                    tax = max(0, gain_for_tax * rate)
+                    realized_sales.append(SaleTaxDetail(
+                        ticker=ticker, asset_class=tx["asset_class"] or "stock",
+                        sell_date=date_str, quantity=qty,
+                        sell_price_eur=amount_eur, cost_basis_eur=cost,
+                        gain_eur=gain, std_costs_eur=std_c if gain > 0 else 0.0,
+                        holding_years=0, tax_rate=rate, tax_eur=tax,
+                    ))
+                fifo_lots[ticker] = []
+            elif "STOCK" not in tx_type:
+                # Plain MERGER with no STOCK/CASH qualifier: clear lots
+                fifo_lots[ticker] = []
+            # MERGER - STOCK: keep fifo_lots intact so the subsequent MERGER - CASH can use them
 
         elif tx_type == "POSITION CLOSURE" and ticker:
             holdings[ticker] = 0
