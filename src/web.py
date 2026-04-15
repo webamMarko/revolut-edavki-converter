@@ -220,7 +220,7 @@ class UploadHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
 
-            html = generate_html_report(analytics, tax_by_year, transactions, per_class=per_class)
+            html = generate_html_report(analytics, tax_by_year, transactions, per_class=per_class, conn=conn)
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()

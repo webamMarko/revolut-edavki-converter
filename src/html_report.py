@@ -157,11 +157,65 @@ def query_investment_notes(conn: sqlite3.Connection) -> list[dict]:
         return []
 
 
+def _query_position_price_history(conn: sqlite3.Connection, tickers: list[str]) -> dict:
+    """Return daily EUR price history for each ticker (last 2 years)."""
+    history = {}
+    if not tickers or conn is None:
+        return history
+
+    # Get EUR/USD rates for conversion
+    fx_rows = conn.execute(
+        "SELECT date, eur_usd FROM fx_rates ORDER BY date"
+    ).fetchall()
+    fx_map = {r[0]: r[1] for r in fx_rows}
+
+    from datetime import date as _date, timedelta as _timedelta
+
+    def eur_usd_for(date: str) -> float:
+        # Walk backwards up to 5 days to find a rate
+        for i in range(5):
+            d = (_date.fromisoformat(date) - _timedelta(days=i)).isoformat()
+            if d in fx_map:
+                return fx_map[d]
+        return 1.1  # fallback
+
+    for ticker in tickers:
+        # Strip asset-class prefix for DB lookup
+        db_ticker = ticker
+        for prefix in ("CFD:", "CRYPTO:", "SAVINGS:"):
+            if ticker.startswith(prefix):
+                db_ticker = ticker[len(prefix):]
+                break
+
+        rows = conn.execute(
+            """SELECT date, close, currency FROM daily_prices
+               WHERE ticker = ? ORDER BY date DESC LIMIT 730""",
+            (db_ticker,)
+        ).fetchall()
+        if not rows:
+            continue
+        rows = list(reversed(rows))
+        dates, values = [], []
+        for r in rows:
+            date, close, currency = r[0], r[1], r[2]
+            if currency == "EUR":
+                price_eur = close
+            else:
+                rate = eur_usd_for(date)
+                price_eur = close / rate if rate else close
+            dates.append(date)
+            values.append(round(price_eur, 4))
+        if dates:
+            history[ticker] = {"dates": dates, "values": values}
+    return history
+
+
 def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                            per_class: dict | None = None,
                            real_estate: dict | None = None,
                            fire_config: dict | None = None,
-                           investment_notes: list[dict] | None = None) -> dict:
+                           investment_notes: list[dict] | None = None,
+                           conn: sqlite3.Connection | None = None) -> dict:
     """Convert analytics/tax results + transactions to JSON-safe dict."""
     daily = analytics.daily_series
     data = {
@@ -210,6 +264,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                     "ticker": p.ticker,
                     "quantity": round(p.quantity, 4),
                     "cost_basis_eur": round(p.cost_basis_eur, 2),
+                    "avg_cost_eur": round(p.cost_basis_eur / p.quantity, 4) if p.quantity else 0,
                     "market_value_eur": round(p.market_value_eur, 2),
                     "unrealized_gain_eur": round(p.unrealized_gain_eur, 2),
                     "unrealized_gain_pct": round(p.unrealized_gain_pct, 2),
@@ -308,6 +363,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                             "ticker": p.ticker,
                             "quantity": round(p.quantity, 4),
                             "cost_basis_eur": round(p.cost_basis_eur, 2),
+                            "avg_cost_eur": round(p.cost_basis_eur / p.quantity, 4) if p.quantity else 0,
                             "market_value_eur": round(p.market_value_eur, 2),
                             "unrealized_gain_eur": round(p.unrealized_gain_eur, 2),
                             "unrealized_gain_pct": round(p.unrealized_gain_pct, 2),
@@ -323,6 +379,11 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
     data["real_estate"] = real_estate or {}
     data["fire"] = fire_config  # full config dict or None (replaces old fire_target)
     data["investment_notes"] = investment_notes or []
+
+    # Price history for expandable position rows
+    pos_tickers = [p["ticker"] for p in data["positions"]]
+    data["position_price_history"] = _query_position_price_history(conn, pos_tickers)
+
     return data
 
 
@@ -330,11 +391,12 @@ def generate_html_report(analytics, tax_by_year, transactions: list[dict],
                          per_class: dict | None = None,
                          real_estate: dict | None = None,
                          fire_config: dict | None = None,
-                         investment_notes: list[dict] | None = None) -> str:
+                         investment_notes: list[dict] | None = None,
+                         conn: sqlite3.Connection | None = None) -> str:
     """Generate a self-contained HTML report."""
     data = _serialize_report_data(analytics, tax_by_year, transactions, per_class=per_class,
                                   real_estate=real_estate, fire_config=fire_config,
-                                  investment_notes=investment_notes)
+                                  investment_notes=investment_notes, conn=conn)
 
     template = _env.get_template("report.html.j2")
     return template.render(

@@ -94,7 +94,7 @@ function buildBenchmarkChart() {
     ? ds.perf_index.map(v => v > 0 ? v : null)
     : ds.value_eur.map(() => null);
   const bds = [{label:'Portfolio', data:rebased.map((v,i) => ({x:allDates[i], y:v})), borderColor:'#4285f4', borderWidth:2, pointRadius:0, tension:0.15}];
-  const bColors = {'S&P 500':'#ea4335', 'NASDAQ':'#34a853', 'Dow Jones':'#fbbc04', 'FTSE 100':'#7c3aed'};
+  const bColors = {'S&P 500':'#ea4335', 'NASDAQ':'#34a853', 'Dow Jones':'#fbbc04', 'FTSE 100':'#7c3aed', 'VWCE':'#f97316'};
   bKeys.forEach(tk => {
     const b = D.benchmark_series[tk];
     bds.push({label:b.name, data:b.dates.map((d,i) => ({x:d, y:b.values[i]})), borderColor:bColors[b.name]||'#999', borderWidth:1.5, pointRadius:0, tension:0.15});

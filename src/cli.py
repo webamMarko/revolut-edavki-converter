@@ -198,7 +198,7 @@ def cmd_report(args):
         notes = query_investment_notes(conn)
         html = generate_html_report(analytics, tax_by_year, transactions, per_class=per_class,
                                      real_estate=re_data, fire_config=fire_cfg,
-                                     investment_notes=notes)
+                                     investment_notes=notes, conn=conn)
 
         output = args.output or f"portfolio_report_{analytics.start_date}_{analytics.end_date}.html"
         with open(output, "w", encoding="utf-8") as f:

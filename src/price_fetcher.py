@@ -27,6 +27,7 @@ BENCHMARKS = {
     "^IXIC": "NASDAQ",
     "^DJI": "Dow Jones",
     "^FTSE": "FTSE 100",
+    "VWCE.DE": "VWCE",
 }
 
 FX_TICKER = "EURUSD=X"
@@ -184,7 +185,8 @@ def sync_benchmarks(conn: sqlite3.Connection, start_date: datetime | None = None
 
         df = _fetch_history(ticker, fetch_start, end_str)
         if df is not None and not df.empty:
-            _store_prices(conn, ticker, df, "USD" if ticker != "^FTSE" else "GBP")
+            currency = "GBP" if ticker == "^FTSE" else "EUR" if ticker == "VWCE.DE" else "USD"
+            _store_prices(conn, ticker, df, currency)
             if verbose:
                 print(f"    -> {len(df)} records")
         else:
