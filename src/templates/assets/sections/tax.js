@@ -35,12 +35,20 @@
       buckets[key] = (buckets[key] || 0) + gainAfterCosts;
       totalGain += s.gain_eur;
     }
+    // Slovenian crypto exemption: total net crypto gain < 5000 EUR → 0% tax
+    const totalCryptoNet = Object.entries(buckets)
+      .filter(([k]) => k.startsWith('crypto|'))
+      .reduce((sum, [, net]) => sum + net, 0);
+    const cryptoExempt = totalCryptoNet < 5000;
+
     let totalTax = 0;
     for (const [key, net] of Object.entries(buckets)) {
+      const ac = key.split('|')[0];
+      if (ac === 'crypto' && cryptoExempt) continue;
       const rate = parseFloat(key.split('|')[1]);
       totalTax += Math.max(0, net) * rate;
     }
-    return { totalGain, totalTax };
+    return { totalGain, totalTax, cryptoExempt };
   }
 
   function renderTax() {
@@ -54,10 +62,15 @@
       ? t.realized_sales
       : t.realized_sales.filter(s => activeClasses.has(s.asset_class));
 
-    const { totalGain, totalTax } = computeTax(sales);
+    const { totalGain, totalTax, cryptoExempt } = computeTax(sales);
 
     // Dividends & fees are stored as year-level totals (not per-class)
     const showTotals = isDefaultSelection();
+
+    const exemptionNote = cryptoExempt
+      ? `<div class="metric-card" style="grid-column:1/-1;background:var(--card-bg);border:1px solid var(--pos);color:var(--pos);font-size:0.78rem;padding:0.5rem 0.75rem;border-radius:6px">
+           ℹ️ Crypto gains below 5 000 EUR threshold — exempt from tax (ZDoh-2, čl. 97)
+         </div>` : '';
 
     document.getElementById('taxCards').innerHTML = [
       ['Tax Year',      currentYear,                                        ''],
@@ -68,7 +81,7 @@
       ['Total Tax',     fmtEur(totalTax),                                   'neg'],
     ].map(([l, v, c]) =>
       `<div class="metric-card"><div class="label">${l}</div><div class="value ${c}">${v}</div></div>`
-    ).join('');
+    ).join('') + exemptionNote;
 
     const tt = document.getElementById('taxTable');
     if (sales.length > 0) {

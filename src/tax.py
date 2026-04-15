@@ -564,7 +564,17 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
     for s in realized_sales:
         gain_after_costs = s.gain_eur - s.std_costs_eur if s.gain_eur > 0 else s.gain_eur
         buckets[(s.asset_class, s.tax_rate)] += gain_after_costs
-    total_realized_tax = sum(max(0, net) * rate for (_, rate), net in buckets.items())
+
+    # Slovenian crypto exemption: if total net crypto gain for the year is < 5000 EUR,
+    # the entire crypto gain is tax-free (Zakon o dohodnini, čl. 97).
+    total_crypto_net = sum(net for (ac, _), net in buckets.items() if ac == "crypto")
+    crypto_exempt = total_crypto_net < 5000.0
+
+    total_realized_tax = sum(
+        max(0, net) * rate
+        for (ac, rate), net in buckets.items()
+        if not (ac == "crypto" and crypto_exempt)
+    )
 
     return TaxReport(
         year=year,
