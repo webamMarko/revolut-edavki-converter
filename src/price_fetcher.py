@@ -11,12 +11,12 @@ TICKER_MAP = {
     "VOW3": "VOW3.DE",
     "RHM": "RHM.DE",
     "SIE": "SIE.DE",
-    "ENR1": "ENR1.DE",
+    "ENR1": "ENR.DE",    # Siemens Energy trades as ENR on Xetra (ENR1 is delisted)
     "HAG": "HAG.DE",
     "E3B": "E3B.DE",
     "SDV1": "SDV1.DE",
     "CSF": "CSF.PA",
-    "ABJ": "ABJ.AS",
+    "ABJ": "ABBN.SW",   # ABB Ltd — Amsterdam delisted on yfinance, use Swiss listing
     "FLY": "FLY.AS",
     "VWCE": "VWCE.DE",
 }
@@ -31,6 +31,7 @@ BENCHMARKS = {
 }
 
 FX_TICKER = "EURUSD=X"
+FX_EURCHF = "EURCHF=X"
 
 # Suffixes to try when a bare ticker fails on yfinance
 _EXCHANGE_SUFFIXES = [".DE", ".AS", ".L", ".PA"]
@@ -146,8 +147,20 @@ def sync_stock_prices(conn: sqlite3.Connection, start_date: datetime | None = No
         yf_ticker, df = _fetch_with_fallback(ticker, fetch_start, end_str)
 
         if df is not None and not df.empty:
-            # Determine currency: EUR tickers get EUR, rest USD
-            currency = "EUR" if yf_ticker.endswith((".DE", ".AS", ".PA", ".L")) else "USD"
+            # Determine currency by exchange suffix
+            if yf_ticker.endswith((".DE", ".AS", ".PA", ".L")):
+                currency = "EUR"
+            elif yf_ticker.endswith(".SW"):
+                # Swiss franc — convert to EUR at storage time using EURCHF rate
+                chf_df = _fetch_history(FX_EURCHF, fetch_start, end_str)
+                if chf_df is not None and not chf_df.empty:
+                    # EURCHF rate: 1 EUR = X CHF, so CHF price / rate = EUR price
+                    df = df.join(chf_df.rename(columns={"close": "eurchf"}), how="left")
+                    df["eurchf"] = df["eurchf"].ffill().bfill()
+                    df["close"] = df["close"] / df["eurchf"]
+                currency = "EUR"
+            else:
+                currency = "USD"
             _store_prices(conn, ticker, df, currency)
             fetched += 1
             if verbose:
