@@ -204,7 +204,7 @@ body {
   border-radius: var(--radius);
   padding: 1rem 1.25rem;
   text-align: center;
-  border-top: 2px solid transparent;
+  border-top: 2px solid var(--border);
   transition: border-color 0.15s;
 }
 .metric-card .label {
