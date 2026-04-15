@@ -210,6 +210,26 @@ def _query_position_price_history(conn: sqlite3.Connection, tickers: list[str]) 
     return history
 
 
+def _query_company_names(conn: sqlite3.Connection | None, tickers: list[str]) -> dict:
+    """Return {ticker: company_name} from cached metadata."""
+    if not tickers or conn is None:
+        return {}
+    names = {}
+    for ticker in tickers:
+        # Strip asset-class prefix for lookup
+        db_ticker = ticker
+        for prefix in ("CFD:", "CRYPTO:", "SAVINGS:"):
+            if ticker.startswith(prefix):
+                db_ticker = ticker[len(prefix):]
+                break
+        row = conn.execute(
+            "SELECT value FROM metadata WHERE key = ?", (f"company_name:{db_ticker}",)
+        ).fetchone()
+        if row and row[0]:
+            names[ticker] = row[0]
+    return names
+
+
 def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                            per_class: dict | None = None,
                            real_estate: dict | None = None,
@@ -380,9 +400,10 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
     data["fire"] = fire_config  # full config dict or None (replaces old fire_target)
     data["investment_notes"] = investment_notes or []
 
-    # Price history for expandable position rows
+    # Price history and company names for expandable position rows
     pos_tickers = [p["ticker"] for p in data["positions"]]
     data["position_price_history"] = _query_position_price_history(conn, pos_tickers)
+    data["company_names"] = _query_company_names(conn, pos_tickers)
 
     return data
 

@@ -159,9 +159,12 @@ function updatePositions() {
     const priceChange  = currentPrice != null && firstPrice != null && firstPrice > 0
       ? ((currentPrice - firstPrice) / firstPrice * 100) : null;
 
+    const companyName = (D.company_names || {})[p.ticker] || '';
     const detail = `<tr class="pos-detail-row" id="pos-detail-${idx}" style="display:none">
       <td colspan="8">
         <div class="pos-detail">
+          ${companyName ? `<div class="pos-detail-name">${companyName}</div>` : ''}
+          <div class="pos-detail-body">
           <div class="pos-detail-stats">
             <div class="pos-stat">
               <span class="pos-stat-label">Current Price</span>
@@ -198,6 +201,7 @@ function updatePositions() {
           </div>
           <div class="pos-chart-wrap">
             <canvas id="pos-chart-${idx}" height="140"></canvas>
+          </div>
           </div>
         </div>
       </td>

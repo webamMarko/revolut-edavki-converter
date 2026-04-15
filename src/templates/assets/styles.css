@@ -372,13 +372,27 @@ body {
 .pos-detail-row:hover { background: transparent !important; }
 
 .pos-detail {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
   padding: 1rem 1.25rem 1.25rem;
   background: var(--raised);
   border-top: 1px solid var(--border);
   animation: pos-expand 0.15s ease;
+}
+
+.pos-detail-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.pos-detail-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
 }
 @keyframes pos-expand {
   from { opacity: 0; transform: translateY(-4px); }
@@ -419,7 +433,7 @@ body {
 .pos-chart-wrap canvas { width: 100% !important; }
 
 @media (max-width: 768px) {
-  .pos-detail { grid-template-columns: 1fr; }
+  .pos-detail-body { grid-template-columns: 1fr; }
   .pos-chart-wrap { height: 130px; }
 }
 
