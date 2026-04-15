@@ -63,12 +63,14 @@ def _detect_asset_class(df: pd.DataFrame) -> str:
 
 
 def _parse_eur_amount(value) -> float | None:
-    """Parse an EUR amount like '€100.00' or '€8,636.57' or '1.30 PLN' to float."""
+    """Parse a currency amount like '€100.00', '$5.00', '€8,636.57' or '1.30 PLN' to float."""
     if pd.isna(value) or value == "":
         return None
     s = str(value).strip()
-    # Remove € prefix
-    s = s.replace("€", "").replace(",", "").strip()
+    # Remove currency prefix symbols (€, $, £, etc.)
+    s = s.lstrip("€$£¥").strip()
+    # Remove thousands separators
+    s = s.replace(",", "")
     # Remove currency suffix like ' PLN'
     s = re.sub(r"\s+[A-Z]{2,4}$", "", s)
     try:
