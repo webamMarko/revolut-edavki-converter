@@ -166,4 +166,5 @@
 }
 .note-body pre  { background: var(--raised); padding: 0.75rem; border-radius: var(--radius-sm); overflow-x: auto; margin: 0.5rem 0; }
 .note-body blockquote { border-left: 2px solid var(--accent); padding-left: 0.75rem; color: var(--muted); margin: 0.5rem 0; }
-.note-footer { font-size: 0.72rem; color: var(--muted); margin-top: 0.75rem; }
+.note-footer { font-size: 0.72rem; color: var(--muted); margin-top: 0.75rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.note-footer .note-actions { margin-left: auto; }

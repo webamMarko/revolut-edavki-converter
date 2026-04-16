@@ -65,7 +65,6 @@
           '<div class="note-summary">' + _esc(note.summary) + '</div>' +
         '</div>' +
         '<div class="note-badges">' + badgeHtml + convHtml + actHtml + '</div>' +
-        editBtns +
         '<span class="note-chevron">▼</span>' +
       '</div>' +
       '<div class="note-detail">' +
@@ -73,13 +72,14 @@
         (note.body
           ? '<div class="note-body">' + (typeof marked !== 'undefined' ? marked.parse(note.body) : '<pre>' + _esc(note.body) + '</pre>') + '</div>'
           : '') +
-        '<div class="note-footer">Created ' + note.created_at.slice(0, 10) +
+        '<div class="note-footer">' +
+          'Created ' + note.created_at.slice(0, 10) +
           (note.updated_at !== note.created_at ? ' · Updated ' + note.updated_at.slice(0, 10) : '') +
+          (editBtns ? '&ensp;' + editBtns : '') +
         '</div>' +
       '</div>';
 
-    card.querySelector('.note-header').addEventListener('click', function(e) {
-      if (e.target.closest('.note-actions')) return;
+    card.querySelector('.note-header').addEventListener('click', function() {
       card.classList.toggle('open');
     });
 
