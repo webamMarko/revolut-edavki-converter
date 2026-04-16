@@ -26,7 +26,17 @@
 // --- Sidebar navigation ---
 (function() {
   const navItems = document.querySelectorAll('.nav-item[data-page]');
-  let currentPage = 'overview';
+  const savedPage = localStorage.getItem('activePage');
+  let currentPage = (savedPage && document.getElementById('page-' + savedPage)) ? savedPage : 'overview';
+
+  // Apply saved page on load (the HTML has 'overview' active by default)
+  if (currentPage !== 'overview') {
+    document.getElementById('page-overview').style.display = 'none';
+    document.getElementById('page-overview').classList.remove('active');
+    const initPage = document.getElementById('page-' + currentPage);
+    if (initPage) { initPage.style.display = 'block'; initPage.classList.add('active'); }
+    navItems.forEach(function(i) { i.classList.toggle('active', i.dataset.page === currentPage); });
+  }
 
   function getPage(id) { return document.getElementById('page-' + id); }
 
@@ -60,6 +70,7 @@
       }, 130);
 
       currentPage = id;
+      localStorage.setItem('activePage', id);
     }, 110);
   }
 
