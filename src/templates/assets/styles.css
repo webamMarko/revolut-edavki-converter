@@ -446,10 +446,35 @@ body {
   .pos-chart-wrap { height: 130px; }
 }
 
+/* ---- Mobile top bar (logo + home link) ---- */
+.mobile-topbar {
+  display: none;
+}
+
 /* ---- Mobile: bottom tab bar ---- */
 @media (max-width: 768px) {
   body { overflow: hidden; }
   .layout { flex-direction: column; height: 100dvh; }
+
+  /* Mobile top bar */
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.9rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    order: 0;
+  }
+  .mobile-topbar-logo {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .mobile-topbar-logo .brand-accent { color: var(--accent); }
 
   .sidebar {
     order: 2;
@@ -510,8 +535,9 @@ body {
   .toolbar { flex-wrap: wrap; gap: 0.5rem; }
   #txFilter { width: 100%; }
 
-  /* Heatmap: always horizontal scroll */
+  /* Heatmap cards: horizontal scroll */
   .heatmap-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .heatmap-row .card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
   /* Position detail: single column */
   .pos-detail-body { grid-template-columns: 1fr; }
