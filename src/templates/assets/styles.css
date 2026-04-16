@@ -497,6 +497,11 @@ body {
   display: none;
 }
 
+/* ---- Mobile asset filter strip ---- */
+.mobile-filters {
+  display: none;
+}
+
 /* ---- Mobile: bottom tab bar ---- */
 @media (max-width: 768px) {
   body { overflow: hidden; }
@@ -521,6 +526,22 @@ body {
     text-decoration: none;
   }
   .mobile-topbar-logo .brand-accent { color: var(--accent); }
+
+  /* Mobile filter strip */
+  .mobile-filters {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    order: 0;
+  }
+  .mobile-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding: 0.4rem 0.9rem 0.5rem;
+  }
 
   .sidebar {
     order: 2;

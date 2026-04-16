@@ -162,24 +162,45 @@ if (hasFilter) {
   const filterEl = document.getElementById('assetFilter');
   filterEl.style.display = '';
   const togglesEl = document.getElementById('assetToggles');
+  const mobileFiltersEl = document.getElementById('mobileFilters');
+  const mobileTogglesEl = document.getElementById('mobileAssetToggles');
+  if (mobileFiltersEl) mobileFiltersEl.style.display = '';
+
   classKeys.forEach(ac => {
-    const btn = document.createElement('div');
     const isActive = activeClasses.has(ac);
-    btn.className = 'toggle-btn toggle-' + ac + (isActive ? ' active' : '');
-    btn.textContent = classLabels[ac] || ac;
-    btn.dataset.ac = ac;
-    btn.addEventListener('click', function() {
+    const cls = 'toggle-btn toggle-' + ac + (isActive ? ' active' : '');
+
+    function makeBtn(container) {
+      const btn = document.createElement('div');
+      btn.className = cls;
+      btn.textContent = classLabels[ac] || ac;
+      btn.dataset.ac = ac;
+      container.appendChild(btn);
+      return btn;
+    }
+
+    const sidebarBtn = makeBtn(togglesEl);
+    const mobileBtn  = mobileTogglesEl ? makeBtn(mobileTogglesEl) : null;
+
+    function syncBtns(active) {
+      sidebarBtn.classList.toggle('active', active);
+      if (mobileBtn) mobileBtn.classList.toggle('active', active);
+    }
+
+    function handleClick() {
       if (activeClasses.has(ac)) {
         if (activeClasses.size <= 1) return;
         activeClasses.delete(ac);
-        btn.classList.remove('active');
+        syncBtns(false);
       } else {
         activeClasses.add(ac);
-        btn.classList.add('active');
+        syncBtns(true);
       }
       onFilterChange();
-    });
-    togglesEl.appendChild(btn);
+    }
+
+    sidebarBtn.addEventListener('click', handleClick);
+    if (mobileBtn) mobileBtn.addEventListener('click', handleClick);
   });
 }
 
