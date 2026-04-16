@@ -506,6 +506,167 @@ def _row_hash(parsed: dict, asset_class: str) -> str:
     )
 
 
+def _apply_map(row, column_map: dict, asset_class: str) -> dict | None:
+    """Map a raw CSV row to a transaction dict using the user-supplied column mapping.
+
+    column_map: {db_field: csv_header_name}
+    Returns None if required fields (date, type) are missing.
+    """
+    def get(field):
+        header = column_map.get(field)
+        if not header:
+            return None
+        val = row.get(header)
+        if pd.isna(val) if not isinstance(val, str) else (not val):
+            return None
+        return val
+
+    # Date
+    raw_date = get("date")
+    if not raw_date:
+        return None
+    if asset_class == "crypto":
+        date = _parse_crypto_date(str(raw_date))
+    else:
+        date = str(raw_date)
+    if not date:
+        return None
+
+    # Type
+    raw_type = get("type")
+    if not raw_type:
+        return None
+    tx_type = str(raw_type)
+
+    # Ticker
+    raw_ticker = get("ticker")
+    ticker = str(raw_ticker) if raw_ticker is not None else None
+
+    # Quantity
+    raw_qty = get("quantity")
+    quantity = _parse_amount(raw_qty) if raw_qty is not None else None
+
+    # Price per share
+    raw_pps = get("price_per_share")
+    if raw_pps is not None:
+        if asset_class in ("crypto", "savings"):
+            price_per_share = _parse_eur_amount(raw_pps)
+        else:
+            price_per_share = _parse_amount(raw_pps)
+    else:
+        price_per_share = None
+
+    # Total amount
+    raw_total = get("total_amount")
+    if raw_total is not None:
+        if asset_class in ("crypto", "savings"):
+            total_amount = _parse_eur_amount(raw_total)
+        else:
+            total_amount = _parse_amount(raw_total)
+    else:
+        total_amount = None
+
+    # Currency
+    raw_currency = get("currency")
+    if raw_currency is not None:
+        currency = str(raw_currency)
+    else:
+        currency = "EUR" if asset_class in ("crypto", "savings") else "USD"
+
+    # FX Rate
+    raw_fx = get("fx_rate")
+    if raw_fx is not None:
+        try:
+            fx_rate = float(raw_fx)
+        except (ValueError, TypeError):
+            fx_rate = 1.0
+    else:
+        fx_rate = 1.0
+
+    return {
+        "date": date,
+        "ticker": ticker,
+        "type": tx_type,
+        "quantity": quantity,
+        "price_per_share": price_per_share,
+        "total_amount": total_amount,
+        "currency": currency,
+        "fx_rate": fx_rate,
+    }
+
+
+def import_csv_mapped(
+    conn: sqlite3.Connection,
+    file_path: str,
+    asset_class: str,
+    column_map: dict,
+    filename_hint: str = "",
+    verbose: bool = False,
+) -> ImportResult:
+    """Import a CSV using an explicit user-supplied column mapping.
+
+    asset_class: "stock" | "cfd" | "crypto" | "savings"
+    column_map: {db_field: csv_header_name}
+    """
+    path = Path(file_path)
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+
+    # File-level dedup
+    fhash = _file_hash(file_path)
+    existing = conn.execute(
+        "SELECT id FROM import_log WHERE file_hash = ?", (fhash,)
+    ).fetchone()
+    if existing:
+        if verbose:
+            print(f"File already imported (SHA-256 match): {filename_hint or path.name}")
+        return ImportResult(total=0, new=0, skipped=0)
+
+    # Read CSV — comma first, retry with semicolon if single column
+    df = pd.read_csv(path)
+    if len(df.columns) == 1 or (len(df.columns) < 3 and ";" in df.columns[0]):
+        df = pd.read_csv(path, sep=";")
+
+    total = len(df)
+    new = 0
+    skipped = 0
+
+    for _, row in df.iterrows():
+        parsed = _apply_map(row, column_map, asset_class)
+        if parsed is None:
+            skipped += 1
+            continue
+
+        try:
+            rh = _row_hash(parsed, asset_class)
+            conn.execute(
+                """INSERT OR IGNORE INTO transactions
+                   (date, ticker, type, quantity, price_per_share, total_amount,
+                    currency, fx_rate, asset_class, source_file, row_hash)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (parsed["date"], parsed["ticker"], parsed["type"],
+                 parsed["quantity"], parsed["price_per_share"],
+                 parsed["total_amount"], parsed["currency"],
+                 parsed["fx_rate"], asset_class, filename_hint or path.name, rh),
+            )
+            if conn.execute("SELECT changes()").fetchone()[0] > 0:
+                new += 1
+            else:
+                skipped += 1
+        except sqlite3.Error:
+            skipped += 1
+
+    display_name = filename_hint or path.name
+    conn.execute(
+        """INSERT INTO import_log (filename, file_hash, rows_total, rows_new, rows_skipped)
+           VALUES (?, ?, ?, ?, ?)""",
+        (display_name, fhash, total, new, total - new),
+    )
+    conn.commit()
+
+    return ImportResult(total=total, new=new, skipped=total - new)
+
+
 def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) -> ImportResult:
     """Import a Revolut CSV/Excel file into the database with deduplication."""
     path = Path(file_path)

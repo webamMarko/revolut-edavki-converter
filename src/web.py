@@ -32,6 +32,58 @@ SESSION_TTL = 86400 * 7  # 7 days
 # In-process session store: token -> {user_id, username, role, expires}
 _SESSIONS: dict[str, dict] = {}
 
+# Import wizard staging: token -> {path, dir, filename, expires}
+_IMPORT_STAGING: dict[str, dict] = {}
+
+
+def _detect_asset_class_from_headers(headers: list) -> str | None:
+    """Detect asset class from CSV header list."""
+    cols = {h.strip() for h in headers}
+    if "FinancialInstrument" in cols and "TransactionTypeName" in cols:
+        return "stock"
+    if "Symbol" in cols and "Margin" in cols:
+        return "cfd"
+    if "Symbol" in cols and "Value" in cols and "Ticker" not in cols:
+        return "crypto"
+    if "Description" in cols and "Symbol" not in cols and "Ticker" not in cols:
+        return "savings"
+    if "Ticker" in cols or "Price per share" in cols:
+        return "stock"
+    return None
+
+
+def _purge_expired_staging():
+    """Remove expired staging entries and their temp files."""
+    now = time.time()
+    expired = [t for t, v in _IMPORT_STAGING.items() if v["expires"] < now]
+    for t in expired:
+        _cleanup_staging(t)
+
+
+def _cleanup_staging(token: str):
+    """Delete temp file/dir for a staging entry and remove from dict."""
+    entry = _IMPORT_STAGING.pop(token, None)
+    if not entry:
+        return
+    try:
+        if os.path.exists(entry["path"]):
+            os.unlink(entry["path"])
+        if os.path.exists(entry.get("dir", "")):
+            os.rmdir(entry["dir"])
+    except Exception:
+        pass
+
+
+def _get_session_token(handler) -> str | None:
+    """Extract raw session token from cookie (used as staging key)."""
+    cookie_header = handler.headers.get("Cookie", "")
+    if not cookie_header:
+        return None
+    c = SimpleCookie()
+    c.load(cookie_header)
+    morsel = c.get("session")
+    return morsel.value if morsel else None
+
 
 # ---------------------------------------------------------------------------
 # Multipart parser (unchanged from original)
@@ -173,6 +225,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._serve_admin_users_json()
         elif path == "/api/notes":
             self._api_list_notes()
+        elif path == "/import":
+            self._serve_import_wizard()
         else:
             self.send_error(404)
 
@@ -198,6 +252,10 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._handle_stripe_webhook()
         elif path == "/api/notes":
             self._api_create_note()
+        elif path == "/import/preview":
+            self._handle_import_preview()
+        elif path == "/import/run":
+            self._handle_import_run()
         else:
             self.send_error(404)
 
@@ -722,6 +780,163 @@ class UploadHandler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+    # ------------------------------------------------------------------
+    # Import wizard
+    # ------------------------------------------------------------------
+
+    def _serve_import_wizard(self):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._redirect("/login")
+            return
+        self._html_response(_import_wizard_html())
+
+    def _handle_import_preview(self):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return
+
+        content_length = int(self.headers.get("Content-Length", 0))
+        if content_length > 50 * 1024 * 1024:
+            self._json_response({"error": "File too large (max 50 MB)."}, status=413)
+            return
+
+        body = self._read_body(content_length)
+        fields, files = _parse_multipart(self.headers, body)
+
+        if not files:
+            self._json_response({"error": "No file received."}, status=400)
+            return
+
+        f = files[0]
+        filename = f["filename"]
+        content = f["content"]
+
+        # Reject binary
+        if b"\x00" in content:
+            self._json_response({"error": "Binary file rejected."}, status=400)
+            return
+
+        # Decode text
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                text = content.decode("latin-1")
+            except Exception:
+                self._json_response({"error": "Could not decode file as text."}, status=400)
+                return
+
+        # CSV sniff
+        import csv as _csv
+        import io as _io
+        lines = text.splitlines()
+        if not lines:
+            self._json_response({"error": "File is empty."}, status=400)
+            return
+
+        reader = _csv.reader(_io.StringIO(text))
+        rows_raw = list(reader)
+        if not rows_raw:
+            self._json_response({"error": "File is empty."}, status=400)
+            return
+
+        headers = rows_raw[0]
+        # Retry with semicolon if single column
+        if len(headers) <= 1:
+            reader2 = _csv.reader(_io.StringIO(text), delimiter=";")
+            rows_raw2 = list(reader2)
+            if rows_raw2 and len(rows_raw2[0]) > 1:
+                rows_raw = rows_raw2
+                headers = rows_raw[0]
+
+        if len(headers) <= 1:
+            self._json_response({"error": "Could not parse as CSV (comma or semicolon separated)."}, status=400)
+            return
+
+        preview_rows = [list(r) for r in rows_raw[1:6]]
+        row_count = max(0, len(rows_raw) - 1)
+
+        detected = _detect_asset_class_from_headers(headers)
+
+        # Stage the file
+        token = _get_session_token(self)
+        tmp_dir = tempfile.mkdtemp(prefix="revolut_import_")
+        tmp_path = os.path.join(tmp_dir, filename)
+        with open(tmp_path, "wb") as fh:
+            fh.write(content)
+
+        _IMPORT_STAGING[token] = {
+            "path": tmp_path,
+            "dir": tmp_dir,
+            "filename": filename,
+            "expires": time.time() + 3600,
+        }
+        _purge_expired_staging()
+
+        self._json_response({
+            "headers": headers,
+            "rows": preview_rows,
+            "detected_asset_class": detected,
+            "row_count": row_count,
+            "filename": filename,
+        })
+
+    def _handle_import_run(self):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return
+
+        body = self._read_body()
+        try:
+            data = json.loads(body)
+        except Exception:
+            self._json_response({"error": "Invalid JSON."}, status=400)
+            return
+
+        asset_class = data.get("asset_class", "")
+        column_map = data.get("mapping", {})
+        filename = data.get("filename", "")
+
+        if asset_class not in ("stock", "cfd", "crypto", "savings"):
+            self._json_response({"error": "Invalid asset class."}, status=400)
+            return
+
+        token = _get_session_token(self)
+        staging = _IMPORT_STAGING.get(token)
+        if not staging or staging["expires"] < time.time():
+            if staging:
+                _cleanup_staging(token)
+            self._json_response({"error": "Upload session expired. Please re-upload the file."}, status=400)
+            return
+
+        from .importer import import_csv_mapped
+        conn = _portfolio_conn(session)
+        try:
+            result = import_csv_mapped(
+                conn,
+                staging["path"],
+                asset_class=asset_class,
+                column_map=column_map,
+                filename_hint=filename or staging["filename"],
+                verbose=self.verbose,
+            )
+        except Exception as e:
+            conn.close()
+            self._json_response({"error": str(e)}, status=500)
+            return
+        finally:
+            conn.close()
+
+        _cleanup_staging(token)
+        self._json_response({
+            "total": result.total,
+            "new": result.new,
+            "skipped": result.skipped,
+        })
+
     def _read_body(self, length: int | None = None) -> bytes:
         if length is None:
             length = int(self.headers.get("Content-Length", 0))
@@ -1174,8 +1389,9 @@ const _USER = __USER_JSON__;
   if (_USER.username) {
     let links = '<span>' + _USER.username + ' (' + _USER.role + ')</span>';
     links += ' <a href="/report">Report</a>';
-    if (_USER.role === 'admin') links += ' <a href="/admin">Admin</a>';
-    links += ' <a href="/logout">Log out</a>';
+    links += ' | <a href="/import">Import Wizard</a>';
+    if (_USER.role === 'admin') links += ' | <a href="/admin">Admin</a>';
+    links += ' | <a href="/logout">Log out</a>';
     hr.innerHTML = links;
   } else {
     hr.innerHTML = '<a href="/login">Log in</a>';
@@ -1313,3 +1529,446 @@ const _USER = __USER_JSON__;
 </body>
 </html>
 """
+
+
+# ---------------------------------------------------------------------------
+# Inline HTML: import wizard page
+# ---------------------------------------------------------------------------
+
+def _import_wizard_html() -> str:
+    return r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Import Wizard — Portfolio</title>
+<style>
+:root {
+  --bg:#0a0c10;--surface:#111520;--raised:#181e2e;--border:#1e2a3a;
+  --text:#dce4f0;--muted:#556075;--subtle:#2e3a4e;
+  --accent:#f59e0b;--accent-dim:rgba(245,158,11,0.12);
+  --green:#34d399;--red:#f87171;--blue:#60a5fa;
+  --radius:10px;--radius-sm:6px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+     background:var(--bg);color:var(--text);min-height:100vh;
+     display:flex;flex-direction:column;align-items:center;}
+header{width:100%;background:var(--surface);border-bottom:1px solid var(--border);
+       padding:1rem 2rem;display:flex;align-items:center;gap:1rem;}
+.logo{font-size:1.1rem;font-weight:700;letter-spacing:-0.03em;text-decoration:none;color:var(--text);}
+.logo span{color:var(--accent);}
+.back{font-size:.82rem;color:var(--muted);text-decoration:none;margin-left:auto;}
+.back:hover{color:var(--text);}
+main{width:100%;max-width:780px;padding:2rem 1rem;display:flex;flex-direction:column;gap:1.5rem;}
+
+/* Progress steps */
+.steps{display:flex;align-items:center;gap:0;margin-bottom:.5rem;}
+.step{display:flex;align-items:center;gap:.5rem;font-size:.78rem;font-weight:600;
+      color:var(--muted);padding:.4rem .75rem;border-radius:20px;}
+.step.active{color:var(--accent);}
+.step.done{color:var(--green);}
+.step-num{width:20px;height:20px;border-radius:50%;border:2px solid currentColor;
+          display:flex;align-items:center;justify-content:center;font-size:.7rem;flex-shrink:0;}
+.step-sep{flex:1;height:1px;background:var(--border);margin:0 .25rem;max-width:40px;}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;}
+.card h2{font-size:1rem;font-weight:600;margin-bottom:1rem;}
+
+/* Drop zone */
+.drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:2.5rem 1.5rem;
+           text-align:center;cursor:pointer;transition:all .15s;position:relative;}
+.drop-zone:hover,.drop-zone.dragover{border-color:var(--accent);background:var(--accent-dim);}
+.drop-zone .icon{font-size:2.2rem;margin-bottom:.5rem;}
+.drop-zone .lbl{font-size:.9rem;color:var(--muted);}
+.drop-zone .lbl strong{color:var(--accent);}
+.drop-zone .hint{font-size:.72rem;color:var(--muted);margin-top:.3rem;}
+.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.chosen-file{margin-top:.75rem;font-size:.83rem;font-weight:500;color:var(--text);}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;
+     padding:.5rem 1.25rem;border-radius:var(--radius-sm);font-size:.85rem;font-weight:600;
+     cursor:pointer;border:none;transition:opacity .12s;font-family:inherit;}
+.btn-primary{background:var(--accent);color:#000;}
+.btn-primary:hover{opacity:.88;}
+.btn-primary:disabled{opacity:.35;cursor:default;}
+.btn-secondary{background:transparent;color:var(--muted);border:1px solid var(--border);}
+.btn-secondary:hover{background:var(--raised);color:var(--text);}
+.btn-group{display:flex;gap:.6rem;margin-top:1.25rem;flex-wrap:wrap;}
+
+/* Asset class toggles */
+.ac-toggles{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.25rem;}
+.ac-btn{padding:.3rem .85rem;border-radius:12px;font-size:.75rem;font-weight:700;
+        cursor:pointer;border:1px solid var(--border);background:transparent;
+        color:var(--muted);font-family:inherit;transition:all .12s;}
+.ac-btn.active{background:var(--accent-dim);color:var(--accent);border-color:var(--accent);}
+
+/* Preview table */
+.preview-wrap{overflow-x:auto;margin-bottom:1.25rem;}
+.preview-table{border-collapse:collapse;font-size:.75rem;width:100%;}
+.preview-table th,.preview-table td{padding:.3rem .55rem;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+.preview-table thead th{font-weight:600;color:var(--accent);font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;}
+
+/* Mapping table */
+.map-table{width:100%;border-collapse:collapse;font-size:.83rem;}
+.map-table td{padding:.45rem .5rem;border-bottom:1px solid var(--border);vertical-align:middle;}
+.map-table td:first-child{width:38%;font-weight:500;}
+.map-table td:nth-child(2){width:10%;text-align:center;}
+.map-table select{background:var(--raised);border:1px solid var(--border);border-radius:var(--radius-sm);
+                  color:var(--text);font-family:inherit;font-size:.8rem;padding:.3rem .5rem;width:100%;}
+.map-table select:focus{outline:none;border-color:var(--accent);}
+.req-badge{font-size:.62rem;font-weight:700;padding:.1rem .4rem;border-radius:8px;
+           background:rgba(248,113,113,.15);color:var(--red);}
+.opt-badge{font-size:.62rem;font-weight:700;padding:.1rem .4rem;border-radius:8px;
+           background:var(--raised);color:var(--muted);}
+
+/* Step 3 summary */
+.summary-list{display:flex;flex-direction:column;gap:.4rem;font-size:.83rem;}
+.summary-row{display:flex;gap:.75rem;}
+.summary-lbl{color:var(--muted);width:140px;flex-shrink:0;font-size:.75rem;font-weight:600;
+             text-transform:uppercase;letter-spacing:.05em;}
+.summary-val{color:var(--text);}
+
+/* Error / success */
+.error-msg{color:var(--red);font-size:.82rem;margin-top:.6rem;}
+.success-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.25);
+             border-radius:var(--radius-sm);padding:1rem;text-align:center;}
+.success-box .big{font-size:1.1rem;font-weight:700;color:var(--green);margin-bottom:.4rem;}
+.success-box .sub{font-size:.82rem;color:var(--muted);}
+.success-links{display:flex;gap:.6rem;justify-content:center;margin-top:1rem;flex-wrap:wrap;}
+
+/* Spinner */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:.85em;height:.85em;border:2px solid rgba(0,0,0,.3);
+      border-top-color:#000;border-radius:50%;animation:spin .6s linear infinite;}
+</style>
+</head>
+<body>
+<header>
+  <a class="logo" href="/">Portfolio<span>.</span></a>
+  <a class="back" href="/">&#8592; Back</a>
+</header>
+
+<main>
+  <!-- Progress bar -->
+  <div class="steps" id="steps">
+    <div class="step active" id="s1"><span class="step-num">1</span><span>Upload</span></div>
+    <div class="step-sep"></div>
+    <div class="step" id="s2"><span class="step-num">2</span><span>Map Columns</span></div>
+    <div class="step-sep"></div>
+    <div class="step" id="s3"><span class="step-num">3</span><span>Import</span></div>
+  </div>
+
+  <!-- Step 1: Upload -->
+  <div class="card" id="step1">
+    <h2>Upload CSV file</h2>
+    <div class="drop-zone" id="dropZone">
+      <div class="icon">&#128196;</div>
+      <div class="lbl">Drop CSV here or <strong>browse</strong></div>
+      <div class="hint">CSV only &mdash; comma or semicolon separated</div>
+      <input type="file" id="fileInput" accept=".csv">
+    </div>
+    <div class="chosen-file" id="chosenFile"></div>
+    <div class="error-msg" id="step1Err"></div>
+    <div class="btn-group">
+      <button class="btn btn-primary" id="previewBtn" disabled>Next: Map Columns</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Map Columns (hidden initially) -->
+  <div class="card" id="step2" style="display:none">
+    <h2>Map columns</h2>
+
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">
+      Asset class: select what type of transactions this file contains.
+    </div>
+    <div class="ac-toggles" id="acToggles">
+      <button class="ac-btn" data-ac="stock">Stock</button>
+      <button class="ac-btn" data-ac="cfd">CFD</button>
+      <button class="ac-btn" data-ac="crypto">Crypto</button>
+      <button class="ac-btn" data-ac="savings">Savings</button>
+    </div>
+
+    <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem">CSV preview (first 5 rows)</div>
+    <div class="preview-wrap"><table class="preview-table" id="previewTable"></table></div>
+
+    <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem">Column mapping</div>
+    <table class="map-table" id="mapTable"></table>
+
+    <div class="error-msg" id="step2Err"></div>
+    <div class="btn-group">
+      <button class="btn btn-secondary" id="backBtn1">&#8592; Back</button>
+      <button class="btn btn-primary" id="nextBtn2" disabled>Next: Review &amp; Import</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Review & Import (hidden initially) -->
+  <div class="card" id="step3" style="display:none">
+    <h2>Review &amp; import</h2>
+    <div class="summary-list" id="summaryList"></div>
+    <div class="error-msg" id="step3Err"></div>
+    <div id="successBox" style="display:none"></div>
+    <div class="btn-group" id="step3Btns">
+      <button class="btn btn-secondary" id="backBtn2">&#8592; Back</button>
+      <button class="btn btn-primary" id="importBtn">Import</button>
+    </div>
+  </div>
+</main>
+
+<script>
+const DB_FIELDS = {
+  stock:   { required: ["date","type"], optional: ["ticker","quantity","price_per_share","total_amount","currency","fx_rate"] },
+  cfd:     { required: ["date","type","ticker"], optional: ["quantity","price_per_share","total_amount","currency","fx_rate"] },
+  crypto:  { required: ["date","type","ticker"], optional: ["quantity","price_per_share","total_amount"] },
+  savings: { required: ["date","type"], optional: ["ticker","quantity","price_per_share","total_amount","fx_rate"] },
+};
+const FIELD_LABELS = {
+  date:"Date", ticker:"Ticker / Symbol", type:"Transaction Type",
+  quantity:"Quantity", price_per_share:"Price per Share",
+  total_amount:"Total Amount", currency:"Currency", fx_rate:"FX Rate",
+};
+const FIELD_ALIASES = {
+  date:            ["date","started date","datevalue","settlementdate","started_date"],
+  ticker:          ["ticker","symbol","financialinstrument"],
+  type:            ["type","transactiontypename","transaction type"],
+  quantity:        ["quantity","volume","volumevalue","quantity of shares","qty"],
+  price_per_share: ["price per share","price","pricevalue","price_per_share"],
+  total_amount:    ["total amount","amount","value","total_amount"],
+  currency:        ["currency","ccy"],
+  fx_rate:         ["fx rate","fxrate","fx_rate","exchange rate"],
+};
+
+let _headers = [], _rows = [], _filename = '', _rowCount = 0;
+let _assetClass = null;
+
+function esc(s) { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+
+// --- Step indicators ---
+function setStep(n) {
+  [1,2,3].forEach(i => {
+    const el = document.getElementById('s'+i);
+    el.classList.remove('active','done');
+    if (i < n) el.classList.add('done');
+    else if (i === n) el.classList.add('active');
+  });
+}
+
+// --- File pick ---
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const chosenFile = document.getElementById('chosenFile');
+const previewBtn = document.getElementById('previewBtn');
+const step1Err = document.getElementById('step1Err');
+
+let _selectedFile = null;
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) setFile(f);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); fileInput.value=''; });
+
+function setFile(f) {
+  if (!f.name.toLowerCase().endsWith('.csv')) {
+    step1Err.textContent = 'Only CSV files are supported.'; return;
+  }
+  _selectedFile = f;
+  chosenFile.textContent = f.name + ' (' + (f.size > 1048576 ? (f.size/1048576).toFixed(1)+' MB' : Math.ceil(f.size/1024)+' KB') + ')';
+  previewBtn.disabled = false;
+  step1Err.textContent = '';
+}
+
+// --- Step 1 → 2 ---
+previewBtn.addEventListener('click', async () => {
+  if (!_selectedFile) return;
+  previewBtn.disabled = true;
+  previewBtn.innerHTML = '<span class="spin"></span> Loading...';
+  step1Err.textContent = '';
+  const form = new FormData();
+  form.append('file', _selectedFile);
+  try {
+    const resp = await fetch('/import/preview', { method: 'POST', body: form });
+    const data = await resp.json();
+    if (data.error) { step1Err.textContent = data.error; previewBtn.disabled = false; previewBtn.textContent = 'Next: Map Columns'; return; }
+    _headers = data.headers;
+    _rows = data.rows;
+    _rowCount = data.row_count;
+    _filename = data.filename;
+    showStep2(data.detected_asset_class);
+  } catch(e) {
+    step1Err.textContent = 'Network error: ' + e.message;
+    previewBtn.disabled = false;
+    previewBtn.textContent = 'Next: Map Columns';
+  }
+});
+
+// --- Step 2 setup ---
+function showStep2(detectedClass) {
+  document.getElementById('step1').style.display = 'none';
+  document.getElementById('step2').style.display = '';
+  setStep(2);
+
+  // Asset class buttons
+  _assetClass = detectedClass || 'stock';
+  document.querySelectorAll('.ac-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.ac === _assetClass);
+    btn.addEventListener('click', () => {
+      _assetClass = btn.dataset.ac;
+      document.querySelectorAll('.ac-btn').forEach(b => b.classList.toggle('active', b.dataset.ac === _assetClass));
+      buildMapTable();
+      validateStep2();
+    });
+  });
+
+  buildPreviewTable();
+  buildMapTable();
+  validateStep2();
+}
+
+function buildPreviewTable() {
+  const t = document.getElementById('previewTable');
+  let html = '<thead><tr>' + _headers.map(h => '<th>'+esc(h)+'</th>').join('') + '</tr></thead><tbody>';
+  _rows.forEach(row => {
+    html += '<tr>' + _headers.map((_, i) => '<td>'+esc(row[i] !== undefined ? row[i] : '')+'</td>').join('') + '</tr>';
+  });
+  t.innerHTML = html + '</tbody>';
+}
+
+function bestMatch(field, headers) {
+  const aliases = FIELD_ALIASES[field] || [];
+  const hLower = headers.map(h => h.toLowerCase().trim());
+  for (const alias of aliases) {
+    const idx = hLower.indexOf(alias.toLowerCase());
+    if (idx !== -1) return headers[idx];
+  }
+  return '';
+}
+
+function buildMapTable() {
+  const ac = _assetClass || 'stock';
+  const fields = DB_FIELDS[ac];
+  const all = [...fields.required, ...fields.optional];
+  const t = document.getElementById('mapTable');
+  let html = '';
+  all.forEach(field => {
+    const isReq = fields.required.includes(field);
+    const match = bestMatch(field, _headers);
+    const opts = ['<option value="">— skip —</option>'] + _headers.map(h =>
+      `<option value="${esc(h)}" ${h === match ? 'selected' : ''}>${esc(h)}</option>`
+    );
+    html += `<tr>
+      <td>${FIELD_LABELS[field] || field}</td>
+      <td>${isReq ? '<span class="req-badge">Required</span>' : '<span class="opt-badge">Optional</span>'}</td>
+      <td><select data-field="${field}" data-req="${isReq ? '1' : '0'}">${opts.join('')}</select></td>
+    </tr>`;
+  });
+  t.innerHTML = html;
+  t.querySelectorAll('select').forEach(sel => sel.addEventListener('change', validateStep2));
+}
+
+function validateStep2() {
+  const ac = _assetClass || 'stock';
+  const required = DB_FIELDS[ac].required;
+  const table = document.getElementById('mapTable');
+  let ok = true;
+  required.forEach(field => {
+    const sel = table.querySelector(`select[data-field="${field}"]`);
+    if (!sel || !sel.value) ok = false;
+  });
+  document.getElementById('nextBtn2').disabled = !ok;
+  document.getElementById('step2Err').textContent = '';
+}
+
+// --- Step 2 → 3 ---
+document.getElementById('nextBtn2').addEventListener('click', () => {
+  showStep3();
+});
+
+function collectMapping() {
+  const mapping = {};
+  document.querySelectorAll('#mapTable select').forEach(sel => {
+    if (sel.value) mapping[sel.dataset.field] = sel.value;
+  });
+  return mapping;
+}
+
+function showStep3() {
+  document.getElementById('step2').style.display = 'none';
+  document.getElementById('step3').style.display = '';
+  setStep(3);
+
+  const mapping = collectMapping();
+  const mapLines = Object.entries(mapping).map(([k,v]) =>
+    `<div class="summary-row"><span class="summary-lbl">${esc(FIELD_LABELS[k]||k)}</span><span class="summary-val">&#8594; ${esc(v)}</span></div>`
+  ).join('');
+
+  document.getElementById('summaryList').innerHTML = `
+    <div class="summary-row"><span class="summary-lbl">File</span><span class="summary-val">${esc(_filename)}</span></div>
+    <div class="summary-row"><span class="summary-lbl">Rows</span><span class="summary-val">${_rowCount}</span></div>
+    <div class="summary-row"><span class="summary-lbl">Asset class</span><span class="summary-val" style="text-transform:capitalize">${esc(_assetClass)}</span></div>
+    <div class="summary-row" style="margin-top:.5rem"><span class="summary-lbl" style="color:var(--text)">Column mapping</span></div>
+    ${mapLines}
+  `;
+  document.getElementById('step3Err').textContent = '';
+  document.getElementById('successBox').style.display = 'none';
+  document.getElementById('step3Btns').style.display = '';
+}
+
+// --- Back buttons ---
+document.getElementById('backBtn1').addEventListener('click', () => {
+  document.getElementById('step2').style.display = 'none';
+  document.getElementById('step1').style.display = '';
+  previewBtn.disabled = false;
+  previewBtn.textContent = 'Next: Map Columns';
+  setStep(1);
+});
+document.getElementById('backBtn2').addEventListener('click', () => {
+  document.getElementById('step3').style.display = 'none';
+  document.getElementById('step2').style.display = '';
+  setStep(2);
+});
+
+// --- Import ---
+document.getElementById('importBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('importBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Importing...';
+  document.getElementById('step3Err').textContent = '';
+
+  const mapping = collectMapping();
+  try {
+    const resp = await fetch('/import/run', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ asset_class: _assetClass, mapping, filename: _filename }),
+    });
+    const data = await resp.json();
+    if (data.error) {
+      document.getElementById('step3Err').textContent = data.error;
+      btn.disabled = false; btn.textContent = 'Import';
+      return;
+    }
+    document.getElementById('step3Btns').style.display = 'none';
+    const box = document.getElementById('successBox');
+    box.style.display = '';
+    box.innerHTML = `<div class="success-box">
+      <div class="big">&#10003; Import complete</div>
+      <div class="sub">${data.new} new &nbsp;&bull;&nbsp; ${data.skipped} skipped &nbsp;&bull;&nbsp; ${data.total} total rows</div>
+      <div class="success-links">
+        <a class="btn btn-primary" href="/report">View Report</a>
+        <button class="btn btn-secondary" onclick="location.href='/import'">Import Another</button>
+      </div>
+    </div>`;
+  } catch(e) {
+    document.getElementById('step3Err').textContent = 'Network error: ' + e.message;
+    btn.disabled = false; btn.textContent = 'Import';
+  }
+});
+</script>
+</body>
+</html>"""
