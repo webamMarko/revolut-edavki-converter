@@ -65,5 +65,38 @@
     if (navRE) navRE.style.display = '';
   }
 
+  // Touch swipe: left/right to navigate between pages
+  (function() {
+    var content = document.querySelector('.content');
+    if (!content) return;
+    var touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+    var SWIPE_MIN_X = 50;   // minimum horizontal distance (px)
+    var SWIPE_MAX_Y = 80;   // maximum vertical drift (px) — ignore scrolls
+    var SWIPE_MAX_MS = 400; // maximum gesture duration
+
+    content.addEventListener('touchstart', function(e) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    }, { passive: true });
+
+    content.addEventListener('touchend', function(e) {
+      var dx = e.changedTouches[0].clientX - touchStartX;
+      var dy = e.changedTouches[0].clientY - touchStartY;
+      var dt = Date.now() - touchStartTime;
+      if (Math.abs(dx) < SWIPE_MIN_X) return;
+      if (Math.abs(dy) > SWIPE_MAX_Y) return;
+      if (dt > SWIPE_MAX_MS) return;
+
+      var ids = [...navItems]
+        .filter(function(i) { return i.style.display !== 'none'; })
+        .map(function(i) { return i.dataset.page; });
+      var idx = ids.indexOf(currentPage);
+
+      if (dx < 0 && idx < ids.length - 1) switchPage(ids[idx + 1]); // swipe left → next
+      if (dx > 0 && idx > 0)              switchPage(ids[idx - 1]); // swipe right → prev
+    }, { passive: true });
+  })();
+
   window.switchPage = switchPage;
 })();
