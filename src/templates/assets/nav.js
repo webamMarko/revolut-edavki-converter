@@ -16,7 +16,7 @@
 
     // Fade out current, swap, fade in next
     prev.style.opacity = '0';
-    prev.style.transition = 'opacity 0.12s ease';
+    prev.style.transition = 'opacity 0.06s ease';
 
     setTimeout(function() {
       prev.style.display = 'none';
@@ -25,17 +25,17 @@
 
       next.style.display = 'block';
       next.style.opacity = '0';
-      next.style.transition = 'opacity 0.12s ease';
+      next.style.transition = 'opacity 0.06s ease';
       // Force reflow before starting fade-in
       void next.offsetWidth;
       next.style.opacity = '1';
 
       setTimeout(function() {
         next.style.transition = '';
-      }, 130);
+      }, 70);
 
       currentPage = id;
-    }, 110);
+    }, 60);
   }
 
   // Wire nav items
