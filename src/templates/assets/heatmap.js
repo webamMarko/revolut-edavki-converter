@@ -32,7 +32,7 @@ function buildHeatmap() {
   function cellFg(ret) {
     return Math.min(Math.abs(ret)/maxAbs, 1) > 0.5 ? '#fff' : 'var(--text)';
   }
-  let h = '<div class="heatmap-wrap"><table class="heatmap-table"><thead><tr><th></th>';
+  let h = '<table class="heatmap-table"><thead><tr><th></th>';
   mNames.forEach(function(m) { h += '<th>' + m + '</th>'; });
   h += '<th class="heatmap-year-col">Year</th></tr></thead><tbody>';
   years.forEach(function(year) {
@@ -55,7 +55,7 @@ function buildHeatmap() {
     } else { h += '<td></td>'; }
     h += '</tr>';
   });
-  h += '</tbody></table></div>';
+  h += '</tbody></table>';
   el.innerHTML = h;
 }
 
@@ -97,7 +97,7 @@ function buildYearlyHeatmap() {
     return Math.min(Math.abs(ret) / maxAbs, 1) > 0.5 ? '#fff' : 'var(--text)';
   }
 
-  let h = '<div class="heatmap-wrap"><table class="heatmap-table yearly-heatmap-table">';
+  let h = '<table class="heatmap-table yearly-heatmap-table">';
   h += '<thead><tr><th>Year</th><th>Annual Return</th><th>Gain / Loss</th><th>Year-end Value</th>';
   if (hasInvested) h += '<th>Cash Invested</th>';
   h += '</tr></thead><tbody>';
@@ -134,6 +134,6 @@ function buildYearlyHeatmap() {
     h += '</tr>';
   });
 
-  h += '</tbody></table></div>';
+  h += '</tbody></table>';
   el.innerHTML = h;
 }
