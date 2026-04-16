@@ -787,7 +787,6 @@ body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
       display:flex;align-items:center;justify-content:center;padding:1rem}}
 .card{{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
        padding:2rem;width:100%;max-width:380px}}
-h1{{font-size:1.2rem;font-weight:700;margin-bottom:1.5rem;text-align:center}}
 label{{display:block;font-size:0.72rem;font-weight:600;color:var(--muted);
        text-transform:uppercase;letter-spacing:.06em;margin-bottom:.3rem}}
 input{{width:100%;padding:.55rem .75rem;border:1px solid var(--border);border-radius:6px;
@@ -797,11 +796,13 @@ button{{width:100%;padding:.65rem;background:var(--accent);color:#000;font-weigh
         font-size:.9rem;font-family:inherit;border:none;border-radius:6px;cursor:pointer}}
 button:hover{{opacity:.9}}
 .error{{color:var(--red);font-size:.82rem;margin-bottom:1rem;text-align:center}}
+.logo{{text-align:center;margin-bottom:1.5rem;font-size:1.5rem;font-weight:700;letter-spacing:-0.03em}}
+.logo span{{color:var(--accent)}}
 </style>
 </head>
 <body>
 <div class="card">
-  <h1>Portfolio Login</h1>
+  <div class="logo"><a href="/" style="text-decoration:none;color:inherit">Portfolio<span>.</span></a></div>
   {error_block}
   <form method="POST" action="/login">
     <label>Username or email</label>
@@ -1117,7 +1118,7 @@ main { max-width: 700px; width: 100%; padding: 2rem 1rem; display: flex; flex-di
 <body>
 
 <header>
-  <h1>Revolut Portfolio</h1>
+  <h1 style="font-size:1.3rem;font-weight:700;letter-spacing:-0.03em">Portfolio<span style="color:var(--blue)">.</span></h1>
   <div class="header-right" id="headerRight"></div>
 </header>
 

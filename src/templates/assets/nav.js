@@ -65,28 +65,36 @@
     if (navRE) navRE.style.display = '';
   }
 
-  // Touch swipe: left/right to navigate between pages
+  // Touch swipe: left/right to navigate between pages.
+  // Uses touchmove to detect dominant axis early — if the finger moves more
+  // vertically first we mark the gesture as a scroll and ignore it entirely.
   (function() {
     var content = document.querySelector('.content');
     if (!content) return;
-    var touchStartX = 0, touchStartY = 0, touchStartTime = 0;
-    var SWIPE_MIN_X = 50;   // minimum horizontal distance (px)
-    var SWIPE_MAX_Y = 80;   // maximum vertical drift (px) — ignore scrolls
-    var SWIPE_MAX_MS = 400; // maximum gesture duration
+    var touchStartX = 0, touchStartY = 0;
+    var axisLocked = null; // 'h' | 'v' | null
+
+    var SWIPE_MIN_X = 60;  // minimum horizontal travel to trigger
+    var AXIS_LOCK_PX = 10; // how far finger must move before axis is decided
 
     content.addEventListener('touchstart', function(e) {
       touchStartX = e.touches[0].clientX;
       touchStartY = e.touches[0].clientY;
-      touchStartTime = Date.now();
+      axisLocked = null;
+    }, { passive: true });
+
+    content.addEventListener('touchmove', function(e) {
+      if (axisLocked) return;
+      var dx = Math.abs(e.touches[0].clientX - touchStartX);
+      var dy = Math.abs(e.touches[0].clientY - touchStartY);
+      if (dx < AXIS_LOCK_PX && dy < AXIS_LOCK_PX) return; // not far enough yet
+      axisLocked = dx > dy ? 'h' : 'v';
     }, { passive: true });
 
     content.addEventListener('touchend', function(e) {
+      if (axisLocked !== 'h') return; // vertical scroll or undecided — ignore
       var dx = e.changedTouches[0].clientX - touchStartX;
-      var dy = e.changedTouches[0].clientY - touchStartY;
-      var dt = Date.now() - touchStartTime;
       if (Math.abs(dx) < SWIPE_MIN_X) return;
-      if (Math.abs(dy) > SWIPE_MAX_Y) return;
-      if (dt > SWIPE_MAX_MS) return;
 
       var ids = [...navItems]
         .filter(function(i) { return i.style.display !== 'none'; })
