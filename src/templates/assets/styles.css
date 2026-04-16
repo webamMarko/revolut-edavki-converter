@@ -232,6 +232,8 @@ body {
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; min-width: 0; }
 /* Heatmap pair stacks to a single column when there's not enough room */
 .two-col.heatmap-row { grid-template-columns: repeat(auto-fit, minmax(min(540px, 100%), 1fr)); }
+/* Prevent heatmap cards from expanding beyond their grid track (table is wider than viewport) */
+.two-col.heatmap-row > * { min-width: 0; }
 
 /* ---- Cards ---- */
 .card {
@@ -602,9 +604,10 @@ body {
   .toolbar { flex-wrap: wrap; gap: 0.5rem; }
   #txFilter { width: 100%; }
 
-  /* Heatmap cards: horizontal scroll */
-  .heatmap-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .heatmap-row .card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Heatmap: single column, horizontally scrollable */
+  .two-col.heatmap-row { grid-template-columns: 1fr; }
+  .heatmap-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; min-width: 0; }
+  .heatmap-row .card { overflow-x: visible; min-width: 0; }
 
   /* Position detail: single column */
   .pos-detail-body { grid-template-columns: 1fr; }
