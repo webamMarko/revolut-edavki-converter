@@ -16,7 +16,7 @@
 
     // Fade out current, swap, fade in next
     prev.style.opacity = '0';
-    prev.style.transition = 'opacity 0.06s ease';
+    prev.style.transition = 'opacity 0.12s ease';
 
     setTimeout(function() {
       prev.style.display = 'none';
@@ -25,17 +25,17 @@
 
       next.style.display = 'block';
       next.style.opacity = '0';
-      next.style.transition = 'opacity 0.06s ease';
+      next.style.transition = 'opacity 0.12s ease';
       // Force reflow before starting fade-in
       void next.offsetWidth;
       next.style.opacity = '1';
 
       setTimeout(function() {
         next.style.transition = '';
-      }, 70);
+      }, 130);
 
       currentPage = id;
-    }, 60);
+    }, 110);
   }
 
   // Wire nav items
@@ -72,14 +72,17 @@
   (function() {
     var content = document.querySelector('.content');
     if (!content) return;
-    var touchStartX = 0, touchStartY = 0;
+    var touchStartX = 0, touchStartY = 0, touchStartTime = 0;
 
     content.addEventListener('touchstart', function(e) {
       touchStartX = e.touches[0].clientX;
       touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
     }, { passive: true });
 
     content.addEventListener('touchend', function(e) {
+      // Ignore slow gestures — a swipe must complete within 300ms
+      if (Date.now() - touchStartTime > 300) return;
       var dx = e.changedTouches[0].clientX - touchStartX;
       var dy = e.changedTouches[0].clientY - touchStartY;
       var adx = Math.abs(dx), ady = Math.abs(dy);
