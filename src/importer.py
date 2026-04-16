@@ -612,15 +612,8 @@ def import_csv_mapped(
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
 
-    # File-level dedup
+    # File-level dedup check (after reading so we know total rows)
     fhash = _file_hash(file_path)
-    existing = conn.execute(
-        "SELECT id FROM import_log WHERE file_hash = ?", (fhash,)
-    ).fetchone()
-    if existing:
-        if verbose:
-            print(f"File already imported (SHA-256 match): {filename_hint or path.name}")
-        return ImportResult(total=0, new=0, skipped=0)
 
     # Read CSV — comma first, retry with semicolon if single column
     df = pd.read_csv(path)
@@ -628,6 +621,15 @@ def import_csv_mapped(
         df = pd.read_csv(path, sep=";")
 
     total = len(df)
+
+    existing = conn.execute(
+        "SELECT id FROM import_log WHERE file_hash = ?", (fhash,)
+    ).fetchone()
+    if existing:
+        if verbose:
+            print(f"File already imported (SHA-256 match): {filename_hint or path.name}")
+        return ImportResult(total=total, new=0, skipped=total)
+
     new = 0
     skipped = 0
 
@@ -673,15 +675,7 @@ def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) 
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
 
-    # Check file-level dedup
     fhash = _file_hash(file_path)
-    existing = conn.execute(
-        "SELECT id FROM import_log WHERE file_hash = ?", (fhash,)
-    ).fetchone()
-    if existing:
-        if verbose:
-            print(f"File already imported (SHA-256 match): {path.name}")
-        return ImportResult(total=0, new=0, skipped=0)
 
     # Parse file
     suffix = path.suffix.lower()
@@ -713,6 +707,16 @@ def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) 
         print(f"  Detected format: {asset_class}" + (f" (stored as {effective_asset_class})" if asset_class != effective_asset_class else ""))
 
     total = len(df)
+
+    # Check file-level dedup (after parsing so we know row count)
+    existing = conn.execute(
+        "SELECT id FROM import_log WHERE file_hash = ?", (fhash,)
+    ).fetchone()
+    if existing:
+        if verbose:
+            print(f"File already imported (SHA-256 match): {path.name}")
+        return ImportResult(total=total, new=0, skipped=total)
+
     new = 0
     skipped = 0
 
