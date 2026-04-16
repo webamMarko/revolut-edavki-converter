@@ -9,10 +9,13 @@ function computePeriodMetrics(si, ei) {
   const periodRealized = ds.realized_gain_eur[ei] - (si > 0 ? ds.realized_gain_eur[si - 1] : 0);
   const periodDividends = ds.dividends_eur[ei] - (si > 0 ? ds.dividends_eur[si - 1] : 0);
 
-  let peak = ds.value_eur[si], maxDD = 0, peakDate = allDates[si], troughDate = allDates[si];
+  // Use perf_index for drawdown so cash withdrawals don't register as drawdowns
+  const ddSeries = (ds.perf_index && ds.perf_index.length === ds.value_eur.length)
+    ? ds.perf_index : ds.value_eur;
+  let peak = ddSeries[si], maxDD = 0, peakDate = allDates[si], troughDate = allDates[si];
   let curPeakDate = allDates[si];
   for (let i = si; i <= ei; i++) {
-    const v = ds.value_eur[i];
+    const v = ddSeries[i];
     if (v > peak) { peak = v; curPeakDate = allDates[i]; }
     const dd = peak > 0 ? (v - peak) / peak * 100 : 0;
     if (dd < maxDD) { maxDD = dd; peakDate = curPeakDate; troughDate = allDates[i]; }
@@ -20,8 +23,11 @@ function computePeriodMetrics(si, ei) {
   const days = (new Date(allDates[ei]) - new Date(allDates[si])) / 86400000;
   const years = days / 365.25;
   let cagr = null;
-  if (years >= 0.1 && startVal > 0) {
-    cagr = (Math.pow(endVal / startVal, 1 / years) - 1) * 100;
+  if (years >= 0.1) {
+    const piStart = ddSeries[si], piEnd = ddSeries[ei];
+    if (piStart > 0 && piEnd > 0) {
+      cagr = (Math.pow(piEnd / piStart, 1 / years) - 1) * 100;
+    }
   }
   return {
     startVal, endVal, startInv, endInv, change, returnPct,
