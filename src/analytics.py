@@ -676,13 +676,17 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     # TWR (time-weighted return)
     twr = _compute_twr(daily_df, cash_flows, period_start)
 
-    # Max drawdown
-    values = daily_df["value_eur"]
-    peak = values.expanding().max()
-    drawdown = (values - peak) / peak
+    # Max drawdown — use perf_index (TWR-based) so that cash deposits/withdrawals
+    # (including savings withdrawals) don't register as drawdowns.
+    dd_series = daily_df["perf_index"] if "perf_index" in daily_df.columns else daily_df["value_eur"]
+    dd_series = dd_series[dd_series > 0]  # ignore zero-value warmup days
+    if dd_series.empty:
+        dd_series = daily_df["value_eur"]
+    peak = dd_series.expanding().max()
+    drawdown = (dd_series - peak) / peak
     max_dd = drawdown.min() * 100
     trough_idx = drawdown.idxmin()
-    peak_idx = values.loc[:trough_idx].idxmax()
+    peak_idx = dd_series.loc[:trough_idx].idxmax()
 
     # Unrealized gains
     total_unrealized = 0.0
