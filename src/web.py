@@ -367,9 +367,6 @@ class UploadHandler(BaseHTTPRequestHandler):
 
     def _serve_upload_page(self):
         session = _get_session(self)
-        if session:
-            self._redirect("/report")
-            return
         # Inject user info into the page for the JS to use
         user_json = json.dumps({
             "username": session["username"] if session else None,
