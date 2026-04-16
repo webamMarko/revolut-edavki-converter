@@ -84,35 +84,78 @@ function buildPortfolioChart() {
   });
 }
 
+function _benchmarkDatasets() {
+  // Build benchmark datasets rebased to 100 at selStart date.
+  const startDate = allDates[selStart];
+  const endDate   = allDates[selEnd];
+
+  // Portfolio: rebase perf_index so value at selStart = 100
+  const pi = (ds.perf_index && ds.perf_index.length > 0) ? ds.perf_index : null;
+  let portData = [];
+  if (pi) {
+    const base = pi[selStart] > 0 ? pi[selStart] : null;
+    for (let i = selStart; i <= selEnd; i++) {
+      portData.push({x: allDates[i], y: base ? Math.round(pi[i] / base * 100 * 100) / 100 : null});
+    }
+  }
+
+  const bColors = {'S&P 500':'#ea4335', 'NASDAQ':'#34a853', 'Dow Jones':'#fbbc04', 'FTSE 100':'#7c3aed', 'VWCE':'#f97316'};
+  const bds = [{label:'Portfolio', data:portData, borderColor:'#4285f4', borderWidth:2, pointRadius:0, tension:0.15}];
+
+  bKeys.forEach(tk => {
+    const b = D.benchmark_series[tk];
+    // Find the index in benchmark dates closest to selStart date
+    let bsi = 0;
+    for (let i = 0; i < b.dates.length; i++) {
+      if (b.dates[i] >= startDate) { bsi = i; break; }
+      bsi = i;
+    }
+    const baseVal = b.values[bsi] > 0 ? b.values[bsi] : null;
+    const data = [];
+    for (let i = bsi; i < b.dates.length; i++) {
+      if (b.dates[i] > endDate) break;
+      data.push({x: b.dates[i], y: baseVal ? Math.round(b.values[i] / baseVal * 100 * 100) / 100 : null});
+    }
+    bds.push({label:b.name, data, borderColor:bColors[b.name]||'#999', borderWidth:1.5, pointRadius:0, tension:0.15});
+  });
+  return bds;
+}
+
 function buildBenchmarkChart() {
   document.getElementById('benchmarkSection').style.display = '';
   if (bKeys.length > 0) {
     document.getElementById('benchmarkTableCard').style.display = '';
     document.getElementById('benchmarkSectionTitle').textContent = 'Performance vs Benchmarks';
   }
-  const rebased = (ds.perf_index && ds.perf_index.length > 0)
-    ? ds.perf_index.map(v => v > 0 ? v : null)
-    : ds.value_eur.map(() => null);
-  const bds = [{label:'Portfolio', data:rebased.map((v,i) => ({x:allDates[i], y:v})), borderColor:'#4285f4', borderWidth:2, pointRadius:0, tension:0.15}];
-  const bColors = {'S&P 500':'#ea4335', 'NASDAQ':'#34a853', 'Dow Jones':'#fbbc04', 'FTSE 100':'#7c3aed', 'VWCE':'#f97316'};
-  bKeys.forEach(tk => {
-    const b = D.benchmark_series[tk];
-    bds.push({label:b.name, data:b.dates.map((d,i) => ({x:d, y:b.values[i]})), borderColor:bColors[b.name]||'#999', borderWidth:1.5, pointRadius:0, tension:0.15});
-  });
   const ctx2 = document.getElementById('benchmarkChart').getContext('2d');
   return new Chart(ctx2, {
     type: 'line',
-    data: { datasets: bds },
+    data: { datasets: _benchmarkDatasets() },
     options: {
       responsive: true, maintainAspectRatio: false,
       interaction: {mode:'index', intersect:false},
       scales: {
         x: {type:'time', time:{unit:'month', tooltipFormat:'yyyy-MM-dd'}, grid:{display:false}},
-        y: {title:{display:true, text:'Value per 100 EUR invested'}}
+        y: {title:{display:true, text:'Index (start of period = 100)'}}
       },
       plugins: {tooltip: {callbacks: {label: c => c.dataset.label + ': ' + fmt(c.parsed.y)}}, zoom: zoomOpts}
     }
   });
+}
+
+function updateBenchmarkChart() {
+  if (!benchmarkChart) return;
+  const bds = _benchmarkDatasets();
+  bds.forEach((bd, i) => {
+    if (benchmarkChart.data.datasets[i]) {
+      benchmarkChart.data.datasets[i].data = bd.data;
+    }
+  });
+  // Explicitly pin the x-axis to the selection window so Chart.js doesn't
+  // misplace points when auto-fitting after data replacement.
+  benchmarkChart.options.scales.x.min = new Date(allDates[selStart]).getTime();
+  benchmarkChart.options.scales.x.max = new Date(allDates[selEnd]).getTime();
+  benchmarkChart.update();
 }
 
 function rebuildCharts() {
@@ -127,13 +170,9 @@ function rebuildCharts() {
 const bKeys = Object.keys(D.benchmark_series);
 
 // --- Sync zoom between charts ---
+// Only the portfolio chart is zoom-draggable; the benchmark chart rebasess via updateBenchmarkChart().
 function syncChartZoom(sourceChart) {
-  const target = sourceChart === portfolioChart ? benchmarkChart : portfolioChart;
-  if (!target) return;
-  const scale = sourceChart.scales.x;
-  target.options.scales.x.min = scale.min;
-  target.options.scales.x.max = scale.max;
-  target.update('none');
+  // No-op: benchmark chart is updated via updateBenchmarkChart() in updateAll()
 }
 
 // --- Reset zoom ---
@@ -146,6 +185,5 @@ function clearScaleLimits(chart) {
 window.resetZoom = function() {
   selStart = 0; selEnd = N - 1; isZoomed = false;
   clearScaleLimits(portfolioChart);
-  if (benchmarkChart) clearScaleLimits(benchmarkChart);
   updateAll();
 };

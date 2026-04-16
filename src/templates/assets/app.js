@@ -21,6 +21,7 @@ function updateAll() {
   updateSummary();
   updateGains();
   updatePositions();
+  updateBenchmarkChart();
   updateBenchmarkTable();
   updateTransactions();
   updateTaxTable();

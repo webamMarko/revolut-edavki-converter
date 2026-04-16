@@ -1,6 +1,7 @@
 """SQLite database layer for portfolio analytics."""
 
 import hashlib
+import os
 import sqlite3
 from pathlib import Path
 
@@ -87,10 +88,20 @@ CREATE TABLE IF NOT EXISTS investment_notes (
 """
 
 
-def get_connection() -> sqlite3.Connection:
-    """Get a database connection, creating the DB directory and schema if needed."""
-    DB_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH))
+def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
+    """Get a database connection, creating the DB directory and schema if needed.
+
+    db_path: explicit path (used by web layer for per-user DBs).
+             Falls back to REVOLUT_DB_PATH env var, then the default DB_PATH.
+    """
+    if db_path is not None:
+        path = Path(db_path)
+    elif "REVOLUT_DB_PATH" in os.environ:
+        path = Path(os.environ["REVOLUT_DB_PATH"])
+    else:
+        path = DB_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path))
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.row_factory = sqlite3.Row

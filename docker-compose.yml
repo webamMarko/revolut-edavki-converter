@@ -1,0 +1,9 @@
+services:
+  portfolio:
+    build: .
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./data:/data
+    env_file: .env
+    restart: unless-stopped

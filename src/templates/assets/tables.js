@@ -37,12 +37,11 @@ function makeSortable(table) {
     const ytd = btn.dataset.ytd === '1';
     if (days === -1) {
       selStart = 0; selEnd = N - 1; isZoomed = false;
-      [portfolioChart, benchmarkChart].forEach(function(c) {
-        if (!c) return;
-        delete c.options.scales.x.min;
-        delete c.options.scales.x.max;
-        c.update();
-      });
+      if (portfolioChart) {
+        delete portfolioChart.options.scales.x.min;
+        delete portfolioChart.options.scales.x.max;
+        portfolioChart.update();
+      }
       updateAll();
       return;
     }
@@ -59,12 +58,11 @@ function makeSortable(table) {
     selStart = si; selEnd = N - 1; isZoomed = true;
     const startMs = new Date(allDates[si]).getTime();
     const endMs   = new Date(allDates[N-1]).getTime();
-    [portfolioChart, benchmarkChart].forEach(function(c) {
-      if (!c) return;
-      c.options.scales.x.min = startMs;
-      c.options.scales.x.max = endMs;
-      c.update('none');
-    });
+    if (portfolioChart) {
+      portfolioChart.options.scales.x.min = startMs;
+      portfolioChart.options.scales.x.max = endMs;
+      portfolioChart.update('none');
+    }
     updateAll();
   });
 })();

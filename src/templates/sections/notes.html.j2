@@ -1,4 +1,62 @@
-<section class="card" id="notesSection" style="display:none">
-  <h2>Investment Notes</h2>
-  <div id="notesList" class="notes-list"></div>
+<section class="card" id="notesSection">
+  <div class="notes-header">
+    <h2>Investment Notes</h2>
+    <button class="btn-add-note" id="btnAddNote" onclick="openNoteModal()">+ Add note</button>
+  </div>
+  <div id="notesList" class="notes-list">
+    <div id="notesEmpty" class="notes-empty">No notes yet.</div>
+  </div>
 </section>
+
+<!-- Note modal -->
+<div id="noteModal" class="note-modal-backdrop" style="display:none" onclick="if(event.target===this)closeNoteModal()">
+  <div class="note-modal">
+    <div class="note-modal-header">
+      <span id="noteModalTitle">Add note</span>
+      <button class="note-modal-close" onclick="closeNoteModal()">&#x2715;</button>
+    </div>
+    <div class="note-modal-body">
+      <input  type="hidden" id="noteEditId">
+      <div class="nf-row">
+        <label class="nf-label">Title</label>
+        <input class="nf-input" id="nfTitle" type="text" placeholder="e.g. BTC halving thesis" autocomplete="off">
+      </div>
+      <div class="nf-row">
+        <label class="nf-label">Summary <span class="nf-hint">one or two sentences</span></label>
+        <input class="nf-input" id="nfSummary" type="text" placeholder="Short summary shown in the list" autocomplete="off">
+      </div>
+      <div class="nf-row nf-inline">
+        <div class="nf-col">
+          <label class="nf-label">Tickers <span class="nf-hint">space-separated</span></label>
+          <input class="nf-input" id="nfTickers" type="text" placeholder="BTC ETH AAPL" autocomplete="off">
+        </div>
+        <div class="nf-col nf-col-sm">
+          <label class="nf-label">Conviction</label>
+          <select class="nf-select" id="nfConviction">
+            <option value="high">High</option>
+            <option value="medium" selected>Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+        <div class="nf-col nf-col-sm">
+          <label class="nf-label">Action</label>
+          <select class="nf-select" id="nfAction">
+            <option value="buy">Buy</option>
+            <option value="watch" selected>Watch</option>
+            <option value="avoid">Avoid</option>
+            <option value="sell">Sell</option>
+          </select>
+        </div>
+      </div>
+      <div class="nf-row">
+        <label class="nf-label">Body <span class="nf-hint">markdown supported</span></label>
+        <textarea class="nf-textarea" id="nfBody" rows="8" placeholder="Optional longer analysis…"></textarea>
+      </div>
+    </div>
+    <div class="note-modal-footer">
+      <span id="noteModalError" class="note-modal-err"></span>
+      <button class="btn-cancel" onclick="closeNoteModal()">Cancel</button>
+      <button class="btn-save" id="btnSaveNote" onclick="saveNote()">Save</button>
+    </div>
+  </div>
+</div>

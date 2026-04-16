@@ -44,3 +44,8 @@ Thumbs.db
 *.xml
 !examples/*.csv
 !examples/*.xml
+
+# Docker / deployment
+.env
+data/
+config/

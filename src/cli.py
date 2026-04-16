@@ -406,6 +406,35 @@ def cmd_notes(args):
         conn.close()
 
 
+def cmd_delisted(args):
+    """Mark/unmark/list tickers as delisted."""
+    from .db import get_connection
+    from .price_fetcher import mark_delisted, unmark_delisted, get_delisted
+
+    conn = get_connection()
+    try:
+        subcmd = getattr(args, "subcmd", None)
+        if subcmd == "mark":
+            for ticker in args.tickers:
+                mark_delisted(conn, ticker.upper())
+                print(f"Marked {ticker.upper()} as delisted.")
+        elif subcmd == "unmark":
+            for ticker in args.tickers:
+                unmark_delisted(conn, ticker.upper())
+                print(f"Unmarked {ticker.upper()} (will sync again).")
+        elif subcmd == "list":
+            tickers = get_delisted(conn)
+            if tickers:
+                for t in tickers:
+                    print(t)
+            else:
+                print("No tickers marked as delisted.")
+        else:
+            print("Usage: delisted <mark|unmark|list>")
+    finally:
+        conn.close()
+
+
 def cmd_web(args):
     """Start web UI for CSV upload and import."""
     from .web import start_server
@@ -620,6 +649,19 @@ Examples:
     # notes delete
     p_notes_del = notes_sub.add_parser("delete", help="Delete a note")
     p_notes_del.add_argument("id", type=int, help="Note ID")
+
+    # --- delisted ---
+    p_delisted = subparsers.add_parser("delisted", help="Manage delisted ticker flags")
+    delisted_sub = p_delisted.add_subparsers(dest="subcmd", help="Sub-commands")
+    p_delisted.set_defaults(func=cmd_delisted)
+
+    p_del_mark = delisted_sub.add_parser("mark", help="Mark ticker(s) as delisted (skip during sync)")
+    p_del_mark.add_argument("tickers", nargs="+", metavar="TICKER")
+
+    p_del_unmark = delisted_sub.add_parser("unmark", help="Unmark ticker(s) as delisted")
+    p_del_unmark.add_argument("tickers", nargs="+", metavar="TICKER")
+
+    delisted_sub.add_parser("list", help="List all tickers marked as delisted")
 
     # --- web ---
     p_web = subparsers.add_parser("web", help="Start web UI for CSV upload and import")

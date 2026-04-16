@@ -17,7 +17,7 @@ TICKER_MAP = {
     "SDV1": "SDV1.DE",
     "CSF": "CSF.PA",
     "ABJ": "ABBN.SW",   # ABB Ltd — Amsterdam delisted on yfinance, use Swiss listing
-    "FLY": "FLY.AS",
+    "FLY": "FLY",
     "VWCE": "VWCE.DE",
 }
 
@@ -72,6 +72,29 @@ def _fetch_with_fallback(revolut_ticker: str, start: str, end: str) -> tuple[str
                 return candidate, df
 
     return yf_ticker, None
+
+
+def mark_delisted(conn: sqlite3.Connection, ticker: str) -> None:
+    """Flag a ticker as delisted so sync will skip it."""
+    conn.execute(
+        "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, 'true')",
+        (f"delisted:{ticker}",),
+    )
+    conn.commit()
+
+
+def unmark_delisted(conn: sqlite3.Connection, ticker: str) -> None:
+    """Remove the delisted flag from a ticker."""
+    conn.execute("DELETE FROM metadata WHERE key = ?", (f"delisted:{ticker}",))
+    conn.commit()
+
+
+def get_delisted(conn: sqlite3.Connection) -> list[str]:
+    """Return list of all tickers marked as delisted."""
+    rows = conn.execute(
+        "SELECT key FROM metadata WHERE key LIKE 'delisted:%'"
+    ).fetchall()
+    return sorted(row[0][len("delisted:"):] for row in rows)
 
 
 def _last_price_date(conn: sqlite3.Connection, ticker: str) -> str | None:
@@ -131,11 +154,19 @@ def sync_stock_prices(conn: sqlite3.Connection, start_date: datetime | None = No
     fetched = 0
     failed = []
 
+    delisted = set(get_delisted(conn))
+
     for ticker in sorted(tickers):
         # Skip bond CUSIPs — yfinance can't look these up
         if ticker.startswith("US") and len(ticker) > 8 and not ticker.isalpha():
             if verbose:
                 print(f"  Skipping bond: {ticker}")
+            continue
+
+        # Skip tickers explicitly marked as delisted
+        if ticker in delisted:
+            if verbose:
+                print(f"  Skipping delisted: {ticker}")
             continue
 
         last = _last_price_date(conn, ticker)

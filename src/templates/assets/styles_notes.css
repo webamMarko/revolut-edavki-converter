@@ -1,4 +1,87 @@
 /* --- Investment Notes --- */
+.notes-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+.notes-header h2 { margin-bottom: 0; }
+.notes-empty { font-size: 0.85rem; color: var(--muted); padding: 0.5rem 0; }
+
+.btn-add-note {
+  padding: 0.35rem 0.9rem; border-radius: var(--radius-sm); font-size: 0.78rem;
+  font-weight: 700; cursor: pointer; font-family: inherit;
+  background: var(--accent); color: #000; border: none;
+  transition: opacity 0.12s;
+}
+.btn-add-note:hover { opacity: 0.85; }
+
+.note-actions { display: flex; gap: 0.4rem; flex-shrink: 0; margin-left: 0.25rem; }
+.note-action-btn {
+  padding: 0.15rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.68rem;
+  font-weight: 600; cursor: pointer; font-family: inherit; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); transition: all 0.12s;
+}
+.note-action-btn:hover { background: var(--raised); color: var(--text); }
+.note-action-btn.del:hover { border-color: var(--red); color: var(--red); }
+
+/* --- Modal --- */
+.note-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  z-index: 1000; display: flex; align-items: center; justify-content: center;
+  padding: 1rem;
+}
+.note-modal {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  width: 100%; max-width: 640px; max-height: 90vh;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.note-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);
+  font-weight: 700; font-size: 0.95rem;
+}
+.note-modal-close {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 1rem; padding: 0.1rem 0.3rem; line-height: 1;
+}
+.note-modal-close:hover { color: var(--text); }
+.note-modal-body { padding: 1.1rem 1.25rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.8rem; }
+.note-modal-footer {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.85rem 1.25rem; border-top: 1px solid var(--border);
+  justify-content: flex-end;
+}
+.note-modal-err { flex: 1; font-size: 0.78rem; color: var(--red); }
+
+/* form fields */
+.nf-row { display: flex; flex-direction: column; gap: 0.3rem; }
+.nf-inline { flex-direction: row !important; gap: 0.75rem; align-items: flex-end; }
+.nf-col { display: flex; flex-direction: column; gap: 0.3rem; flex: 1; }
+.nf-col-sm { flex: 0 0 110px; }
+.nf-label { font-size: 0.7rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.nf-hint { font-size: 0.65rem; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--subtle); margin-left: 0.3rem; }
+.nf-input, .nf-select, .nf-textarea {
+  background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text); font-family: inherit; font-size: 0.83rem; padding: 0.45rem 0.65rem;
+  transition: border-color 0.12s;
+}
+.nf-input:focus, .nf-select:focus, .nf-textarea:focus { outline: none; border-color: var(--accent); }
+.nf-textarea { resize: vertical; min-height: 120px; line-height: 1.5; }
+.nf-select option { background: var(--raised); }
+
+.btn-cancel {
+  padding: 0.35rem 0.9rem; border-radius: var(--radius-sm); font-size: 0.8rem;
+  font-weight: 600; cursor: pointer; font-family: inherit;
+  background: transparent; color: var(--muted); border: 1px solid var(--border);
+  transition: all 0.12s;
+}
+.btn-cancel:hover { background: var(--raised); color: var(--text); }
+.btn-save {
+  padding: 0.35rem 1rem; border-radius: var(--radius-sm); font-size: 0.8rem;
+  font-weight: 700; cursor: pointer; font-family: inherit;
+  background: var(--accent); color: #000; border: none;
+  transition: opacity 0.12s;
+}
+.btn-save:hover { opacity: 0.85; }
+.btn-save:disabled { opacity: 0.4; cursor: default; }
+
 .notes-list { display: flex; flex-direction: column; gap: 0.75rem; }
 .note-card {
   border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;

@@ -1,47 +1,60 @@
-"""Lightweight web UI for CSV upload and import."""
+"""Lightweight web UI for CSV upload, import, and portfolio dashboard.
 
+Multi-user mode: session cookies, per-user SQLite databases, role-based access.
+Roles: guest (unauthenticated, sees demo portfolio), premium (own DB), admin (+ user management).
+"""
+
+import hashlib
+import hmac
 import json
 import os
+import re
+import secrets
 import tempfile
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import time
+from http.cookies import SimpleCookie
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
+# ---------------------------------------------------------------------------
+# Environment / constants
+# ---------------------------------------------------------------------------
+
+DATA_DIR = Path(os.environ.get("REVOLUT_DATA_DIR", "/data"))
+DEMO_DB  = DATA_DIR / "_demo" / "portfolio.db"
+
+APP_BASE_URL           = os.environ.get("APP_BASE_URL", "http://localhost:8080")
+STRIPE_WEBHOOK_SECRET  = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
+SESSION_TTL = 86400 * 7  # 7 days
+
+# In-process session store: token -> {user_id, username, role, expires}
+_SESSIONS: dict[str, dict] = {}
+
+
+# ---------------------------------------------------------------------------
+# Multipart parser (unchanged from original)
+# ---------------------------------------------------------------------------
 
 def _parse_multipart(headers, body):
-    """Parse multipart/form-data body into fields and files.
-
-    Returns: (fields: dict[str, str], files: list[dict]) where each file dict
-    has keys 'filename', 'content' (bytes), 'field_name'.
-    """
     content_type = headers.get("Content-Type", "")
     if "boundary=" not in content_type:
         return {}, []
-
-    boundary = content_type.split("boundary=")[1].strip()
-    if boundary.startswith('"') and boundary.endswith('"'):
-        boundary = boundary[1:-1]
-    boundary = boundary.encode()
-
+    boundary = content_type.split("boundary=")[1].strip().strip('"').encode()
     parts = body.split(b"--" + boundary)
-    fields = {}
-    files = []
-
+    fields, files = {}, []
     for part in parts:
         part = part.strip()
         if not part or part == b"--":
             continue
-
         if b"\r\n\r\n" not in part:
             continue
         header_block, content = part.split(b"\r\n\r\n", 1)
-        # Strip trailing \r\n
         if content.endswith(b"\r\n"):
             content = content[:-2]
-
         header_str = header_block.decode("utf-8", errors="replace")
-        # Parse Content-Disposition
-        name = None
-        filename = None
+        name = filename = None
         for line in header_str.split("\r\n"):
             if "Content-Disposition:" in line:
                 for param in line.split(";"):
@@ -50,14 +63,83 @@ def _parse_multipart(headers, body):
                         name = param.split("=", 1)[1].strip('"')
                     elif param.startswith("filename="):
                         filename = param.split("=", 1)[1].strip('"')
-
         if filename:
             files.append({"filename": filename, "content": content, "field_name": name})
         elif name:
             fields[name] = content.decode("utf-8", errors="replace")
-
     return fields, files
 
+
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+def _user_db_path(username: str) -> Path:
+    return DATA_DIR / username / "portfolio.db"
+
+
+def _portfolio_conn(user: dict | None):
+    """Return a DB connection for the given session user (or demo DB if no user)."""
+    from .db import get_connection
+    if user and user["role"] in ("premium", "admin"):
+        return get_connection(db_path=_user_db_path(user["username"]))
+    return get_connection(db_path=DEMO_DB)
+
+
+def _create_session(user) -> str:
+    """Create a session token for a User object and store it."""
+    token = secrets.token_urlsafe(32)
+    _SESSIONS[token] = {
+        "user_id": user.id,
+        "username": user.username,
+        "role": user.role,
+        "expires": time.time() + SESSION_TTL,
+    }
+    return token
+
+
+def _get_session(handler) -> dict | None:
+    """Return session dict or None."""
+    cookie_header = handler.headers.get("Cookie", "")
+    if not cookie_header:
+        return None
+    c = SimpleCookie()
+    c.load(cookie_header)
+    morsel = c.get("session")
+    if not morsel:
+        return None
+    token = morsel.value
+    session = _SESSIONS.get(token)
+    if not session:
+        return None
+    if session["expires"] < time.time():
+        del _SESSIONS[token]
+        return None
+    return session
+
+
+# ---------------------------------------------------------------------------
+# Stripe webhook HMAC verification
+# ---------------------------------------------------------------------------
+
+def _verify_stripe_signature(body: bytes, sig_header: str, secret: str) -> bool:
+    """Verify Stripe-Signature header using HMAC-SHA256."""
+    if not secret:
+        return False
+    try:
+        pairs = dict(p.split("=", 1) for p in sig_header.split(",") if "=" in p)
+        timestamp = pairs.get("t", "")
+        v1 = pairs.get("v1", "")
+        signed_payload = f"{timestamp}.".encode() + body
+        expected = hmac.new(secret.encode(), signed_payload, hashlib.sha256).hexdigest()
+        return secrets.compare_digest(expected, v1)
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Request handler
+# ---------------------------------------------------------------------------
 
 class UploadHandler(BaseHTTPRequestHandler):
     verbose = False
@@ -66,67 +148,223 @@ class UploadHandler(BaseHTTPRequestHandler):
         if self.verbose:
             super().log_message(format, *args)
 
+    # ------------------------------------------------------------------
+    # Routing
+    # ------------------------------------------------------------------
+
     def do_GET(self):
-        if self.path == "/":
+        path = urlparse(self.path).path
+        if path == "/":
             self._serve_upload_page()
-        elif self.path == "/status":
+        elif path == "/status":
             self._serve_status()
-        elif self.path == "/report":
+        elif path == "/report":
             self._serve_report()
+        elif path == "/login":
+            self._serve_login_page()
+        elif path == "/logout":
+            self._handle_logout()
+        elif path.startswith("/invite/"):
+            token = path[len("/invite/"):]
+            self._serve_invite_page(token)
+        elif path == "/admin":
+            self._serve_admin_page()
+        elif path == "/admin/users":
+            self._serve_admin_users_json()
+        elif path == "/api/notes":
+            self._api_list_notes()
         else:
             self.send_error(404)
 
     def do_POST(self):
-        if self.path == "/upload":
+        path = urlparse(self.path).path
+        if path == "/upload":
             self._handle_upload()
-        elif self.path == "/sync":
+        elif path == "/sync":
             self._handle_sync()
+        elif path == "/login":
+            self._handle_login()
+        elif path.startswith("/invite/"):
+            token = path[len("/invite/"):]
+            self._handle_invite_accept(token)
+        elif path == "/admin/users":
+            self._handle_admin_create_user()
+        elif path.startswith("/admin/users/") and path.endswith("/role"):
+            parts = path.split("/")
+            # /admin/users/{id}/role
+            if len(parts) == 5:
+                self._handle_admin_set_role(parts[3])
+        elif path == "/webhook/stripe":
+            self._handle_stripe_webhook()
+        elif path == "/api/notes":
+            self._api_create_note()
         else:
             self.send_error(404)
 
-    def _serve_upload_page(self):
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+    def do_PUT(self):
+        path = urlparse(self.path).path
+        parts = path.split("/")
+        # /api/notes/<id>
+        if len(parts) == 4 and parts[1] == "api" and parts[2] == "notes" and parts[3].isdigit():
+            self._api_update_note(int(parts[3]))
+        else:
+            self.send_error(404)
+
+    def do_DELETE(self):
+        path = urlparse(self.path).path
+        parts = path.split("/")
+        # /api/notes/<id>
+        if len(parts) == 4 and parts[1] == "api" and parts[2] == "notes" and parts[3].isdigit():
+            self._api_delete_note(int(parts[3]))
+        else:
+            self.send_error(404)
+
+    # ------------------------------------------------------------------
+    # Login / logout
+    # ------------------------------------------------------------------
+
+    def _serve_login_page(self, error: str = ""):
+        html = _login_html(error)
+        self._html_response(html)
+
+    def _handle_login(self):
+        body = self._read_body()
+        fields = parse_qs(body.decode("utf-8", errors="replace"))
+        username_or_email = fields.get("username", [""])[0].strip()
+        password = fields.get("password", [""])[0]
+
+        from .users import authenticate
+        user = authenticate(username_or_email, password)
+        if not user:
+            self._serve_login_page(error="Invalid username or password.")
+            return
+
+        token = _create_session(user)
+        self.send_response(302)
+        self.send_header("Location", "/")
+        self.send_header(
+            "Set-Cookie",
+            f"session={token}; HttpOnly; SameSite=Lax; Max-Age={SESSION_TTL}; Path=/"
+        )
         self.end_headers()
-        self.wfile.write(_UPLOAD_HTML.encode("utf-8"))
+
+    def _handle_logout(self):
+        cookie_header = self.headers.get("Cookie", "")
+        c = SimpleCookie()
+        c.load(cookie_header)
+        morsel = c.get("session")
+        if morsel and morsel.value in _SESSIONS:
+            del _SESSIONS[morsel.value]
+        self.send_response(302)
+        self.send_header("Location", "/")
+        self.send_header(
+            "Set-Cookie",
+            "session=; HttpOnly; SameSite=Lax; Max-Age=0; Path=/"
+        )
+        self.end_headers()
+
+    # ------------------------------------------------------------------
+    # Invite (set password)
+    # ------------------------------------------------------------------
+
+    def _serve_invite_page(self, token: str, error: str = ""):
+        from .users import get_user_by_invite_token
+        user = get_user_by_invite_token(token)
+        if not user:
+            self._html_response(_error_html("This invite link is invalid or has expired."))
+            return
+        self._html_response(_invite_html(token, user.email, error))
+
+    def _handle_invite_accept(self, token: str):
+        body = self._read_body()
+        fields = parse_qs(body.decode("utf-8", errors="replace"))
+        password = fields.get("password", [""])[0]
+        confirm = fields.get("confirm", [""])[0]
+
+        if not password or len(password) < 8:
+            self._serve_invite_page(token, error="Password must be at least 8 characters.")
+            return
+        if password != confirm:
+            self._serve_invite_page(token, error="Passwords do not match.")
+            return
+
+        from .users import accept_invite
+        user = accept_invite(token, password)
+        if not user:
+            self._html_response(_error_html("This invite link is invalid or has expired."))
+            return
+
+        session_token = _create_session(user)
+        self.send_response(302)
+        self.send_header("Location", "/")
+        self.send_header(
+            "Set-Cookie",
+            f"session={session_token}; HttpOnly; SameSite=Lax; Max-Age={SESSION_TTL}; Path=/"
+        )
+        self.end_headers()
+
+    # ------------------------------------------------------------------
+    # Upload page (main UI)
+    # ------------------------------------------------------------------
+
+    def _serve_upload_page(self):
+        session = _get_session(self)
+        if session:
+            self._redirect("/report")
+            return
+        # Inject user info into the page for the JS to use
+        user_json = json.dumps({
+            "username": session["username"] if session else None,
+            "role": session["role"] if session else "guest",
+        })
+        html = _UPLOAD_HTML.replace("__USER_JSON__", user_json)
+        self._html_response(html)
+
+    # ------------------------------------------------------------------
+    # Status (JSON)
+    # ------------------------------------------------------------------
 
     def _serve_status(self):
-        from .db import get_connection, DB_PATH
-
-        data = {"has_data": False, "db_path": str(DB_PATH)}
-        if DB_PATH.exists():
-            conn = get_connection()
-            try:
-                row_count = conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
-                data["has_data"] = row_count > 0
-                data["transaction_count"] = row_count
-                data["ticker_count"] = conn.execute(
-                    "SELECT COUNT(DISTINCT ticker) FROM transactions WHERE ticker IS NOT NULL"
-                ).fetchone()[0]
-                date_range = conn.execute("SELECT MIN(date), MAX(date) FROM transactions").fetchone()
-                if date_range and date_range[0]:
-                    data["date_range"] = [date_range[0][:10], date_range[1][:10]]
-                # Per-class counts
-                class_rows = conn.execute(
-                    "SELECT asset_class, COUNT(*) FROM transactions GROUP BY asset_class"
-                ).fetchall()
-                data["asset_classes"] = {r[0]: r[1] for r in class_rows}
-                import_count = conn.execute("SELECT COUNT(*) FROM import_log").fetchone()[0]
-                data["import_count"] = import_count
-                price_count = conn.execute("SELECT COUNT(*) FROM daily_prices").fetchone()[0]
-                data["price_count"] = price_count
-            finally:
-                conn.close()
-
+        session = _get_session(self)
+        conn = _portfolio_conn(session)
+        db_path = _user_db_path(session["username"]) if session and session["role"] in ("premium", "admin") else DEMO_DB
+        data = {"has_data": False, "db_path": str(db_path)}
+        try:
+            row_count = conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
+            data["has_data"] = row_count > 0
+            data["transaction_count"] = row_count
+            data["ticker_count"] = conn.execute(
+                "SELECT COUNT(DISTINCT ticker) FROM transactions WHERE ticker IS NOT NULL"
+            ).fetchone()[0]
+            date_range = conn.execute("SELECT MIN(date), MAX(date) FROM transactions").fetchone()
+            if date_range and date_range[0]:
+                data["date_range"] = [date_range[0][:10], date_range[1][:10]]
+            class_rows = conn.execute(
+                "SELECT asset_class, COUNT(*) FROM transactions GROUP BY asset_class"
+            ).fetchall()
+            data["asset_classes"] = {r[0]: r[1] for r in class_rows}
+            data["import_count"] = conn.execute("SELECT COUNT(*) FROM import_log").fetchone()[0]
+            data["price_count"] = conn.execute("SELECT COUNT(*) FROM daily_prices").fetchone()[0]
+        finally:
+            conn.close()
         self._json_response(data)
 
+    # ------------------------------------------------------------------
+    # Upload (premium/admin only)
+    # ------------------------------------------------------------------
+
     def _handle_upload(self):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required to upload files."}, status=403)
+            return
+
         content_length = int(self.headers.get("Content-Length", 0))
-        if content_length > 100 * 1024 * 1024:  # 100MB limit
+        if content_length > 100 * 1024 * 1024:
             self._json_response({"error": "File too large (max 100MB)"}, status=413)
             return
 
-        body = self.rfile.read(content_length)
+        body = self._read_body(content_length)
         fields, files = _parse_multipart(self.headers, body)
 
         if not files:
@@ -136,7 +374,7 @@ class UploadHandler(BaseHTTPRequestHandler):
         from .db import get_connection
         from .importer import import_csv
 
-        conn = get_connection()
+        conn = get_connection(db_path=_user_db_path(session["username"]))
         results = []
         try:
             for f in files:
@@ -145,8 +383,6 @@ class UploadHandler(BaseHTTPRequestHandler):
                 if ext not in (".csv", ".xlsx", ".xls"):
                     results.append({"filename": filename, "error": f"Unsupported format: {ext}"})
                     continue
-
-                # Write to temp file preserving original name
                 tmp_dir = tempfile.mkdtemp(prefix="revolut_upload_")
                 tmp_path = os.path.join(tmp_dir, filename)
                 try:
@@ -162,18 +398,30 @@ class UploadHandler(BaseHTTPRequestHandler):
                 except Exception as e:
                     results.append({"filename": filename, "error": str(e)})
                 finally:
-                    os.unlink(tmp_path)
-                    os.rmdir(tmp_dir)
+                    try:
+                        os.unlink(tmp_path)
+                        os.rmdir(tmp_dir)
+                    except Exception:
+                        pass
         finally:
             conn.close()
 
         self._json_response({"results": results})
 
+    # ------------------------------------------------------------------
+    # Sync (premium/admin only)
+    # ------------------------------------------------------------------
+
     def _handle_sync(self):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required to sync prices."}, status=403)
+            return
+
         from .db import get_connection
         from .price_fetcher import sync_all
 
-        conn = get_connection()
+        conn = get_connection(db_path=_user_db_path(session["username"]))
         try:
             sync_all(conn, verbose=self.verbose)
             self._json_response({"ok": True})
@@ -182,14 +430,20 @@ class UploadHandler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+    # ------------------------------------------------------------------
+    # Report
+    # ------------------------------------------------------------------
+
     def _serve_report(self):
-        from .db import get_connection
+        session = _get_session(self)
         from .analytics import compute_analytics
         from .tax import compute_tax_report
-        from .html_report import generate_html_report, query_transactions
+        from .html_report import (generate_html_report, query_transactions,
+                                   query_real_estate, query_fire_config,
+                                   query_investment_notes)
         from datetime import datetime
 
-        conn = get_connection()
+        conn = _portfolio_conn(session)
         try:
             analytics = compute_analytics(conn, scope="all")
             tax_by_year = {}
@@ -208,19 +462,35 @@ class UploadHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
             transactions = query_transactions(conn)
-
-            # Per-class analytics
             per_class = {}
-            asset_classes = [r[0] for r in conn.execute(
-                "SELECT DISTINCT asset_class FROM transactions"
-            ).fetchall()]
-            for ac in asset_classes:
+            for ac in [r[0] for r in conn.execute("SELECT DISTINCT asset_class FROM transactions").fetchall()]:
                 try:
                     per_class[ac] = compute_analytics(conn, scope=ac)
                 except Exception:
                     pass
-
-            html = generate_html_report(analytics, tax_by_year, transactions, per_class=per_class, conn=conn)
+            re_data = query_real_estate(conn)
+            fire_cfg = query_fire_config(conn)
+            notes = query_investment_notes(conn)
+            html = generate_html_report(analytics, tax_by_year, transactions, per_class=per_class,
+                                        real_estate=re_data, fire_config=fire_cfg,
+                                        investment_notes=notes, conn=conn)
+            # Inject current user into D so client JS can gate the edit UI.
+            # The report template emits:  <script>const D={...};</script>
+            # We append D.user right after the D assignment closes.
+            user_payload = json.dumps({
+                "id": session["user_id"],
+                "username": session["username"],
+                "role": session["role"],
+            }) if session else "null"
+            html = html.replace(
+                "<script>const D=",
+                f"<script>const D=",
+                1,
+            )
+            # Find the </script> that closes the D= block and inject before it
+            d_script_end = html.find(";</script>", html.find("<script>const D="))
+            if d_script_end != -1:
+                html = html[:d_script_end] + f";D.user={user_payload}" + html[d_script_end:]
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
@@ -233,6 +503,238 @@ class UploadHandler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+    # ------------------------------------------------------------------
+    # Admin — user management
+    # ------------------------------------------------------------------
+
+    def _serve_admin_page(self):
+        session = _get_session(self)
+        if not session or session["role"] != "admin":
+            self._redirect("/login")
+            return
+        from .users import list_users
+        users = list_users()
+        self._html_response(_admin_html(users, session["username"]))
+
+    def _serve_admin_users_json(self):
+        session = _get_session(self)
+        if not session or session["role"] != "admin":
+            self._json_response({"error": "Forbidden"}, status=403)
+            return
+        from .users import list_users
+        users = list_users()
+        self._json_response([
+            {"id": u.id, "username": u.username, "email": u.email, "role": u.role,
+             "has_password": bool(u.password_hash), "invite_pending": bool(u.invite_token),
+             "created_at": u.created_at, "last_login": u.last_login}
+            for u in users
+        ])
+
+    def _handle_admin_create_user(self):
+        session = _get_session(self)
+        if not session or session["role"] != "admin":
+            self._json_response({"error": "Forbidden"}, status=403)
+            return
+
+        body = self._read_body()
+        try:
+            data = json.loads(body)
+            email = data.get("email", "").strip().lower()
+            role = data.get("role", "premium")
+        except Exception:
+            self._json_response({"error": "Invalid JSON"}, status=400)
+            return
+
+        if not email or "@" not in email:
+            self._json_response({"error": "Valid email required"}, status=400)
+            return
+        if role not in ("premium", "admin"):
+            self._json_response({"error": "Role must be premium or admin"}, status=400)
+            return
+
+        from .users import create_user, get_user_by_email
+        if get_user_by_email(email):
+            self._json_response({"error": "A user with that email already exists"}, status=409)
+            return
+
+        user, raw_token = create_user(email, role=role)
+        invite_url = f"{APP_BASE_URL}/invite/{raw_token}"
+
+        # Send invite email
+        sent = False
+        try:
+            from .email_service import send_invite
+            send_invite(email, invite_url, user.username)
+            sent = True
+        except Exception as e:
+            pass  # Don't fail the creation if email fails
+
+        self._json_response({
+            "ok": True,
+            "username": user.username,
+            "invite_url": invite_url,
+            "email_sent": sent,
+        })
+
+    def _handle_admin_set_role(self, user_id_str: str):
+        session = _get_session(self)
+        if not session or session["role"] != "admin":
+            self._json_response({"error": "Forbidden"}, status=403)
+            return
+
+        body = self._read_body()
+        try:
+            data = json.loads(body)
+            role = data.get("role", "")
+        except Exception:
+            self._json_response({"error": "Invalid JSON"}, status=400)
+            return
+
+        try:
+            user_id = int(user_id_str)
+        except ValueError:
+            self._json_response({"error": "Invalid user id"}, status=400)
+            return
+
+        from .users import set_role
+        ok = set_role(user_id, role)
+        self._json_response({"ok": ok})
+
+    # ------------------------------------------------------------------
+    # Stripe webhook
+    # ------------------------------------------------------------------
+
+    def _handle_stripe_webhook(self):
+        body = self._read_body()
+        sig_header = self.headers.get("Stripe-Signature", "")
+
+        if STRIPE_WEBHOOK_SECRET and not _verify_stripe_signature(body, sig_header, STRIPE_WEBHOOK_SECRET):
+            self.send_error(400, "Invalid signature")
+            return
+
+        try:
+            event = json.loads(body)
+        except Exception:
+            self.send_error(400, "Invalid JSON")
+            return
+
+        if event.get("type") == "checkout.session.completed":
+            obj = event.get("data", {}).get("object", {})
+            email = obj.get("customer_details", {}).get("email") or obj.get("customer_email", "")
+            stripe_customer_id = obj.get("customer", "")
+            if email:
+                from .users import create_stripe_user
+                user, raw_token = create_stripe_user(email, stripe_customer_id)
+                if raw_token:
+                    invite_url = f"{APP_BASE_URL}/invite/{raw_token}"
+                    try:
+                        from .email_service import send_invite
+                        send_invite(email, invite_url, user.username)
+                    except Exception:
+                        pass
+
+        self._json_response({"received": True})
+
+    # ------------------------------------------------------------------
+    # Shared helpers
+    # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # Notes API  (premium + admin only)
+    # ------------------------------------------------------------------
+
+    def _notes_conn_or_403(self):
+        """Return (session, conn) if user is premium/admin, else send 403 and return (None, None)."""
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "forbidden"}, 403)
+            return None, None
+        conn = _portfolio_conn(session)
+        return session, conn
+
+    def _api_list_notes(self):
+        session = _get_session(self)
+        conn = _portfolio_conn(session)
+        try:
+            from .notes import query_notes_for_report
+            notes = query_notes_for_report(conn)
+            self._json_response(notes)
+        finally:
+            conn.close()
+
+    def _api_create_note(self):
+        _, conn = self._notes_conn_or_403()
+        if conn is None:
+            return
+        try:
+            data = json.loads(self._read_body())
+            from .notes import add_note, get_note
+            note_id = add_note(
+                conn,
+                title=str(data.get("title", "")).strip(),
+                summary=str(data.get("summary", "")).strip(),
+                body=str(data.get("body", "")),
+                tickers=str(data.get("tickers", "")),
+                conviction=data.get("conviction", "medium"),
+                action=data.get("action", "watch"),
+            )
+            from .notes import query_notes_for_report
+            all_notes = query_notes_for_report(conn)
+            note = next((n for n in all_notes if n["id"] == note_id), None)
+            self._json_response(note or {"id": note_id}, 201)
+        except (json.JSONDecodeError, KeyError) as e:
+            self._json_response({"error": str(e)}, 400)
+        finally:
+            conn.close()
+
+    def _api_update_note(self, note_id: int):
+        _, conn = self._notes_conn_or_403()
+        if conn is None:
+            return
+        try:
+            data = json.loads(self._read_body())
+            from .notes import edit_note, query_notes_for_report
+            edit_note(conn, note_id, **{k: data[k] for k in
+                ("title", "summary", "body", "tickers", "conviction", "action")
+                if k in data})
+            all_notes = query_notes_for_report(conn)
+            note = next((n for n in all_notes if n["id"] == note_id), None)
+            if note is None:
+                self._json_response({"error": "not found"}, 404)
+            else:
+                self._json_response(note)
+        except (json.JSONDecodeError, KeyError) as e:
+            self._json_response({"error": str(e)}, 400)
+        finally:
+            conn.close()
+
+    def _api_delete_note(self, note_id: int):
+        _, conn = self._notes_conn_or_403()
+        if conn is None:
+            return
+        try:
+            from .notes import delete_note
+            ok = delete_note(conn, note_id)
+            if ok:
+                self._json_response({"deleted": note_id})
+            else:
+                self._json_response({"error": "not found"}, 404)
+        finally:
+            conn.close()
+
+    def _read_body(self, length: int | None = None) -> bytes:
+        if length is None:
+            length = int(self.headers.get("Content-Length", 0))
+        return self.rfile.read(length)
+
+    def _html_response(self, html: str, status: int = 200):
+        encoded = html.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
     def _json_response(self, data, status=200):
         body = json.dumps(data).encode("utf-8")
         self.send_response(status)
@@ -241,18 +743,22 @@ class UploadHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _redirect(self, path: str):
+        self.send_response(302)
+        self.send_header("Location", path)
+        self.end_headers()
 
-def start_server(host="127.0.0.1", port=8080, verbose=False):
-    """Start the upload web server."""
+
+# ---------------------------------------------------------------------------
+# Server entry point
+# ---------------------------------------------------------------------------
+
+def start_server(host="0.0.0.0", port=8080, verbose=False):
+    """Start the web server."""
     UploadHandler.verbose = verbose
-    server = HTTPServer((host, port), UploadHandler)
-    url = f"http://{host}:{port}"
-    print(f"Upload server running at {url}")
+    server = ThreadingHTTPServer((host, port), UploadHandler)
+    print(f"Server running at http://{host}:{port}")
     print("Press Ctrl+C to stop.")
-
-    import webbrowser
-    webbrowser.open(url)
-
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -261,8 +767,251 @@ def start_server(host="127.0.0.1", port=8080, verbose=False):
 
 
 # ---------------------------------------------------------------------------
-# Self-contained HTML upload page
+# Inline HTML: login page
 # ---------------------------------------------------------------------------
+
+def _login_html(error: str = "") -> str:
+    error_block = f'<p class="error">{error}</p>' if error else ""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Login — Portfolio</title>
+<style>
+:root {{--bg:#0a0c10;--surface:#111520;--border:#1e2a3a;--text:#dce4f0;--muted:#556075;
+       --accent:#f59e0b;--red:#f87171;--radius:10px}}
+*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:var(--bg);color:var(--text);min-height:100vh;
+      display:flex;align-items:center;justify-content:center;padding:1rem}}
+.card{{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+       padding:2rem;width:100%;max-width:380px}}
+h1{{font-size:1.2rem;font-weight:700;margin-bottom:1.5rem;text-align:center}}
+label{{display:block;font-size:0.72rem;font-weight:600;color:var(--muted);
+       text-transform:uppercase;letter-spacing:.06em;margin-bottom:.3rem}}
+input{{width:100%;padding:.55rem .75rem;border:1px solid var(--border);border-radius:6px;
+       background:var(--bg);color:var(--text);font-size:.9rem;font-family:inherit;margin-bottom:1rem}}
+input:focus{{outline:none;border-color:var(--accent)}}
+button{{width:100%;padding:.65rem;background:var(--accent);color:#000;font-weight:700;
+        font-size:.9rem;font-family:inherit;border:none;border-radius:6px;cursor:pointer}}
+button:hover{{opacity:.9}}
+.error{{color:var(--red);font-size:.82rem;margin-bottom:1rem;text-align:center}}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Portfolio Login</h1>
+  {error_block}
+  <form method="POST" action="/login">
+    <label>Username or email</label>
+    <input type="text" name="username" required autofocus autocomplete="username">
+    <label>Password</label>
+    <input type="password" name="password" required autocomplete="current-password">
+    <button type="submit">Log in</button>
+  </form>
+</div>
+</body>
+</html>"""
+
+
+# ---------------------------------------------------------------------------
+# Inline HTML: invite / set-password page
+# ---------------------------------------------------------------------------
+
+def _invite_html(token: str, email: str, error: str = "") -> str:
+    error_block = f'<p class="error">{error}</p>' if error else ""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set Password — Portfolio</title>
+<style>
+:root {{--bg:#0a0c10;--surface:#111520;--border:#1e2a3a;--text:#dce4f0;--muted:#556075;
+       --accent:#f59e0b;--red:#f87171;--radius:10px}}
+*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:var(--bg);color:var(--text);min-height:100vh;
+      display:flex;align-items:center;justify-content:center;padding:1rem}}
+.card{{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+       padding:2rem;width:100%;max-width:400px}}
+h1{{font-size:1.2rem;font-weight:700;margin-bottom:.5rem;text-align:center}}
+.sub{{font-size:.82rem;color:var(--muted);text-align:center;margin-bottom:1.5rem}}
+label{{display:block;font-size:.72rem;font-weight:600;color:var(--muted);
+       text-transform:uppercase;letter-spacing:.06em;margin-bottom:.3rem}}
+input{{width:100%;padding:.55rem .75rem;border:1px solid var(--border);border-radius:6px;
+       background:var(--bg);color:var(--text);font-size:.9rem;font-family:inherit;margin-bottom:1rem}}
+input:focus{{outline:none;border-color:var(--accent)}}
+button{{width:100%;padding:.65rem;background:var(--accent);color:#000;font-weight:700;
+        font-size:.9rem;font-family:inherit;border:none;border-radius:6px;cursor:pointer}}
+button:hover{{opacity:.9}}
+.error{{color:var(--red);font-size:.82rem;margin-bottom:1rem;text-align:center}}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Set your password</h1>
+  <p class="sub">Account: <strong>{email}</strong></p>
+  {error_block}
+  <form method="POST" action="/invite/{token}">
+    <label>Password</label>
+    <input type="password" name="password" required minlength="8" autocomplete="new-password">
+    <label>Confirm password</label>
+    <input type="password" name="confirm" required minlength="8" autocomplete="new-password">
+    <button type="submit">Set password &amp; log in</button>
+  </form>
+</div>
+</body>
+</html>"""
+
+
+# ---------------------------------------------------------------------------
+# Inline HTML: generic error page
+# ---------------------------------------------------------------------------
+
+def _error_html(message: str) -> str:
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Error</title>
+<style>body{{font-family:sans-serif;background:#0a0c10;color:#dce4f0;
+             display:flex;align-items:center;justify-content:center;min-height:100vh}}
+.box{{text-align:center;padding:2rem}}</style></head>
+<body><div class="box"><h2>&#9888; {message}</h2>
+<p style="margin-top:1rem"><a href="/" style="color:#f59e0b">Go home</a></p>
+</div></body></html>"""
+
+
+# ---------------------------------------------------------------------------
+# Inline HTML: admin page
+# ---------------------------------------------------------------------------
+
+def _admin_html(users, current_username: str) -> str:
+    rows = ""
+    for u in users:
+        invite_badge = '<span style="color:#f59e0b;font-size:.75rem">invite pending</span>' if u.invite_token else ""
+        role_options = "".join(
+            f'<option value="{r}" {"selected" if r == u.role else ""}>{r}</option>'
+            for r in ("guest", "premium", "admin")
+        )
+        rows += f"""<tr>
+          <td>{u.id}</td>
+          <td>{u.username}</td>
+          <td>{u.email}</td>
+          <td>
+            <select data-uid="{u.id}" class="role-select" {"disabled" if u.username == current_username else ""}>
+              {role_options}
+            </select>
+            {invite_badge}
+          </td>
+          <td style="color:#556075;font-size:.8rem">{(u.last_login or u.created_at)[:10]}</td>
+        </tr>"""
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — Portfolio</title>
+<style>
+:root{{--bg:#0a0c10;--surface:#111520;--raised:#181e2e;--border:#1e2a3a;--text:#dce4f0;
+      --muted:#556075;--accent:#f59e0b;--green:#34d399;--red:#f87171;--radius:10px}}
+*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:var(--bg);color:var(--text);padding:2rem}}
+h1{{font-size:1.2rem;font-weight:700;margin-bottom:1.5rem}}
+.card{{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+       padding:1.5rem;margin-bottom:1.5rem}}
+.card h2{{font-size:.95rem;font-weight:600;margin-bottom:1rem}}
+table{{width:100%;border-collapse:collapse;font-size:.85rem}}
+th,td{{padding:.5rem .75rem;text-align:left;border-bottom:1px solid var(--border)}}
+th{{font-size:.67rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}}
+select{{background:var(--raised);color:var(--text);border:1px solid var(--border);
+        border-radius:4px;padding:.2rem .4rem;font-size:.82rem;cursor:pointer}}
+.form-row{{display:flex;gap:.75rem;margin-top:.5rem;flex-wrap:wrap}}
+input[type=email],select.new-role{{padding:.5rem .75rem;border:1px solid var(--border);
+  border-radius:6px;background:var(--raised);color:var(--text);font-size:.85rem;font-family:inherit}}
+input[type=email]{{flex:1;min-width:200px}}
+button{{padding:.5rem 1.2rem;background:var(--accent);color:#000;font-weight:700;
+        font-size:.85rem;font-family:inherit;border:none;border-radius:6px;cursor:pointer}}
+button:hover{{opacity:.9}}
+.msg{{font-size:.82rem;margin-top:.5rem}}
+.nav{{margin-bottom:1.5rem;font-size:.85rem}}
+.nav a{{color:var(--accent);text-decoration:none}}
+</style>
+</head>
+<body>
+<p class="nav"><a href="/">&#8592; Back to dashboard</a></p>
+<h1>Admin — User Management</h1>
+
+<div class="card">
+  <h2>Create user &amp; send invite</h2>
+  <div class="form-row">
+    <input type="email" id="newEmail" placeholder="user@example.com">
+    <select id="newRole" class="new-role">
+      <option value="premium">Premium</option>
+      <option value="admin">Admin</option>
+    </select>
+    <button id="createBtn">Create &amp; send invite</button>
+  </div>
+  <p id="createMsg" class="msg"></p>
+</div>
+
+<div class="card">
+  <h2>All users</h2>
+  <table>
+    <thead><tr><th>#</th><th>Username</th><th>Email</th><th>Role</th><th>Last seen</th></tr></thead>
+    <tbody>{rows}</tbody>
+  </table>
+</div>
+
+<script>
+document.getElementById('createBtn').addEventListener('click', async () => {{
+  const email = document.getElementById('newEmail').value.trim();
+  const role = document.getElementById('newRole').value;
+  const msg = document.getElementById('createMsg');
+  if (!email) {{ msg.textContent = 'Enter an email address.'; return; }}
+  const resp = await fetch('/admin/users', {{
+    method: 'POST',
+    headers: {{'Content-Type':'application/json'}},
+    body: JSON.stringify({{email, role}})
+  }});
+  const data = await resp.json();
+  if (data.ok) {{
+    msg.style.color = '#34d399';
+    msg.textContent = data.email_sent
+      ? 'Invite sent to ' + email + ' (username: ' + data.username + ')'
+      : 'User created. Invite URL: ' + data.invite_url;
+    document.getElementById('newEmail').value = '';
+    setTimeout(() => location.reload(), 2000);
+  }} else {{
+    msg.style.color = '#f87171';
+    msg.textContent = data.error;
+  }}
+}});
+
+document.querySelectorAll('.role-select').forEach(sel => {{
+  sel.addEventListener('change', async () => {{
+    const uid = sel.dataset.uid;
+    const role = sel.value;
+    const resp = await fetch('/admin/users/' + uid + '/role', {{
+      method: 'POST',
+      headers: {{'Content-Type':'application/json'}},
+      body: JSON.stringify({{role}})
+    }});
+    const data = await resp.json();
+    if (!data.ok) alert('Failed to update role.');
+  }});
+}});
+</script>
+</body>
+</html>"""
+
+
+# ---------------------------------------------------------------------------
+# Self-contained HTML upload page (main UI)
+# ---------------------------------------------------------------------------
+
 _UPLOAD_HTML = """\
 <!DOCTYPE html>
 <html lang="en">
@@ -290,24 +1039,22 @@ body {
 }
 header {
   width: 100%; background: var(--card); border-bottom: 1px solid var(--border);
-  padding: 1.5rem 2rem; text-align: center;
+  padding: 1.25rem 2rem; display: flex; align-items: center; justify-content: space-between;
 }
-header h1 { font-size: 1.5rem; font-weight: 700; }
-.subtitle { color: var(--muted); font-size: 0.875rem; margin-top: 0.25rem; }
+header h1 { font-size: 1.3rem; font-weight: 700; }
+.header-right { display: flex; align-items: center; gap: 1rem; font-size: .85rem; color: var(--muted); }
+.header-right a { color: var(--blue); text-decoration: none; font-weight: 600; }
 main { max-width: 700px; width: 100%; padding: 2rem 1rem; display: flex; flex-direction: column; gap: 1.5rem; }
 .card {
   background: var(--card); border: 1px solid var(--border); border-radius: 10px;
   padding: 1.5rem;
 }
 .card h2 { font-size: 1.1rem; margin-bottom: 1rem; }
-.form-group { margin-bottom: 1rem; }
-.form-group label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-bottom: 0.35rem; text-transform: uppercase; letter-spacing: 0.05em; }
-select, input[type="file"] {
-  width: 100%; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 6px;
-  background: var(--bg); color: var(--text); font-size: 0.9rem;
+.guest-banner {
+  background: #fef9ec; border: 1px solid #f59e0b; border-radius: 10px;
+  padding: 1rem 1.25rem; font-size: .9rem;
 }
-select { cursor: pointer; appearance: auto; }
-
+@media (prefers-color-scheme: dark) { .guest-banner { background: rgba(245,158,11,.08); } }
 .drop-zone {
   border: 2px dashed var(--border); border-radius: 10px; padding: 2.5rem 1.5rem;
   text-align: center; cursor: pointer; transition: all 0.15s ease;
@@ -319,7 +1066,6 @@ select { cursor: pointer; appearance: auto; }
 .drop-zone .label strong { color: var(--blue); }
 .drop-zone .hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.35rem; }
 .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-
 .file-list { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.35rem; }
 .file-item {
   display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.75rem;
@@ -328,11 +1074,10 @@ select { cursor: pointer; appearance: auto; }
 .file-item .name { flex: 1; font-weight: 500; }
 .file-item .size { color: var(--muted); font-size: 0.8rem; }
 .file-item .remove { cursor: pointer; color: var(--red); font-weight: 700; padding: 0 0.25rem; border: none; background: none; font-size: 1rem; }
-
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
   padding: 0.6rem 1.5rem; border-radius: 8px; font-size: 0.9rem; font-weight: 600;
-  cursor: pointer; border: none; transition: all 0.15s ease;
+  cursor: pointer; border: none; transition: all 0.15s ease; text-decoration: none;
 }
 .btn-primary { background: var(--blue); color: #fff; }
 .btn-primary:hover { opacity: 0.9; }
@@ -340,15 +1085,11 @@ select { cursor: pointer; appearance: auto; }
 .btn-secondary { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
 .btn-secondary:hover { background: var(--hover); }
 .btn-group { display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap; }
-
 .progress { display: none; margin-top: 1rem; }
 .progress.active { display: block; }
-.progress-bar {
-  height: 4px; background: var(--border); border-radius: 4px; overflow: hidden;
-}
+.progress-bar { height: 4px; background: var(--border); border-radius: 4px; overflow: hidden; }
 .progress-bar .fill { height: 100%; background: var(--blue); transition: width 0.3s ease; border-radius: 4px; }
 .progress-label { font-size: 0.8rem; color: var(--muted); margin-top: 0.35rem; }
-
 .results { margin-top: 1rem; display: none; }
 .results.active { display: block; }
 .result-item {
@@ -361,7 +1102,6 @@ select { cursor: pointer; appearance: auto; }
 .result-item .info .filename { font-weight: 600; }
 .result-item .info .detail { color: var(--muted); font-size: 0.8rem; }
 .result-item .info .error { color: var(--red); font-size: 0.8rem; }
-
 .status-bar {
   background: var(--card); border: 1px solid var(--border); border-radius: 10px;
   padding: 1rem 1.25rem; display: flex; align-items: center; gap: 1.25rem;
@@ -370,7 +1110,6 @@ select { cursor: pointer; appearance: auto; }
 .status-item { display: flex; align-items: center; gap: 0.35rem; }
 .status-item .num { font-weight: 700; }
 .status-item .lbl { color: var(--muted); }
-
 .actions { display: none; }
 .actions.active { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; }
 </style>
@@ -378,14 +1117,23 @@ select { cursor: pointer; appearance: auto; }
 <body>
 
 <header>
-  <h1>Revolut eDavki — Import</h1>
-  <p class="subtitle">Upload Revolut CSV exports to import into the portfolio database</p>
+  <h1>Revolut Portfolio</h1>
+  <div class="header-right" id="headerRight"></div>
 </header>
 
 <main>
   <div id="statusBar" class="status-bar" style="display:none"></div>
+  <div id="guestBanner" style="display:none" class="guest-banner">
+    &#128275; You're viewing the <strong>demo portfolio</strong>.
+    <a href="/login" style="color:#f59e0b;font-weight:700">Log in</a> to view your own data.
+  </div>
+  <div id="guestReportCard" class="card" style="display:none;text-align:center;padding:2rem">
+    <div style="font-size:1.05rem;font-weight:600;margin-bottom:0.5rem">Demo Portfolio</div>
+    <div style="color:var(--muted);font-size:0.85rem;margin-bottom:1.25rem">Explore the portfolio dashboard with sample data.</div>
+    <a class="btn btn-primary" href="/report">View Demo Report</a>
+  </div>
 
-  <div class="card">
+  <div id="uploadCard" class="card">
     <h2>Upload CSV Files</h2>
 
     <div class="drop-zone" id="dropZone">
@@ -417,7 +1165,29 @@ select { cursor: pointer; appearance: auto; }
 </main>
 
 <script>
+const _USER = __USER_JSON__;
+
 (function() {
+  // --- Header ---
+  const hr = document.getElementById('headerRight');
+  if (_USER.username) {
+    let links = '<span>' + _USER.username + ' (' + _USER.role + ')</span>';
+    links += ' <a href="/report">Report</a>';
+    if (_USER.role === 'admin') links += ' <a href="/admin">Admin</a>';
+    links += ' <a href="/logout">Log out</a>';
+    hr.innerHTML = links;
+  } else {
+    hr.innerHTML = '<a href="/login">Log in</a>';
+    document.getElementById('guestBanner').style.display = '';
+  }
+
+  // --- Hide upload for guests, show report link instead ---
+  const isPremium = _USER.role === 'premium' || _USER.role === 'admin';
+  if (!isPremium) {
+    document.getElementById('uploadCard').style.display = 'none';
+    document.getElementById('guestReportCard').style.display = '';
+  }
+
   const fileInput = document.getElementById('fileInput');
   const dropZone = document.getElementById('dropZone');
   const fileList = document.getElementById('fileList');
@@ -433,7 +1203,6 @@ select { cursor: pointer; appearance: auto; }
 
   let selectedFiles = [];
 
-  // --- Load status on page load ---
   fetch('/status').then(r=>r.json()).then(data => {
     if (data.has_data) {
       const items = [];
@@ -441,7 +1210,7 @@ select { cursor: pointer; appearance: auto; }
       items.push(`<span class="num">${data.ticker_count}</span> <span class="lbl">tickers</span>`);
       if (data.date_range) items.push(`<span class="lbl">${data.date_range[0]} to ${data.date_range[1]}</span>`);
       if (data.asset_classes) {
-        const tags = Object.entries(data.asset_classes).map(([k,v]) => `${k}: ${v}`).join(', ');
+        const tags = Object.entries(data.asset_classes).map(([k,v]) => k + ': ' + v).join(', ');
         items.push(`<span class="lbl">${tags}</span>`);
       }
       statusBar.innerHTML = items.map(i => `<div class="status-item">${i}</div>`).join('');
@@ -449,18 +1218,17 @@ select { cursor: pointer; appearance: auto; }
     }
   }).catch(()=>{});
 
-  // --- Drag and drop ---
+  if (!isPremium) return;
+
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
   dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.classList.remove('dragover');
-    addFiles(e.dataTransfer.files);
+    e.preventDefault(); dropZone.classList.remove('dragover'); addFiles(e.dataTransfer.files);
   });
   fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
 
-  function addFiles(fileListObj) {
-    for (const f of fileListObj) {
+  function addFiles(fl) {
+    for (const f of fl) {
       const ext = f.name.split('.').pop().toLowerCase();
       if (!['csv','xlsx','xls'].includes(ext)) continue;
       if (selectedFiles.some(sf => sf.name === f.name && sf.size === f.size)) continue;
@@ -473,8 +1241,8 @@ select { cursor: pointer; appearance: auto; }
     uploadBtn.disabled = selectedFiles.length === 0;
     fileList.innerHTML = selectedFiles.map((f, i) => {
       const size = f.size < 1024 ? f.size + ' B'
-        : f.size < 1024*1024 ? (f.size/1024).toFixed(1) + ' KB'
-        : (f.size/1024/1024).toFixed(1) + ' MB';
+        : f.size < 1048576 ? (f.size/1024).toFixed(1) + ' KB'
+        : (f.size/1048576).toFixed(1) + ' MB';
       return `<div class="file-item">
         <span class="name">${esc(f.name)}</span>
         <span class="size">${size}</span>
@@ -482,76 +1250,41 @@ select { cursor: pointer; appearance: auto; }
       </div>`;
     }).join('');
     fileList.querySelectorAll('.remove').forEach(btn => {
-      btn.addEventListener('click', () => {
-        selectedFiles.splice(parseInt(btn.dataset.idx), 1);
-        renderFileList();
-      });
+      btn.addEventListener('click', () => { selectedFiles.splice(+btn.dataset.idx, 1); renderFileList(); });
     });
   }
 
   function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-  // --- Upload ---
   uploadBtn.addEventListener('click', async () => {
-    if (selectedFiles.length === 0) return;
+    if (!selectedFiles.length) return;
     uploadBtn.disabled = true;
     progress.classList.add('active');
     resultsEl.classList.remove('active');
     actionsEl.classList.remove('active');
     progressFill.style.width = '30%';
     progressLabel.textContent = 'Uploading ' + selectedFiles.length + ' file(s)...';
-
     const form = new FormData();
     selectedFiles.forEach(f => form.append('files', f));
-
     try {
       progressFill.style.width = '60%';
       progressLabel.textContent = 'Importing...';
       const resp = await fetch('/upload', { method: 'POST', body: form });
       const data = await resp.json();
       progressFill.style.width = '100%';
-
-      if (data.error) {
-        progressLabel.textContent = 'Error: ' + data.error;
-        uploadBtn.disabled = false;
-        return;
-      }
-
+      if (data.error) { progressLabel.textContent = 'Error: ' + data.error; uploadBtn.disabled = false; return; }
       progressLabel.textContent = 'Done!';
-      // Show results
       resultsEl.innerHTML = data.results.map(r => {
-        if (r.error) {
-          return `<div class="result-item">
-            <span class="status">&#10060;</span>
-            <div class="info"><div class="filename">${esc(r.filename)}</div><div class="error">${esc(r.error)}</div></div>
-          </div>`;
-        }
+        if (r.error) return `<div class="result-item"><span class="status">&#10060;</span>
+          <div class="info"><div class="filename">${esc(r.filename)}</div><div class="error">${esc(r.error)}</div></div></div>`;
         const icon = r.new > 0 ? '&#9989;' : '&#9898;';
-        return `<div class="result-item">
-          <span class="status">${icon}</span>
-          <div class="info">
-            <div class="filename">${esc(r.filename)}</div>
-            <div class="detail">${r.new} new, ${r.skipped} skipped (of ${r.total} rows)</div>
-          </div>
-        </div>`;
+        return `<div class="result-item"><span class="status">${icon}</span>
+          <div class="info"><div class="filename">${esc(r.filename)}</div>
+          <div class="detail">${r.new} new, ${r.skipped} skipped (of ${r.total} rows)</div></div></div>`;
       }).join('');
       resultsEl.classList.add('active');
       actionsEl.classList.add('active');
-      selectedFiles = [];
-      renderFileList();
-
-      // Refresh status bar
-      fetch('/status').then(r=>r.json()).then(st => {
-        if (st.has_data) {
-          const items = [];
-          items.push(`<span class="num">${st.transaction_count}</span> <span class="lbl">transactions</span>`);
-          items.push(`<span class="num">${st.ticker_count}</span> <span class="lbl">tickers</span>`);
-          if (st.date_range) items.push(`<span class="lbl">${st.date_range[0]} to ${st.date_range[1]}</span>`);
-          statusBar.innerHTML = items.map(i => `<div class="status-item">${i}</div>`).join('');
-          statusBar.style.display = '';
-        }
-      }).catch(()=>{});
-
+      selectedFiles = []; renderFileList();
     } catch (e) {
       progressFill.style.width = '100%';
       progressLabel.textContent = 'Error: ' + e.message;
@@ -559,26 +1292,19 @@ select { cursor: pointer; appearance: auto; }
     }
   });
 
-  // --- Sync ---
   syncBtn.addEventListener('click', async () => {
-    syncBtn.disabled = true;
-    syncBtn.textContent = 'Syncing...';
+    syncBtn.disabled = true; syncBtn.textContent = 'Syncing...';
     try {
       const resp = await fetch('/sync', { method: 'POST' });
       const data = await resp.json();
       syncBtn.textContent = data.ok ? 'Synced!' : 'Error: ' + data.error;
-    } catch (e) {
-      syncBtn.textContent = 'Error';
-    }
+    } catch(e) { syncBtn.textContent = 'Error'; }
     setTimeout(() => { syncBtn.textContent = 'Sync Prices'; syncBtn.disabled = false; }, 3000);
   });
 
-  // --- Reset ---
   resetBtn.addEventListener('click', () => {
-    resultsEl.classList.remove('active');
-    actionsEl.classList.remove('active');
-    progress.classList.remove('active');
-    progressFill.style.width = '0%';
+    resultsEl.classList.remove('active'); actionsEl.classList.remove('active');
+    progress.classList.remove('active'); progressFill.style.width = '0%';
     uploadBtn.disabled = true;
   });
 })();
