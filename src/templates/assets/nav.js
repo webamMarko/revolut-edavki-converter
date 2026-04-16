@@ -66,35 +66,25 @@
   }
 
   // Touch swipe: left/right to navigate between pages.
-  // Uses touchmove to detect dominant axis early — if the finger moves more
-  // vertically first we mark the gesture as a scroll and ignore it entirely.
+  // Requires the gesture to be clearly horizontal: |dx| > 70px AND |dx| > 3*|dy|
+  // (angle within ~18° of horizontal). This prevents vertical scrolls from
+  // accidentally triggering a page switch regardless of speed.
   (function() {
     var content = document.querySelector('.content');
     if (!content) return;
     var touchStartX = 0, touchStartY = 0;
-    var axisLocked = null; // 'h' | 'v' | null
-
-    var SWIPE_MIN_X = 60;  // minimum horizontal travel to trigger
-    var AXIS_LOCK_PX = 10; // how far finger must move before axis is decided
 
     content.addEventListener('touchstart', function(e) {
       touchStartX = e.touches[0].clientX;
       touchStartY = e.touches[0].clientY;
-      axisLocked = null;
-    }, { passive: true });
-
-    content.addEventListener('touchmove', function(e) {
-      if (axisLocked) return;
-      var dx = Math.abs(e.touches[0].clientX - touchStartX);
-      var dy = Math.abs(e.touches[0].clientY - touchStartY);
-      if (dx < AXIS_LOCK_PX && dy < AXIS_LOCK_PX) return; // not far enough yet
-      axisLocked = dx > dy ? 'h' : 'v';
     }, { passive: true });
 
     content.addEventListener('touchend', function(e) {
-      if (axisLocked !== 'h') return; // vertical scroll or undecided — ignore
       var dx = e.changedTouches[0].clientX - touchStartX;
-      if (Math.abs(dx) < SWIPE_MIN_X) return;
+      var dy = e.changedTouches[0].clientY - touchStartY;
+      var adx = Math.abs(dx), ady = Math.abs(dy);
+      // Must travel at least 70px horizontally AND be 3× more horizontal than vertical
+      if (adx < 70 || adx < ady * 3) return;
 
       var ids = [...navItems]
         .filter(function(i) { return i.style.display !== 'none'; })
