@@ -69,3 +69,53 @@ The analytics pipeline is: **CLI -> Importer (`importer.py`) -> DB (`db.py`) -> 
 - **yfinance**: Historical stock prices and FX rates
 - **tabulate**: Terminal table formatting
 - **matplotlib**: Portfolio performance charts
+- **resend**: Email delivery for invite flows
+
+## Docker Deployment
+
+### Deploy script
+
+```bash
+./scripts/deploy.sh           # full deploy (code + databases)
+./scripts/deploy.sh --skip-db # code-only update, skip DB copy
+```
+
+The script (`scripts/deploy.sh`) does the following:
+1. Creates a tarball of the project (excluding `.git`, `data/`, `venv/`, `.env`)
+2. Uploads via `scp` to `homeassistant@192.168.4.213`
+3. Extracts into `/home/homeassistant/revolut-edavki-converter`
+4. Copies `data/marko/portfolio.db`, `data/_demo/portfolio.db`, `data/_system/users.db` (unless `--skip-db`)
+5. Creates `.env` from `.env.example` if missing (sets `APP_BASE_URL` to the server IP)
+6. Runs `sudo docker build` on the server, then `sudo docker run` (removes old container first)
+7. Reports running container status
+
+Requires `sshpass` locally. Uses password auth (`homeassistant@192.168.4.213`).
+
+### Server layout
+
+| Path | Purpose |
+|------|---------|
+| `/home/homeassistant/revolut-edavki-converter/` | App source + Dockerfile |
+| `/home/homeassistant/revolut-edavki-converter/data/` | Volume-mounted data directory |
+| `data/_demo/portfolio.db` | Read-only demo DB for unauthenticated visitors |
+| `data/_system/users.db` | User registry (roles, password hashes, invite tokens) |
+| `data/{username}/portfolio.db` | Per-user isolated portfolio DB |
+| `/home/homeassistant/portfolio-sync.log` | Cron sync output log |
+
+### Cron job (on server)
+
+```
+15 22 * * 1-5 docker exec portfolio python -m src.cli sync >> /home/homeassistant/portfolio-sync.log 2>&1
+```
+
+Runs 15 minutes after NYSE close (22:15 Ljubljana/CEST). Adjust to 21:15 in winter (CET).
+
+### Multi-user auth
+
+- **Session cookies**: `HttpOnly`, `SameSite=Lax`, 7-day TTL, `secrets.token_urlsafe(32)`
+- **Passwords**: PBKDF2-HMAC-SHA256, 260k iterations, per-user salt
+- **Roles**: `guest` (demo only), `premium` (own DB), `admin` (own DB + user management)
+- **Invite flow**: admin creates user → Resend API sends invite email with token → user sets password
+- **Data isolation**: `_portfolio_conn(session)` returns demo DB for guests, user DB for premium/admin
+- **`src/web.py`**: `_get_session()`, `_create_session()`, `_require_role()`, `_portfolio_conn()`
+- **`src/users.py`**: `authenticate()`, `create_user()`, `accept_invite()`, `set_role()`

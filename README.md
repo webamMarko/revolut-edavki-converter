@@ -105,6 +105,68 @@ The importer auto-detects the format based on column headers:
 | **Crypto** | `Symbol`, `Value`, `Type` (Buy/Sell/Staking reward...) | Revolut app > Crypto > Statements |
 | **Savings** | `Description` with fund class info (e.g. "BUY USD Class R IE000H9J0QX4") | Revolut app > Savings > Statements |
 
+## Docker Deployment
+
+The app can be deployed as a multi-user web service via Docker.
+
+### First-time deploy
+
+Requirements: `sshpass` installed locally (`brew install sshpass`).
+
+```bash
+./scripts/deploy.sh
+```
+
+This will:
+1. Package the source code and upload it to the server
+2. Copy all databases (`data/marko/`, `data/_demo/`, `data/_system/`)
+3. Create `.env` from `.env.example` if it doesn't exist
+4. Build the Docker image on the server
+5. Start (or restart) the `portfolio` container on port **8081**
+
+### Code-only update (skip DB copy)
+
+```bash
+./scripts/deploy.sh --skip-db
+```
+
+Use this for deploying code changes when databases don't need to be synced.
+
+### Server details
+
+| Setting | Value |
+|---------|-------|
+| Host | `192.168.4.213` |
+| Port | `8081` |
+| Container name | `portfolio` |
+| Remote path | `/home/homeassistant/revolut-edavki-converter` |
+| Data volume | `./data:/data` |
+
+### Automatic price sync
+
+A cron job runs on the server every weekday at **22:15 Ljubljana time** (15 min after NYSE close):
+
+```
+15 22 * * 1-5 docker exec portfolio python -m src.cli sync >> /home/homeassistant/portfolio-sync.log 2>&1
+```
+
+### Multi-user architecture
+
+- Unauthenticated visitors see a read-only demo portfolio (`data/_demo/portfolio.db`)
+- Each registered user has an isolated database at `data/{username}/portfolio.db`
+- User registry is stored in `data/_system/users.db`
+- Roles: `guest` (demo only), `premium` (own DB), `admin` (own DB + user management)
+
+### Admin tasks
+
+```bash
+# Bootstrap first admin user (run locally, then deploy DB)
+python scripts/hash_password.py bootstrap admin@example.com mypassword
+
+# Or on the server:
+docker exec portfolio python scripts/hash_password.py bootstrap admin@example.com mypassword
+```
+
 ## Project Structure
 
 ```
@@ -119,7 +181,16 @@ revolut-edavki-converter/
 │   ├── analytics.py        # Portfolio analytics engine (daily reconstruction)
 │   ├── tax.py              # Slovenian capital gains tax computation
 │   ├── formatters.py       # Terminal output formatting
-│   └── html_report.py      # Interactive HTML report generator
+│   ├── html_report.py      # Interactive HTML report generator
+│   ├── web.py              # Multi-user HTTP server with auth
+│   ├── users.py            # User registry and authentication
+│   └── email_service.py    # Resend API email wrapper
+├── scripts/
+│   ├── deploy.sh           # Remote deployment script
+│   └── hash_password.py    # CLI helper for password hashing and user bootstrap
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
 ├── examples/               # Sample CSV files
 ├── requirements.txt
 └── README.md
