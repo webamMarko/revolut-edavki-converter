@@ -27,6 +27,50 @@
   --radius-sm: 6px;
 }
 
+/* ---- Light theme overrides ---- */
+[data-theme="light"] {
+  --bg:           #f0f2f5;
+  --surface:      #ffffff;
+  --raised:       #f5f7fa;
+  --border:       #dde1e9;
+  --text:         #111827;
+  --muted:        #6b7280;
+  --subtle:       #c8cdd8;
+
+  --accent:       #d97706;
+  --accent-dim:   rgba(217,119,6,0.10);
+  --accent-glow:  rgba(217,119,6,0.04);
+
+  --green:        #059669;
+  --red:          #dc2626;
+  --blue:         #2563eb;
+
+  --stock-color:   #2563eb;
+  --cfd-color:     #d97706;
+  --crypto-color:  #7c3aed;
+  --savings-color: #059669;
+  --re-color:      #e11d48;
+}
+
+/* ---- Theme toggle button ---- */
+.theme-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 0.2rem 0.55rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: inherit;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.theme-toggle:hover { border-color: var(--accent); color: var(--text); }
+
 /* ---- Reset ---- */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 

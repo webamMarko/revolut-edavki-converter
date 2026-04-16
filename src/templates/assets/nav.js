@@ -1,3 +1,28 @@
+// --- Theme toggle ---
+(function() {
+  function syncIcons() {
+    var isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+    var icon = isDark ? '☀️' : '🌙';
+    var d = document.getElementById('themeIconDesktop');
+    var m = document.getElementById('themeIconMobile');
+    if (d) d.textContent = icon;
+    if (m) m.textContent = icon;
+  }
+  window.toggleTheme = function() {
+    var current = document.documentElement.getAttribute('data-theme');
+    var next = current === 'light' ? 'dark' : 'light';
+    if (next === 'dark') {
+      document.documentElement.removeAttribute('data-theme');
+      localStorage.removeItem('theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+    }
+    syncIcons();
+  };
+  syncIcons();
+})();
+
 // --- Sidebar navigation ---
 (function() {
   const navItems = document.querySelectorAll('.nav-item[data-page]');

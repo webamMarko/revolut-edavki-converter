@@ -1,10 +1,18 @@
 <div class="mobile-topbar">
   <a class="mobile-topbar-logo" href="/">Portfolio<span class="brand-accent">.</span></a>
+  <button class="theme-toggle" id="themeToggleMobile" onclick="toggleTheme()" aria-label="Toggle theme">
+    <span id="themeIconMobile">☀️</span>
+  </button>
 </div>
 
 <nav class="sidebar">
   <div class="sidebar-brand">
-    <a class="brand-title" href="/" style="text-decoration:none;color:inherit">Portfolio<span class="brand-accent">.</span></a>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem">
+      <a class="brand-title" href="/" style="text-decoration:none;color:inherit">Portfolio<span class="brand-accent">.</span></a>
+      <button class="theme-toggle" id="themeToggleDesktop" onclick="toggleTheme()" aria-label="Toggle theme">
+        <span id="themeIconDesktop">☀️</span>
+      </button>
+    </div>
     <div class="brand-dates">{{ start_date }} &ndash; {{ end_date }}</div>
   </div>
 
