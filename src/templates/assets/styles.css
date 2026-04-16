@@ -230,6 +230,8 @@ body {
 /* ---- Page layout helpers ---- */
 .page-stack { display: flex; flex-direction: column; gap: 1.25rem; }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; min-width: 0; }
+/* Heatmap pair stacks to a single column when there's not enough room */
+.two-col.heatmap-row { grid-template-columns: repeat(auto-fit, minmax(min(540px, 100%), 1fr)); }
 
 /* ---- Cards ---- */
 .card {
