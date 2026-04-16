@@ -24,5 +24,5 @@ function updateAll() {
   updateBenchmarkChart();
   updateBenchmarkTable();
   updateTransactions();
-  updateTaxTable();
+  if (typeof updateTaxTable === 'function') updateTaxTable();
 }
