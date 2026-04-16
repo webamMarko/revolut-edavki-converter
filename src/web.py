@@ -1855,9 +1855,9 @@ function buildMapTable() {
   all.forEach(field => {
     const isReq = fields.required.includes(field);
     const match = bestMatch(field, _headers);
-    const opts = ['<option value="">— skip —</option>'] + _headers.map(h =>
+    const opts = ['<option value="">— skip —</option>'].concat(_headers.map(h =>
       `<option value="${esc(h)}" ${h === match ? 'selected' : ''}>${esc(h)}</option>`
-    );
+    ));
     html += `<tr>
       <td>${FIELD_LABELS[field] || field}</td>
       <td>${isReq ? '<span class="req-badge">Required</span>' : '<span class="opt-badge">Optional</span>'}</td>
