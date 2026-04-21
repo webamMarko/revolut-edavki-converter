@@ -66,6 +66,7 @@ function updateAll() {
   updateGains();
   updatePositions();
   updateClosedPositions();
+  updateDividends();
   updateBenchmarkChart();
   updateBenchmarkTable();
   updateTransactions();

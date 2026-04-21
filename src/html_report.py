@@ -157,6 +157,51 @@ def query_investment_notes(conn: sqlite3.Connection) -> list[dict]:
         return []
 
 
+def _query_dividend_data(conn: sqlite3.Connection | None) -> dict:
+    """Query per-ticker and monthly dividend data from transactions."""
+    if conn is None:
+        return {"by_ticker": [], "by_month": [], "total_eur": 0}
+
+    dividend_types = ("DIVIDEND", "BOND COUPON", "INTEREST PAID", "STAKING REWARD", "LEARN REWARD")
+    placeholders = ",".join("?" for _ in dividend_types)
+
+    # Per-ticker totals
+    rows = conn.execute(f"""
+        SELECT ticker, SUM(
+            CASE WHEN fx_rate > 0 AND currency != 'EUR' THEN ABS(total_amount) / fx_rate
+                 ELSE ABS(total_amount) END
+        ) as total_eur,
+        COUNT(*) as payment_count
+        FROM transactions
+        WHERE type IN ({placeholders}) AND total_amount IS NOT NULL AND total_amount != 0
+        GROUP BY ticker
+        ORDER BY total_eur DESC
+    """, dividend_types).fetchall()
+
+    by_ticker = [
+        {"ticker": r[0] or "Unknown", "total_eur": round(r[1], 2), "count": r[2]}
+        for r in rows
+    ]
+    total_eur = round(sum(t["total_eur"] for t in by_ticker), 2)
+
+    # Monthly totals
+    rows = conn.execute(f"""
+        SELECT SUBSTR(date, 1, 7) as month,
+        SUM(
+            CASE WHEN fx_rate > 0 AND currency != 'EUR' THEN ABS(total_amount) / fx_rate
+                 ELSE ABS(total_amount) END
+        ) as total_eur
+        FROM transactions
+        WHERE type IN ({placeholders}) AND total_amount IS NOT NULL AND total_amount != 0
+        GROUP BY month
+        ORDER BY month
+    """, dividend_types).fetchall()
+
+    by_month = [{"month": r[0], "total_eur": round(r[1], 2)} for r in rows]
+
+    return {"by_ticker": by_ticker, "by_month": by_month, "total_eur": total_eur}
+
+
 def _query_position_price_history(conn: sqlite3.Connection, tickers: list[str]) -> dict:
     """Return daily EUR price history for each ticker (last 2 years)."""
     history = {}
@@ -429,6 +474,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
     data["real_estate"] = real_estate or {}
     data["fire"] = fire_config  # full config dict or None (replaces old fire_target)
     data["investment_notes"] = investment_notes or []
+    data["dividends"] = _query_dividend_data(conn)
 
     # Price history and company names for expandable position rows
     pos_tickers = [p["ticker"] for p in data["positions"]]
