@@ -1,0 +1,37 @@
+<section class="card" id="dividendsSummary">
+  <h2>Dividend Income</h2>
+  <div class="card-grid" id="dividendCards"></div>
+</section>
+
+<section class="card" id="dividendChartSection">
+  <h3>Monthly Income</h3>
+  <div class="chart-wrap" style="height:260px">
+    <canvas id="dividendChart"></canvas>
+  </div>
+</section>
+
+<section class="card" id="dividendGrowthSection" style="display:none">
+  <h3>Annual Dividend Income</h3>
+  <div class="chart-wrap" style="height:240px">
+    <canvas id="dividendGrowthChart"></canvas>
+  </div>
+  <div class="table-scroll" style="margin-top:1rem">
+    <table id="dividendGrowthTable" class="data-table sortable"></table>
+  </div>
+</section>
+
+<section class="card" id="dividendProjectionSection" style="display:none">
+  <h3 id="divProjectionTitle">Income Projection</h3>
+  <p id="divProjectionDesc" style="color:var(--muted);font-size:0.8rem;margin:-0.25rem 0 0.75rem"></p>
+  <div id="divProjectionCards" class="card-grid small"></div>
+  <div class="chart-wrap" style="height:260px">
+    <canvas id="dividendProjectionChart"></canvas>
+  </div>
+</section>
+
+<section class="card" id="dividendTableSection">
+  <h3>Income by Ticker</h3>
+  <div class="table-scroll">
+    <table id="dividendTable" class="data-table sortable"></table>
+  </div>
+</section>

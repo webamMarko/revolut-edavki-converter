@@ -270,6 +270,68 @@ def sync_fx_rates(conn: sqlite3.Connection, start_date: datetime | None = None,
     conn.commit()
 
 
+def sync_ticker_metadata(conn: sqlite3.Connection, verbose: bool = False):
+    """Fetch sector, industry, and company name for stock tickers via yfinance .info."""
+    tickers = [
+        row[0] for row in
+        conn.execute(
+            "SELECT DISTINCT ticker FROM transactions WHERE ticker IS NOT NULL AND asset_class = 'stock'"
+        ).fetchall()
+    ]
+    if not tickers:
+        return
+
+    # Only fetch for tickers that don't already have sector metadata
+    existing = {
+        row[0][len("sector:"):] for row in
+        conn.execute("SELECT key FROM metadata WHERE key LIKE 'sector:%'").fetchall()
+    }
+
+    delisted = set(get_delisted(conn))
+    to_fetch = [t for t in tickers if t not in existing and t not in delisted
+                and not (t.startswith("US") and len(t) > 8 and not t.isalpha())]
+
+    if not to_fetch:
+        if verbose:
+            print("  All tickers already have sector metadata")
+        return
+
+    fetched = 0
+    for ticker in sorted(to_fetch):
+        yf_ticker = _yf_ticker(ticker)
+        try:
+            info = yf.Ticker(yf_ticker).info or {}
+        except Exception:
+            if verbose:
+                print(f"  {ticker}: failed to fetch info")
+            continue
+
+        sector = info.get("sector", "")
+        industry = info.get("industry", "")
+        name = info.get("longName") or info.get("shortName") or ""
+
+        if sector:
+            conn.execute(
+                "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
+                (f"sector:{ticker}", sector),
+            )
+            conn.execute(
+                "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
+                (f"industry:{ticker}", industry),
+            )
+            fetched += 1
+        if name:
+            conn.execute(
+                "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
+                (f"company_name:{ticker}", name),
+            )
+        if verbose:
+            print(f"  {ticker}: {sector or '—'} / {industry or '—'}")
+
+    conn.commit()
+    print(f"Ticker metadata: {fetched}/{len(to_fetch)} tickers updated")
+
+
 def sync_all(conn: sqlite3.Connection, start_date: datetime | None = None,
              end_date: datetime | None = None, verbose: bool = False):
     """Run all syncs: stock prices, benchmarks, FX rates, real estate ETN valuations."""
@@ -290,6 +352,10 @@ def sync_all(conn: sqlite3.Connection, start_date: datetime | None = None,
         from .realestate import sync_etn_valuations
         print("\nSyncing real estate ETN valuations...")
         sync_etn_valuations(conn, verbose=verbose)
+
+    # Fetch sector/industry metadata for stock tickers
+    print("\nSyncing ticker metadata (sector/industry)...")
+    sync_ticker_metadata(conn, verbose)
 
     # Record sync time
     conn.execute(

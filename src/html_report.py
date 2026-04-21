@@ -157,6 +157,67 @@ def query_investment_notes(conn: sqlite3.Connection) -> list[dict]:
         return []
 
 
+def _query_dividend_data(conn: sqlite3.Connection | None) -> dict:
+    """Query per-ticker and monthly dividend data from transactions."""
+    if conn is None:
+        return {"by_ticker": [], "by_month": [], "total_eur": 0}
+
+    dividend_types = ("DIVIDEND", "BOND COUPON", "INTEREST PAID", "STAKING REWARD", "LEARN REWARD")
+    placeholders = ",".join("?" for _ in dividend_types)
+
+    # Per-ticker totals
+    rows = conn.execute(f"""
+        SELECT ticker, SUM(
+            CASE WHEN fx_rate > 0 AND currency != 'EUR' THEN ABS(total_amount) / fx_rate
+                 ELSE ABS(total_amount) END
+        ) as total_eur,
+        COUNT(*) as payment_count
+        FROM transactions
+        WHERE type IN ({placeholders}) AND total_amount IS NOT NULL AND total_amount != 0
+        GROUP BY ticker
+        ORDER BY total_eur DESC
+    """, dividend_types).fetchall()
+
+    by_ticker = [
+        {"ticker": r[0] or "Unknown", "total_eur": round(r[1], 2), "count": r[2]}
+        for r in rows
+    ]
+    total_eur = round(sum(t["total_eur"] for t in by_ticker), 2)
+
+    # Monthly totals
+    rows = conn.execute(f"""
+        SELECT SUBSTR(date, 1, 7) as month,
+        SUM(
+            CASE WHEN fx_rate > 0 AND currency != 'EUR' THEN ABS(total_amount) / fx_rate
+                 ELSE ABS(total_amount) END
+        ) as total_eur
+        FROM transactions
+        WHERE type IN ({placeholders}) AND total_amount IS NOT NULL AND total_amount != 0
+        GROUP BY month
+        ORDER BY month
+    """, dividend_types).fetchall()
+
+    by_month = [{"month": r[0], "total_eur": round(r[1], 2)} for r in rows]
+
+    # TTM (trailing 12 months) per-ticker for yield calculation
+    from datetime import datetime as _dt, timedelta as _td
+    ttm_start = (_dt.now() - _td(days=365)).strftime("%Y-%m-%d")
+    rows = conn.execute(f"""
+        SELECT ticker, SUM(
+            CASE WHEN fx_rate > 0 AND currency != 'EUR' THEN ABS(total_amount) / fx_rate
+                 ELSE ABS(total_amount) END
+        ) as ttm_eur
+        FROM transactions
+        WHERE type IN ({placeholders}) AND total_amount IS NOT NULL AND total_amount != 0
+          AND date >= ?
+        GROUP BY ticker
+    """, (*dividend_types, ttm_start)).fetchall()
+    ttm_by_ticker = {r[0]: round(r[1], 2) for r in rows}
+
+    return {"by_ticker": by_ticker, "by_month": by_month, "total_eur": total_eur,
+            "ttm_by_ticker": ttm_by_ticker}
+
+
 def _query_position_price_history(conn: sqlite3.Connection, tickers: list[str]) -> dict:
     """Return daily EUR price history for each ticker (last 2 years)."""
     history = {}
@@ -230,16 +291,257 @@ def _query_company_names(conn: sqlite3.Connection | None, tickers: list[str]) ->
     return names
 
 
+def _query_currency_exposure(conn: sqlite3.Connection, positions: list) -> list[dict]:
+    """Determine native currency of each position and compute exposure breakdown."""
+    if not conn or not positions:
+        return []
+
+    # Get the most recent trade currency for each ticker
+    ticker_currency = {}
+    for pos in positions:
+        ticker = pos.ticker if hasattr(pos, 'ticker') else pos.get('ticker', '')
+        # Strip prefix for DB lookup
+        db_ticker = ticker
+        for prefix in ("CFD:", "CRYPTO:", "SAVINGS:"):
+            if ticker.startswith(prefix):
+                db_ticker = ticker[len(prefix):]
+                break
+        row = conn.execute(
+            "SELECT currency FROM transactions WHERE ticker = ? AND type IN ('BUY','SELL') "
+            "AND currency IS NOT NULL ORDER BY date DESC LIMIT 1",
+            (db_ticker,)
+        ).fetchone()
+        if row:
+            ticker_currency[ticker] = row[0]
+        else:
+            # Check daily_prices for currency
+            row = conn.execute(
+                "SELECT currency FROM daily_prices WHERE ticker = ? LIMIT 1",
+                (db_ticker,)
+            ).fetchone()
+            ticker_currency[ticker] = row[0] if row else "EUR"
+
+    # Group market value by currency
+    currency_totals = {}
+    for pos in positions:
+        ticker = pos.ticker if hasattr(pos, 'ticker') else pos.get('ticker', '')
+        mv = pos.market_value_eur if hasattr(pos, 'market_value_eur') else pos.get('market_value_eur', 0)
+        cur = ticker_currency.get(ticker, "EUR")
+        currency_totals[cur] = currency_totals.get(cur, 0) + mv
+
+    total = sum(currency_totals.values()) or 1
+    return sorted(
+        [{"currency": c, "value_eur": round(v, 2), "pct": round(v / total * 100, 1)}
+         for c, v in currency_totals.items()],
+        key=lambda x: x["value_eur"],
+        reverse=True,
+    )
+
+
+def _query_sector_allocation(conn: sqlite3.Connection | None, positions: list) -> dict:
+    """Build sector and industry allocation from position weights + metadata."""
+    if not conn or not positions:
+        return {"sectors": [], "industries": []}
+
+    # Load sector/industry metadata
+    sector_map = {}
+    industry_map = {}
+    rows = conn.execute("SELECT key, value FROM metadata WHERE key LIKE 'sector:%'").fetchall()
+    for k, v in rows:
+        sector_map[k[len("sector:"):]] = v
+    rows = conn.execute("SELECT key, value FROM metadata WHERE key LIKE 'industry:%'").fetchall()
+    for k, v in rows:
+        industry_map[k[len("industry:"):]] = v
+
+    # Aggregate by sector and industry
+    sector_totals = {}
+    industry_totals = {}
+    total_mv = 0
+    for pos in positions:
+        ticker = pos.ticker if hasattr(pos, 'ticker') else pos.get('ticker', '')
+        mv = pos.market_value_eur if hasattr(pos, 'market_value_eur') else pos.get('market_value_eur', 0)
+        if mv <= 0:
+            continue
+        # Strip prefix
+        db_ticker = ticker
+        for prefix in ("CFD:", "CRYPTO:", "SAVINGS:"):
+            if ticker.startswith(prefix):
+                db_ticker = ticker[len(prefix):]
+                break
+        sector = sector_map.get(db_ticker, "Other")
+        industry = industry_map.get(db_ticker, "Other")
+        sector_totals[sector] = sector_totals.get(sector, 0) + mv
+        industry_totals[industry] = industry_totals.get(industry, 0) + mv
+        total_mv += mv
+
+    if total_mv == 0:
+        return {"sectors": [], "industries": []}
+
+    sectors = sorted(
+        [{"name": s, "value_eur": round(v, 2), "pct": round(v / total_mv * 100, 1)}
+         for s, v in sector_totals.items()],
+        key=lambda x: x["value_eur"], reverse=True,
+    )
+    industries = sorted(
+        [{"name": i, "value_eur": round(v, 2), "pct": round(v / total_mv * 100, 1)}
+         for i, v in industry_totals.items()],
+        key=lambda x: x["value_eur"], reverse=True,
+    )
+    return {"sectors": sectors, "industries": industries}
+
+
+def _compute_correlation_matrix(conn: sqlite3.Connection | None,
+                                positions: list) -> dict | None:
+    """Compute pairwise return correlation matrix for current holdings."""
+    if not conn or not positions:
+        return None
+
+    import numpy as np
+
+    # Get tickers with enough weight (top 15 by market value, skip tiny positions)
+    sorted_pos = sorted(positions,
+                        key=lambda p: p.market_value_eur if hasattr(p, 'market_value_eur') else p.get('market_value_eur', 0),
+                        reverse=True)
+    tickers = []
+    for p in sorted_pos[:15]:
+        ticker = p.ticker if hasattr(p, 'ticker') else p.get('ticker', '')
+        if ticker:
+            tickers.append(ticker)
+
+    if len(tickers) < 2:
+        return None
+
+    # Load daily prices (last 1 year) for each ticker
+    from datetime import date as _date, timedelta as _td
+    one_year_ago = (_date.today() - _td(days=365)).isoformat()
+
+    # Load FX rates for USD→EUR conversion
+    fx_rows = conn.execute(
+        "SELECT date, eur_usd FROM fx_rates WHERE date >= ? ORDER BY date",
+        (one_year_ago,)
+    ).fetchall()
+    fx_map = {r[0]: r[1] for r in fx_rows}
+
+    def eur_usd_for(dt: str) -> float:
+        for i in range(5):
+            d = (_date.fromisoformat(dt) - _td(days=i)).isoformat()
+            if d in fx_map:
+                return fx_map[d]
+        return 1.1
+
+    price_series = {}
+    for ticker in tickers:
+        db_ticker = ticker
+        for prefix in ("CFD:", "CRYPTO:", "SAVINGS:"):
+            if ticker.startswith(prefix):
+                db_ticker = ticker[len(prefix):]
+                break
+        rows = conn.execute(
+            "SELECT date, close, currency FROM daily_prices WHERE ticker = ? AND date >= ? ORDER BY date",
+            (db_ticker, one_year_ago)
+        ).fetchall()
+        if len(rows) < 30:  # need minimum data for meaningful correlation
+            continue
+        prices = {}
+        for r in rows:
+            price = r[1] / eur_usd_for(r[0]) if r[2] != "EUR" else r[1]
+            prices[r[0]] = price
+        price_series[ticker] = prices
+
+    valid_tickers = [t for t in tickers if t in price_series]
+    if len(valid_tickers) < 2:
+        return None
+
+    # Align dates: use intersection of all dates
+    all_dates = set(price_series[valid_tickers[0]].keys())
+    for tk in valid_tickers[1:]:
+        all_dates &= set(price_series[tk].keys())
+    sorted_dates = sorted(all_dates)
+
+    if len(sorted_dates) < 30:
+        return None
+
+    # Build returns matrix
+    n = len(valid_tickers)
+    returns_matrix = []
+    for tk in valid_tickers:
+        prices = [price_series[tk][d] for d in sorted_dates]
+        returns = []
+        for i in range(1, len(prices)):
+            if prices[i - 1] > 0:
+                returns.append((prices[i] - prices[i - 1]) / prices[i - 1])
+            else:
+                returns.append(0)
+        returns_matrix.append(returns)
+
+    # Compute correlation matrix
+    arr = np.array(returns_matrix)
+    corr = np.corrcoef(arr)
+
+    # Convert to serializable format
+    matrix = []
+    for i in range(n):
+        row = []
+        for j in range(n):
+            val = float(corr[i][j])
+            if np.isnan(val):
+                val = 0.0
+            row.append(round(val, 2))
+        matrix.append(row)
+
+    return {
+        "tickers": valid_tickers,
+        "matrix": matrix,
+        "data_points": len(sorted_dates),
+    }
+
+
 def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                            per_class: dict | None = None,
                            real_estate: dict | None = None,
                            fire_config: dict | None = None,
                            investment_notes: list[dict] | None = None,
-                           conn: sqlite3.Connection | None = None) -> dict:
+                           conn: sqlite3.Connection | None = None,
+                           country: str = "SI") -> dict:
     """Convert analytics/tax results + transactions to JSON-safe dict."""
+    from .tax_regimes import get_regime, REGIMES
+    from .i18n import get_translations, get_locale_for_country
+
+    regime = get_regime(country)
+    lang = get_locale_for_country(country)
+
     daily = analytics.daily_series
     data = {
         "scope": analytics.scope,
+        "country": country,
+        "locale": regime.locale,
+        "currency": regime.currency,
+        "lang": lang,
+        "regime": {
+            "country_code": regime.country_code,
+            "country_name": regime.country_name,
+            "currency": regime.currency,
+            "locale": regime.locale,
+            "description": regime.description,
+            "netting": regime.netting,
+            "std_cost_rate": regime.std_cost_rate,
+            "std_cost_rate_leveraged": regime.std_cost_rate_leveraged,
+            "crypto_exemption_threshold": regime.crypto_exemption_threshold,
+            "crypto_exemption_type": regime.crypto_exemption_type,
+            "crypto_holding_exempt_years": regime.crypto_holding_exempt_years,
+            "dividend_tax_rate": regime.dividend_tax_rate,
+            "flat_rate": regime.flat_rate,
+            "legal_refs": regime.legal_refs,
+            "stock_brackets": [{"min_years": b.min_years, "rate": b.rate} for b in regime.stock_brackets],
+            "cfd_brackets": [{"min_years": b.min_years, "rate": b.rate} for b in regime.cfd_brackets],
+            "crypto_brackets": [{"min_years": b.min_years, "rate": b.rate} for b in regime.crypto_brackets],
+            "savings_brackets": [{"min_years": b.min_years, "rate": b.rate} for b in regime.savings_brackets],
+        },
+        "available_regimes": [
+            {"code": r.country_code, "name": r.country_name, "currency": r.currency}
+            for r in REGIMES.values()
+        ],
+        "i18n": get_translations(lang),
         "start_date": analytics.start_date,
         "end_date": analytics.end_date,
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -253,6 +555,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
             "max_drawdown_pct": round(analytics.max_drawdown_pct, 2),
             "max_drawdown_peak_date": analytics.max_drawdown_peak_date,
             "max_drawdown_trough_date": analytics.max_drawdown_trough_date,
+            "risk_metrics": analytics.risk_metrics,
         },
         "gains": {
             "realized_eur": round(analytics.total_realized_gain_eur, 2),
@@ -310,6 +613,13 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
             key=lambda x: abs(x["realized_gain_eur"]),
             reverse=True,
         ),
+        "position_lots": {
+            ticker: [
+                {"qty": round(qty, 4), "cost_eur": round(cost, 4), "date": date}
+                for qty, cost, date in lots
+            ]
+            for ticker, lots in analytics.position_lots.items()
+        },
         "tax": None,
         "transactions": [
             {
@@ -338,7 +648,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
 
     # Tax data — keyed by year so the client can switch years
     def _ser_tax(t) -> dict:
-        return {
+        d = {
             "year": t.year,
             "total_dividends_eur": round(t.total_dividends_eur, 2),
             "total_fees_eur": round(t.total_fees_eur, 2),
@@ -359,6 +669,22 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                 for s in t.realized_sales
             ],
         }
+        if t.harvest_candidates:
+            d["harvest_candidates"] = [
+                {
+                    "ticker": c.ticker,
+                    "asset_class": c.asset_class,
+                    "quantity": round(c.quantity, 4),
+                    "cost_basis_eur": round(c.cost_basis_eur, 2),
+                    "market_value_eur": round(c.market_value_eur, 2),
+                    "unrealized_loss_eur": round(c.unrealized_loss_eur, 2),
+                    "tax_rate": round(c.tax_rate, 2),
+                    "potential_tax_saving_eur": round(c.potential_tax_saving_eur, 2),
+                    "avg_holding_years": round(c.avg_holding_years, 1),
+                }
+                for c in t.harvest_candidates
+            ]
+        return d
 
     if tax_by_year:
         data["tax_by_year"] = {str(yr): _ser_tax(t) for yr, t in tax_by_year.items()}
@@ -385,6 +711,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                     "max_drawdown_pct": round(ac_analytics.max_drawdown_pct, 2),
                     "max_drawdown_peak_date": ac_analytics.max_drawdown_peak_date,
                     "max_drawdown_trough_date": ac_analytics.max_drawdown_trough_date,
+                    "risk_metrics": ac_analytics.risk_metrics,
                 },
                 "gains": {
                     "realized_eur": round(ac_analytics.total_realized_gain_eur, 2),
@@ -424,16 +751,33 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                     key=lambda x: abs(x["realized_gain_eur"]),
                     reverse=True,
                 ),
+                "position_lots": {
+                    ticker: [
+                        {"qty": round(qty, 4), "cost_eur": round(cost, 4), "date": date}
+                        for qty, cost, date in lots
+                    ]
+                    for ticker, lots in ac_analytics.position_lots.items()
+                },
             }
 
     data["real_estate"] = real_estate or {}
     data["fire"] = fire_config  # full config dict or None (replaces old fire_target)
     data["investment_notes"] = investment_notes or []
+    data["dividends"] = _query_dividend_data(conn)
 
     # Price history and company names for expandable position rows
     pos_tickers = [p["ticker"] for p in data["positions"]]
     data["position_price_history"] = _query_position_price_history(conn, pos_tickers)
     data["company_names"] = _query_company_names(conn, pos_tickers)
+
+    # Currency exposure
+    data["currency_exposure"] = _query_currency_exposure(conn, analytics.positions)
+
+    # Sector/industry allocation
+    data["sector_allocation"] = _query_sector_allocation(conn, analytics.positions)
+
+    # Correlation matrix
+    data["correlation"] = _compute_correlation_matrix(conn, analytics.positions)
 
     return data
 
@@ -443,11 +787,13 @@ def generate_html_report(analytics, tax_by_year, transactions: list[dict],
                          real_estate: dict | None = None,
                          fire_config: dict | None = None,
                          investment_notes: list[dict] | None = None,
-                         conn: sqlite3.Connection | None = None) -> str:
+                         conn: sqlite3.Connection | None = None,
+                         country: str = "SI") -> str:
     """Generate a self-contained HTML report."""
     data = _serialize_report_data(analytics, tax_by_year, transactions, per_class=per_class,
                                   real_estate=real_estate, fire_config=fire_config,
-                                  investment_notes=investment_notes, conn=conn)
+                                  investment_notes=investment_notes, conn=conn,
+                                  country=country)
 
     template = _env.get_template("report.html.j2")
     return template.render(

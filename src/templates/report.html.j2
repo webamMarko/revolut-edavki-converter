@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Apply saved theme before paint to avoid flash -->
-<script>(function(){var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
+<script>(function(){var t=localStorage.getItem('theme');if(!t&&window.matchMedia&&window.matchMedia('(prefers-color-scheme:light)').matches)t='light';if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
 <title>{{ title }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -32,6 +32,9 @@
     <div class="page" id="page-positions">
       {% include "sections/positions.html.j2" %}
     </div>
+    <div class="page" id="page-dividends">
+      {% include "sections/dividends.html.j2" %}
+    </div>
     <div class="page" id="page-notes">
       {% include "sections/notes.html.j2" %}
     </div>
@@ -58,11 +61,13 @@
 {% include "assets/sections/summary.js" %}
 {% include "assets/sections/gains.js" %}
 {% include "assets/sections/positions.js" %}
+{% include "assets/sections/dividends.js" %}
 {% include "assets/sections/benchmark_table.js" %}
 {% include "assets/sections/tax.js" %}
 {% include "assets/sections/transactions.js" %}
 {% include "assets/sections/real_estate.js" %}
 {% include "assets/sections/notes.js" %}
+{% include "assets/sections/monte_carlo.js" %}
 {% include "assets/nav.js" %}
 
 // --- Initial render ---
@@ -71,7 +76,10 @@ portfolioChart = buildPortfolioChart();
 benchmarkChart = buildBenchmarkChart();
 updateAll();
 buildHeatmap();
+buildDrawdownChart();
 buildYearlyHeatmap();
+buildYearlyTable();
+buildRollingReturns();
 </script>
 </body>
 </html>

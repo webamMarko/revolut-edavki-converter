@@ -1,4 +1,4 @@
-"""Slovenian capital gains tax computation."""
+"""Capital gains tax computation with multi-country regime support."""
 
 import sqlite3
 from collections import defaultdict
@@ -6,62 +6,56 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from .importer import normalize_date
+from .tax_regimes import TaxRegime, get_regime, get_tax_rate, DEFAULT_REGIME, REGIMES
 
 
-def slovenian_tax_rate(holding_years: float) -> float:
-    """Return the Slovenian capital gains tax rate for stocks/crypto/savings.
+def _get_stock_rate(regime: TaxRegime, holding_years: float) -> float:
+    return get_tax_rate(regime.stock_brackets, holding_years)
 
-    - 0–5 years:   25%
-    - 5–10 years:  20%
-    - 10–15 years: 15%
-    - 15–20 years: 10%
-    - 20+ years:    0%
-    """
-    if holding_years >= 20:
-        return 0.0
-    elif holding_years >= 15:
-        return 0.10
-    elif holding_years >= 10:
-        return 0.15
-    elif holding_years >= 5:
-        return 0.20
+
+def _get_cfd_rate(regime: TaxRegime, holding_years: float) -> float:
+    return get_tax_rate(regime.cfd_brackets, holding_years)
+
+
+def _get_crypto_rate(regime: TaxRegime, holding_years: float) -> float:
+    return get_tax_rate(regime.crypto_brackets, holding_years)
+
+
+def _get_savings_rate(regime: TaxRegime, holding_years: float) -> float:
+    return get_tax_rate(regime.savings_brackets, holding_years)
+
+
+def _get_rate_for_class(regime: TaxRegime, asset_class: str, holding_years: float) -> float:
+    if asset_class == "cfd":
+        return _get_cfd_rate(regime, holding_years)
+    elif asset_class == "crypto":
+        return _get_crypto_rate(regime, holding_years)
+    elif asset_class == "savings":
+        return _get_savings_rate(regime, holding_years)
     else:
-        return 0.25
+        return _get_stock_rate(regime, holding_years)
+
+
+def standardized_costs(cost_basis_eur: float, proceeds_eur: float, leveraged: bool,
+                       regime: TaxRegime | None = None) -> float:
+    """Return standardized cost allowance that reduces the tax base.
+
+    Uses regime-specific rates if provided, otherwise defaults to Slovenian rates.
+    """
+    if regime:
+        rate = regime.std_cost_rate_leveraged if leveraged else regime.std_cost_rate
+    else:
+        rate = 0.0025 if leveraged else 0.01
+    return rate * (cost_basis_eur + proceeds_eur)
+
+
+# Backwards compatibility aliases
+def slovenian_tax_rate(holding_years: float) -> float:
+    return _get_stock_rate(get_regime("SI"), holding_years)
 
 
 def slovenian_cfd_tax_rate(holding_years: float) -> float:
-    """Return the Slovenian tax rate for derivative financial instruments (CFDs).
-
-    Source: FURS – Odsvojil sem izvedene finančne instrumente (effective 2020-01-01)
-    - < 1 year:    40%
-    - 1–5 years:   27.5%
-    - 5–10 years:  20%
-    - 10–15 years: 15%
-    - 15–20 years: 10%
-    - 20+ years:    0%
-    """
-    if holding_years >= 20:
-        return 0.0
-    elif holding_years >= 15:
-        return 0.10
-    elif holding_years >= 10:
-        return 0.15
-    elif holding_years >= 5:
-        return 0.20
-    elif holding_years >= 1:
-        return 0.275
-    else:
-        return 0.40
-
-
-def standardized_costs(cost_basis_eur: float, proceeds_eur: float, leveraged: bool) -> float:
-    """Return Slovenian standardized cost allowance that reduces the tax base.
-
-    Source: FURS – 0.25% of acquisition + 0.25% of disposal for leveraged instruments;
-    1% + 1% for regular instruments. Reduces only a positive gain, cannot exceed it.
-    """
-    rate = 0.0025 if leveraged else 0.01
-    return rate * (cost_basis_eur + proceeds_eur)
+    return _get_cfd_rate(get_regime("SI"), holding_years)
 
 
 @dataclass
@@ -92,6 +86,19 @@ class UnrealizedTaxDetail:
 
 
 @dataclass
+class TaxLossHarvestCandidate:
+    ticker: str
+    asset_class: str
+    quantity: float
+    cost_basis_eur: float
+    market_value_eur: float
+    unrealized_loss_eur: float    # negative = loss
+    tax_rate: float
+    potential_tax_saving_eur: float  # positive = money saved
+    avg_holding_years: float
+
+
+@dataclass
 class TaxReport:
     year: int
     # Realized
@@ -111,15 +118,22 @@ class TaxReport:
     total_tax_eur: float
     # Scope
     scope: str
+    # Country regime used
+    country: str = "SI"
+    # Tax-loss harvesting candidates
+    harvest_candidates: list[TaxLossHarvestCandidate] | None = None
 
 
 def compute_tax_report(conn: sqlite3.Connection, year: int,
                        include_unrealized: bool = False,
-                       scope: str = "all") -> TaxReport:
-    """Compute Slovenian capital gains tax for a fiscal year.
+                       scope: str = "all",
+                       country: str = DEFAULT_REGIME) -> TaxReport:
+    """Compute capital gains tax for a fiscal year using the specified country's regime.
 
     scope: 'stock', 'cfd', 'crypto', or 'all'
+    country: ISO 3166-1 alpha-2 code (default: SI for Slovenia)
     """
+    regime = get_regime(country)
     # Real estate (asset_class='realestate') is taxed under a separate Slovenian form
     # (Doh-Nepremičnine) and must not be included in this Doh-KDVP calculation.
     if scope == "all":
@@ -190,10 +204,10 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     holding_years = holding_days / 365.25
 
                     if buy_date.year == year:
-                        rate = slovenian_cfd_tax_rate(holding_years) if is_cfd_tx else slovenian_tax_rate(holding_years)
+                        rate = _get_rate_for_class(regime, tx["asset_class"] or "stock", holding_years)
                         proceeds = matched * s_pps
                         basis = matched * pps_eur
-                        std_c = standardized_costs(basis, proceeds, leveraged=is_cfd_tx)
+                        std_c = standardized_costs(basis, proceeds, leveraged=is_cfd_tx, regime=regime)
                         gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
                         tax = max(0, gain_for_tax * rate)
                         realized_sales.append(SaleTaxDetail(
@@ -265,8 +279,8 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     holding_days = weighted_buy_date_sum / sold_qty if sold_qty > 0 else 0
                     holding_years = holding_days / 365.25
                     gain = amount_eur - total_cost
-                    rate = slovenian_tax_rate(holding_years)
-                    std_c = standardized_costs(total_cost, amount_eur, leveraged=False)
+                    rate = _get_crypto_rate(regime, holding_years)
+                    std_c = standardized_costs(total_cost, amount_eur, leveraged=False, regime=regime)
                     gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
                     tax = max(0, gain_for_tax * rate)
                     realized_sales.append(SaleTaxDetail(
@@ -309,8 +323,8 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     holding_days = weighted_buy_date_sum / sold_qty if sold_qty > 0 else 0
                     holding_years = holding_days / 365.25
                     gain = amount_eur - total_cost
-                    rate = slovenian_tax_rate(holding_years)
-                    std_c = standardized_costs(total_cost, amount_eur, leveraged=False)
+                    rate = _get_savings_rate(regime, holding_years)
+                    std_c = standardized_costs(total_cost, amount_eur, leveraged=False, regime=regime)
                     gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
                     tax = max(0, gain_for_tax * rate)
                     realized_sales.append(SaleTaxDetail(
@@ -340,10 +354,10 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     holding_years = holding_days / 365.25
 
                     if sell_date.year == year:
-                        rate = slovenian_cfd_tax_rate(holding_years) if is_cfd_tx else slovenian_tax_rate(holding_years)
+                        rate = _get_rate_for_class(regime, tx["asset_class"] or "stock", holding_years)
                         proceeds = matched * pps_eur
                         basis = matched * l_pps
-                        std_c = standardized_costs(basis, proceeds, leveraged=is_cfd_tx)
+                        std_c = standardized_costs(basis, proceeds, leveraged=is_cfd_tx, regime=regime)
                         gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
                         tax = max(0, gain_for_tax * rate)
                         realized_sales.append(SaleTaxDetail(
@@ -403,8 +417,8 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     holding_days = weighted_buy_date_sum / sold_qty if sold_qty > 0 else 0
                     holding_years = holding_days / 365.25
                     gain = amount_eur - total_cost
-                    rate = slovenian_tax_rate(holding_years)
-                    std_c = standardized_costs(total_cost, amount_eur, leveraged=False)
+                    rate = _get_stock_rate(regime, holding_years)
+                    std_c = standardized_costs(total_cost, amount_eur, leveraged=False, regime=regime)
                     gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
                     tax = max(0, gain_for_tax * rate)
 
@@ -466,8 +480,8 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     cost = sum(lq * lc for lq, lc, _ in fifo_lots.get(ticker, []))
                     gain = amount_eur - cost
                     is_cfd_tx = tx.get("asset_class") == "cfd"
-                    rate = slovenian_cfd_tax_rate(0) if is_cfd_tx else slovenian_tax_rate(0)
-                    std_c = standardized_costs(cost, amount_eur, leveraged=is_cfd_tx)
+                    rate = _get_rate_for_class(regime, tx["asset_class"] or "stock", 0)
+                    std_c = standardized_costs(cost, amount_eur, leveraged=is_cfd_tx, regime=regime)
                     gain_for_tax = max(0, gain - std_c) if gain > 0 else gain
                     tax = max(0, gain_for_tax * rate)
                     realized_sales.append(SaleTaxDetail(
@@ -544,7 +558,10 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
             avg_years = (weighted_days / total_qty / 365.25) if total_qty > 0 else 0
 
             is_cfd_ticker = is_cfd_scope or ticker.startswith("CFD:")
-            rate = slovenian_cfd_tax_rate(avg_years) if is_cfd_ticker else slovenian_tax_rate(avg_years)
+            is_crypto_ticker = ticker.startswith("CRYPTO:")
+            is_savings_ticker = ticker.startswith("SAVINGS:")
+            ac = "cfd" if is_cfd_ticker else "crypto" if is_crypto_ticker else "savings" if is_savings_ticker else "stock"
+            rate = _get_rate_for_class(regime, ac, avg_years)
             tax = max(0, gain * rate)
 
             unrealized_positions.append(UnrealizedTaxDetail(
@@ -556,21 +573,89 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
             total_unrealized_gain += gain
             total_unrealized_tax += tax
 
+    # --- Tax-loss harvesting candidates ---
+    # Find positions with unrealized losses that could offset realized gains
+    harvest_candidates = []
+    today = datetime.now()
+    for ticker, qty in sorted(holdings.items()):
+        if abs(qty) < 1e-10:
+            continue
+        lots = fifo_lots.get(ticker, [])
+        if not lots:
+            continue
+
+        # Get current price
+        row = conn.execute(
+            "SELECT close, currency FROM daily_prices WHERE ticker = ? ORDER BY date DESC LIMIT 1",
+            (ticker,)
+        ).fetchone()
+        if not row:
+            continue
+
+        close, currency = row[0], row[1]
+        fx_row = conn.execute(
+            "SELECT eur_usd FROM fx_rates ORDER BY date DESC LIMIT 1"
+        ).fetchone()
+        fx_rate = fx_row[0] if fx_row else 1.10
+        price_eur = close / fx_rate if currency != "EUR" else close
+        market_value = qty * price_eur
+        cost = sum(lq * lc for lq, lc, _ in lots)
+        unrealized = market_value - cost
+
+        # Only include positions with losses
+        if unrealized >= 0:
+            continue
+
+        # Weighted average holding period
+        weighted_days = sum(
+            lq * (today - datetime.strptime(ld, "%Y-%m-%d")).days
+            for lq, lc, ld in lots
+        )
+        total_qty = sum(lq for lq, _, _ in lots)
+        avg_years = (weighted_days / total_qty / 365.25) if total_qty > 0 else 0
+
+        is_cfd_ticker = is_cfd_scope or ticker.startswith("CFD:")
+        is_crypto_ticker = ticker.startswith("CRYPTO:")
+        is_savings_ticker = ticker.startswith("SAVINGS:")
+        ac = "cfd" if is_cfd_ticker else "crypto" if is_crypto_ticker else "savings" if is_savings_ticker else "stock"
+        rate = _get_rate_for_class(regime, ac, avg_years)
+        potential_saving = abs(unrealized) * rate
+
+        if potential_saving > 0.01:  # skip trivial amounts
+            harvest_candidates.append(TaxLossHarvestCandidate(
+                ticker=ticker,
+                asset_class=ac,
+                quantity=qty,
+                cost_basis_eur=round(cost, 2),
+                market_value_eur=round(market_value, 2),
+                unrealized_loss_eur=round(unrealized, 2),
+                tax_rate=rate,
+                potential_tax_saving_eur=round(potential_saving, 2),
+                avg_holding_years=round(avg_years, 1),
+            ))
+
+    # Sort by potential saving descending
+    harvest_candidates.sort(key=lambda c: c.potential_tax_saving_eur, reverse=True)
+
     total_realized_gain = sum(s.gain_eur for s in realized_sales)
 
-    # Net gains/losses per asset class — losses within a class offset gains within
-    # the same class, but asset classes never mix (stock losses don't offset CFD gains etc.).
-    # Bucket key is (asset_class, tax_rate) so different holding-period brackets within
-    # the same class also stay separate.
+    # Net gains/losses — netting rules depend on the regime
     buckets: dict[tuple, float] = defaultdict(float)
     for s in realized_sales:
         gain_after_costs = s.gain_eur - s.std_costs_eur if s.gain_eur > 0 else s.gain_eur
-        buckets[(s.asset_class, s.tax_rate)] += gain_after_costs
+        if regime.netting == "all_classes":
+            # All asset classes net against each other within same rate bucket
+            buckets[("all", s.tax_rate)] += gain_after_costs
+        else:
+            # Per-class netting (default): losses within a class offset gains within
+            # the same class, but asset classes never mix
+            buckets[(s.asset_class, s.tax_rate)] += gain_after_costs
 
-    # Slovenian crypto exemption: if total net crypto gain for the year is < 5000 EUR,
-    # the entire crypto gain is tax-free (Zakon o dohodnini, čl. 97).
-    total_crypto_net = sum(net for (ac, _), net in buckets.items() if ac == "crypto")
-    crypto_exempt = total_crypto_net < 5000.0
+    # Crypto exemption check (regime-dependent)
+    crypto_exempt = False
+    if regime.crypto_exemption_type == "threshold" and regime.crypto_exemption_threshold is not None:
+        total_crypto_net = sum(net for (ac, _), net in buckets.items() if ac == "crypto")
+        crypto_exempt = total_crypto_net < regime.crypto_exemption_threshold
 
     total_realized_tax = sum(
         max(0, net) * rate
@@ -591,4 +676,6 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
         total_fees_eur=total_fees,
         total_tax_eur=total_realized_tax,  # realized only; unrealized is informational
         scope=scope,
+        country=country,
+        harvest_candidates=harvest_candidates if harvest_candidates else None,
     )

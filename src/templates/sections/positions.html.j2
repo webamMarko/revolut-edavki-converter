@@ -1,5 +1,68 @@
+<div class="two-col" id="chartsRow">
+  <section class="card" id="allocationSection" style="display:none">
+    <h2>Portfolio Allocation</h2>
+    <div class="allocation-wrap">
+      <div class="allocation-chart-col">
+        <canvas id="allocationChart"></canvas>
+      </div>
+      <div class="allocation-legend" id="allocationLegend"></div>
+    </div>
+  </section>
+  <section class="card" id="currencySection" style="display:none">
+    <h2>Currency Exposure</h2>
+    <div class="allocation-wrap">
+      <div class="allocation-chart-col">
+        <canvas id="currencyChart"></canvas>
+      </div>
+      <div class="allocation-legend" id="currencyLegend"></div>
+    </div>
+  </section>
+</div>
+
+<div class="two-col" id="sectorRow" style="display:none">
+  <section class="card" id="sectorSection">
+    <h2 id="sectorTitle">Sector Allocation</h2>
+    <div class="allocation-wrap">
+      <div class="allocation-chart-col">
+        <canvas id="sectorChart"></canvas>
+      </div>
+      <div class="allocation-legend" id="sectorLegend"></div>
+    </div>
+  </section>
+  <section class="card" id="industrySection">
+    <h2 id="industryTitle">Industry Breakdown</h2>
+    <div class="table-scroll">
+      <table id="industryTable" class="data-table sortable"></table>
+    </div>
+  </section>
+</div>
+
+<section class="card" id="concentrationSection" style="display:none">
+  <h2>Diversification</h2>
+  <div id="concentrationCards" class="card-grid"></div>
+</section>
+
+<section class="card" id="correlationSection" style="display:none">
+  <h2 id="correlationTitle">Position Correlations</h2>
+  <p id="correlationDesc" style="color:var(--muted);font-size:0.8rem;margin:-0.5rem 0 0.75rem"></p>
+  <div class="table-scroll" id="correlationGrid"></div>
+</section>
+
+<section class="card" id="attributionSection" style="display:none">
+  <h2>Performance Attribution</h2>
+  <div class="table-scroll">
+    <table id="attributionTable" class="data-table sortable"></table>
+  </div>
+</section>
+
 <section class="card" id="positionsSection" style="display:none">
-  <h2>Current Positions</h2>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem">
+    <h2 style="margin:0">Current Positions</h2>
+    <div style="display:flex;gap:0.4rem">
+      <button id="simulateBtn" class="tax-export-btn" style="font-size:0.72rem;padding:0.3rem 0.7rem">Simulate</button>
+      <button id="exportPositionsBtn" class="tax-export-btn" style="font-size:0.72rem;padding:0.3rem 0.7rem">Export CSV</button>
+    </div>
+  </div>
   <div class="table-scroll">
     <table id="positionsTable" class="data-table sortable"></table>
   </div>
@@ -9,5 +72,33 @@
   <h2>Closed Positions</h2>
   <div class="table-scroll">
     <table id="closedPositionsTable" class="data-table sortable"></table>
+  </div>
+</section>
+
+<section class="card" id="simulatorSection" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem">
+    <h2 style="margin:0" id="simTitle">What-If Simulator</h2>
+    <div style="display:flex;gap:0.4rem">
+      <button id="simResetBtn" class="tax-export-btn" style="font-size:0.72rem;padding:0.3rem 0.7rem">Reset</button>
+      <button id="simCloseBtn" class="tax-export-btn" style="font-size:0.72rem;padding:0.3rem 0.7rem">Close</button>
+    </div>
+  </div>
+  <p id="simDesc" style="color:var(--muted);font-size:0.8rem;margin:0 0 1rem"></p>
+  <div class="two-col">
+    <div>
+      <div id="simCards" class="card-grid small" style="margin-bottom:0.75rem"></div>
+      <div class="table-scroll">
+        <table id="simTable" class="data-table"></table>
+      </div>
+    </div>
+    <div>
+      <h3 id="simAllocTitle" style="margin:0 0 0.5rem">Resulting Allocation</h3>
+      <div class="allocation-wrap">
+        <div class="allocation-chart-col">
+          <canvas id="simChart"></canvas>
+        </div>
+        <div class="allocation-legend" id="simLegend"></div>
+      </div>
+    </div>
   </div>
 </section>

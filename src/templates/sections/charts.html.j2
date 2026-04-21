@@ -9,4 +9,20 @@
       <div class="heatmap-wrap"><div id="yearly-heatmap"></div></div>
     </section>
   </div>
+  <section class="card chart-section" id="drawdownSection" style="display:none">
+    <h2>Drawdown from Peak</h2>
+    <div class="chart-wrap" style="height:200px"><canvas id="drawdownChart"></canvas></div>
+  </section>
+
+  <section class="card chart-section" id="rollingReturnsSection" style="display:none">
+    <h2>Rolling 1-Year Returns</h2>
+    <div class="chart-wrap" style="height:240px"><canvas id="rollingReturnsChart"></canvas></div>
+  </section>
+
+  <section class="card" id="yearlyTableSection">
+    <h2>Annual Summary</h2>
+    <div class="table-scroll">
+      <table id="yearlyTable" class="data-table sortable"></table>
+    </div>
+  </section>
 </div>

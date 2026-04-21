@@ -60,11 +60,14 @@ class AnalyticsResult:
     # Positions
     positions: list[PositionDetail]
     closed_positions: list[ClosedPositionDetail]
+    position_lots: dict  # ticker -> [(qty, cost_per_share_eur, date)]
     # Benchmarks
     benchmarks: list[BenchmarkComparison]
     # Daily series (for export and charting)
     daily_series: pd.DataFrame
     benchmark_series: dict  # ticker -> pd.Series of rebased values
+    # Risk metrics
+    risk_metrics: dict
     # Period
     start_date: str
     end_date: str
@@ -841,6 +844,9 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             realized_gain_pct=gain_pct,
         ))
 
+    # Risk metrics (Sharpe, Sortino, volatility, etc.)
+    risk_metrics = _compute_risk_metrics(daily_df)
+
     # Benchmark comparisons (skip for CFD/savings/realestate scope)
     if is_cfd or is_savings or is_realestate:
         benchmarks, benchmark_series = [], {}
@@ -863,9 +869,11 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
         total_fees_eur=total_fees,
         positions=positions,
         closed_positions=closed_positions,
+        position_lots={t: list(lots) for t, lots in fifo_lots.items() if lots and abs(holdings.get(t, 0)) > 1e-10},
         benchmarks=benchmarks,
         daily_series=daily_df,
         benchmark_series=benchmark_series,
+        risk_metrics=risk_metrics,
         start_date=period_start,
         end_date=period_end,
         scope=scope,
@@ -884,6 +892,110 @@ def _get_current_value_eur(ticker: str, date_str: str, conn: sqlite3.Connection,
     if currency == "EUR":
         return close
     return close / fx_rate
+
+
+def _compute_risk_metrics(daily_df: pd.DataFrame) -> dict:
+    """Compute risk metrics from the perf_index (TWR-adjusted) daily series.
+
+    Returns dict with: volatility_pct, sharpe_ratio, sortino_ratio,
+    best_day_pct, worst_day_pct, best_month_pct, worst_month_pct,
+    positive_days_pct, calmar_ratio.
+    """
+    import numpy as np
+
+    empty = {
+        "volatility_pct": None, "sharpe_ratio": None, "sortino_ratio": None,
+        "best_day_pct": None, "worst_day_pct": None,
+        "best_month_pct": None, "worst_month_pct": None,
+        "positive_days_pct": None, "calmar_ratio": None,
+    }
+
+    pi = daily_df["perf_index"] if "perf_index" in daily_df.columns else None
+    if pi is None or len(pi) < 30:
+        return empty
+
+    # Filter to positive values only (skip warmup zeros)
+    pi = pi[pi > 0]
+    if len(pi) < 30:
+        return empty
+
+    values = pi.values
+    # Daily returns from perf_index
+    daily_returns = np.diff(values) / values[:-1]
+    daily_returns = daily_returns[np.isfinite(daily_returns)]
+    if len(daily_returns) < 20:
+        return empty
+
+    # Annualized volatility
+    vol_daily = float(np.std(daily_returns, ddof=1))
+    vol_annual = vol_daily * np.sqrt(252) * 100
+
+    # Mean daily return
+    mean_daily = float(np.mean(daily_returns))
+    mean_annual = mean_daily * 252
+
+    # Risk-free rate assumption: 3% annually
+    rf_annual = 0.03
+    rf_daily = rf_annual / 252
+
+    # Sharpe ratio (annualized)
+    sharpe = None
+    if vol_daily > 1e-10:
+        sharpe = round((mean_annual - rf_annual) / (vol_daily * np.sqrt(252)), 2)
+
+    # Sortino ratio (uses downside deviation only)
+    sortino = None
+    downside = daily_returns[daily_returns < rf_daily]
+    if len(downside) > 5:
+        downside_std = float(np.std(downside, ddof=1))
+        if downside_std > 1e-10:
+            sortino = round((mean_annual - rf_annual) / (downside_std * np.sqrt(252)), 2)
+
+    # Best / worst day
+    best_day = float(np.max(daily_returns)) * 100
+    worst_day = float(np.min(daily_returns)) * 100
+
+    # Monthly returns from perf_index
+    dates = pi.index.tolist()
+    monthly_returns = []
+    month_start_val = values[0]
+    current_month = str(dates[0])[:7]
+    for i in range(1, len(values)):
+        m = str(dates[i])[:7]
+        if m != current_month:
+            if month_start_val > 0:
+                monthly_returns.append((values[i - 1] / month_start_val - 1) * 100)
+            month_start_val = values[i - 1]
+            current_month = m
+    # Final partial month
+    if month_start_val > 0 and len(values) > 1:
+        monthly_returns.append((values[-1] / month_start_val - 1) * 100)
+
+    best_month = max(monthly_returns) if monthly_returns else None
+    worst_month = min(monthly_returns) if monthly_returns else None
+
+    # Positive days %
+    pos_days = float(np.sum(daily_returns > 0) / len(daily_returns) * 100)
+
+    # Calmar ratio: annualized return / abs(max drawdown)
+    calmar = None
+    dd_peak = np.maximum.accumulate(values)
+    dd = (values - dd_peak) / dd_peak
+    max_dd = float(np.min(dd))
+    if abs(max_dd) > 1e-10:
+        calmar = round(mean_annual / abs(max_dd), 2)
+
+    return {
+        "volatility_pct": round(vol_annual, 2),
+        "sharpe_ratio": sharpe,
+        "sortino_ratio": sortino,
+        "best_day_pct": round(best_day, 2),
+        "worst_day_pct": round(worst_day, 2),
+        "best_month_pct": round(best_month, 2) if best_month is not None else None,
+        "worst_month_pct": round(worst_month, 2) if worst_month is not None else None,
+        "positive_days_pct": round(pos_days, 1),
+        "calmar_ratio": calmar,
+    }
 
 
 def _compute_twr(daily_df: pd.DataFrame, cash_flows: list, period_start: str) -> float | None:

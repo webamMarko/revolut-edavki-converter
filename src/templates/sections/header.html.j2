@@ -5,7 +5,10 @@
   </button>
 </div>
 <div class="mobile-filters" id="mobileFilters" style="display:none">
-  <div id="mobileAssetToggles" class="mobile-filter-row"></div>
+  <div class="mobile-filter-row">
+    <select id="mobileRegimeSelect" class="regime-select" style="max-width:160px;flex-shrink:0"></select>
+    <div id="mobileAssetToggles" class="mobile-filter-row" style="flex:1"></div>
+  </div>
   <div id="mobileFireRow" class="mobile-filter-row mobile-fire-row" style="display:none">
     <span class="mobile-fire-label">Projections</span>
     <div id="mobileFireToggleBtn" class="toggle-btn toggle-fire">FIRE</div>
@@ -27,8 +30,15 @@
     <div class="brand-dates">{{ start_date }} &ndash; {{ end_date }}</div>
   </div>
 
+  <div id="regimeFilter" class="sidebar-filter-block">
+    <div class="filter-label" id="regimeFilterLabel">Tax Country</div>
+    <select id="regimeSelect" class="regime-select">
+      <!-- Populated by JS from D.available_regimes -->
+    </select>
+  </div>
+
   <div id="assetFilter" class="sidebar-filter-block" style="display:none">
-    <div class="filter-label">Assets</div>
+    <div class="filter-label" id="assetFilterLabel">Assets</div>
     <div id="assetToggles" class="toggles"></div>
   </div>
 
@@ -55,6 +65,10 @@
     <div class="nav-item" data-page="positions">
       <svg viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
       <span>Positions</span>
+    </div>
+    <div class="nav-item" data-page="dividends" id="navDividends" style="display:none">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.75 3.5v1.12c1.21.25 2 1.05 2 2.13h-1.5c0-.55-.45-.9-1.1-.9-.7 0-1.15.35-1.15.85 0 .42.3.68 1.05.88l.65.17c1.35.35 2.05.95 2.05 2.05 0 1.1-.8 1.85-2 2.1V14h-1.5v-1.12c-1.25-.27-2.1-1.1-2.1-2.23h1.5c0 .6.5 1 1.2 1 .75 0 1.2-.35 1.2-.9 0-.45-.3-.72-1.05-.92l-.7-.18C5.95 9.28 5.25 8.68 5.25 7.6c0-1.05.8-1.8 2-2.02V4.5h1.5z"/></svg>
+      <span>Dividends</span>
     </div>
     <div class="nav-item" data-page="notes">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2h10v9l-3 3H3V2z"/><line x1="5" y1="6" x2="11" y2="6"/><line x1="5" y1="9" x2="9" y2="9"/></svg>

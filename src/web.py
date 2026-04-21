@@ -502,6 +502,11 @@ class UploadHandler(BaseHTTPRequestHandler):
                                    query_investment_notes)
         from datetime import datetime
 
+        # Parse country from query string, default to SI
+        from urllib.parse import urlparse, parse_qs
+        qs = parse_qs(urlparse(self.path).query)
+        country = qs.get("country", ["SI"])[0].upper()
+
         conn = _portfolio_conn(session)
         try:
             analytics = compute_analytics(conn, scope="all")
@@ -515,7 +520,8 @@ class UploadHandler(BaseHTTPRequestHandler):
                 ]
                 for yr in years_with_tx:
                     try:
-                        tax_by_year[yr] = compute_tax_report(conn, year=yr, include_unrealized=False, scope="all")
+                        tax_by_year[yr] = compute_tax_report(conn, year=yr, include_unrealized=False,
+                                                              scope="all", country=country)
                     except Exception:
                         pass
             except Exception:
@@ -532,7 +538,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             notes = query_investment_notes(conn)
             html = generate_html_report(analytics, tax_by_year, transactions, per_class=per_class,
                                         real_estate=re_data, fire_config=fire_cfg,
-                                        investment_notes=notes, conn=conn)
+                                        investment_notes=notes, conn=conn,
+                                        country=country)
             # Inject current user into D so client JS can gate the edit UI.
             # The report template emits:  <script>const D={...};</script>
             # We append D.user right after the D assignment closes.

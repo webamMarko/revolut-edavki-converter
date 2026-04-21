@@ -150,8 +150,11 @@ def _analytics_to_dict(result) -> dict:
 def format_tax(report, verbose: bool = False):
     """Print tax report as formatted terminal output."""
     scope_label = {"stock": "STOCKS", "cfd": "CFD", "crypto": "CRYPTO", "savings": "SAVINGS", "all": "ALL"}.get(report.scope, "ALL")
+    country = getattr(report, "country", "SI")
+    from .tax_regimes import get_regime
+    regime = get_regime(country)
     print("=" * 60)
-    print(f"SLOVENIAN CAPITAL GAINS TAX — {report.year} — {scope_label}")
+    print(f"{regime.country_name.upper()} CAPITAL GAINS TAX — {report.year} — {scope_label}")
     print("=" * 60)
 
     # Realized sales
@@ -209,6 +212,29 @@ def format_tax(report, verbose: bool = False):
                        tablefmt="simple"))
 
         print(f"\nTotal Unrealized Tax:  {report.total_unrealized_tax_eur:,.2f} EUR")
+
+    # Tax-loss harvesting
+    if report.harvest_candidates:
+        print("\n--- Tax-Loss Harvesting Opportunities ---")
+        rows = []
+        for c in report.harvest_candidates:
+            rows.append([
+                c.ticker,
+                c.asset_class,
+                f"{c.quantity:,.4f}",
+                f"{c.cost_basis_eur:,.2f}",
+                f"{c.market_value_eur:,.2f}",
+                f"{c.unrealized_loss_eur:+,.2f}",
+                f"{c.avg_holding_years:,.1f}y",
+                f"{c.tax_rate:.0%}",
+                f"{c.potential_tax_saving_eur:,.2f}",
+            ])
+        print(tabulate(rows,
+                       headers=["Ticker", "Class", "Qty", "Cost Basis", "Mkt Value",
+                                "Loss", "Held", "Rate", "Tax Saving"],
+                       tablefmt="simple"))
+        total_saving = sum(c.potential_tax_saving_eur for c in report.harvest_candidates)
+        print(f"\nTotal Potential Tax Saving:  {total_saving:,.2f} EUR")
 
     print(f"\n{'=' * 60}")
     print(f"TOTAL TAX LIABILITY:  {report.total_tax_eur:,.2f} EUR")

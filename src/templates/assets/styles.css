@@ -132,6 +132,19 @@ body {
   margin-bottom: 0.5rem;
 }
 .toggles { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.regime-select {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+}
+.regime-select:focus { border-color: var(--accent, #6366f1); }
 
 /* Sidebar nav */
 .sidebar-nav { flex: 1; padding: 0.5rem 0; }
@@ -667,3 +680,194 @@ body {
 @media (max-width: 389px) {
   .card-grid, .card-grid.small { grid-template-columns: 1fr; }
 }
+
+/* ---- Cost basis lots ---- */
+.pos-lots { margin-top: 0.75rem; }
+.pos-lots-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.35rem;
+}
+.pos-lots-table {
+  width: 100%;
+  font-size: 0.78rem;
+  border-collapse: collapse;
+}
+.pos-lots-table th {
+  font-weight: 500;
+  color: var(--muted);
+  text-align: left;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--raised);
+}
+.pos-lots-table td {
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid rgba(30,42,58,0.4);
+}
+
+/* ---- Top movers ---- */
+.movers-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.mover-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  background: var(--raised);
+}
+.mover-ticker { font-weight: 600; font-size: 0.85rem; }
+.mover-name { font-size: 0.72rem; color: var(--muted); margin-top: 0.1rem; }
+.mover-right { text-align: right; }
+.mover-gain { font-weight: 600; font-size: 0.85rem; }
+.mover-pct { font-size: 0.72rem; color: var(--muted); }
+
+/* ---- Allocation chart ---- */
+.allocation-wrap {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+.allocation-chart-col {
+  width: 260px;
+  min-width: 200px;
+  flex-shrink: 0;
+}
+.allocation-legend {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.2rem;
+  font-size: 0.78rem;
+  color: var(--text);
+}
+.alloc-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+.alloc-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.alloc-pct {
+  color: var(--muted);
+  margin-left: 0.15rem;
+}
+@media (max-width: 768px) {
+  .allocation-wrap { flex-direction: column; }
+  .allocation-chart-col { width: 220px; margin: 0 auto; }
+}
+
+/* ---- Milestones ---- */
+.milestones-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.milestone-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--raised);
+  border-radius: 6px;
+  border-left: 3px solid var(--border);
+}
+.milestone-icon { font-size: 1.2rem; flex-shrink: 0; line-height: 1.4; }
+.milestone-body { flex: 1; min-width: 0; }
+.milestone-date { font-size: 0.7rem; color: var(--muted); }
+.milestone-text { font-size: 0.85rem; font-weight: 600; }
+.milestone-detail { font-size: 0.75rem; color: var(--muted); }
+
+/* ---- Keyboard shortcut modal ---- */
+.shortcut-modal-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+}
+.shortcut-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.2rem 1.5rem;
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 0.8rem;
+  align-items: center;
+}
+.shortcut-key kbd {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.45rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  color: var(--text);
+  display: inline-block;
+  min-width: 1.6rem;
+  text-align: center;
+}
+.shortcut-desc { font-size: 0.8rem; color: var(--muted); }
+
+/* ---- Print styles ---- */
+@media print {
+  :root {
+    --bg: #fff; --surface: #fff; --raised: #f9f9f9; --border: #ddd;
+    --text: #111; --muted: #666; --subtle: #ccc;
+    --green: #059669; --red: #dc2626;
+  }
+  body {
+    overflow: visible;
+    height: auto;
+    font-size: 11px;
+    background: #fff;
+    color: #111;
+  }
+  .layout { display: block; height: auto; }
+  .sidebar { display: none !important; }
+  .mobile-topbar { display: none !important; }
+  .content { margin: 0; padding: 0; overflow: visible; height: auto; }
+  .page-stack { gap: 0.5rem; }
+  .card, .chart-section { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
+  .chart-wrap { height: auto !important; min-height: 150px; }
+  canvas { max-height: 200px !important; }
+  .range-bar, .chart-hint, .selection-banner { display: none !important; }
+  .theme-toggle { display: none !important; }
+  #assetFilter, #fireFilter { display: none !important; }
+  #mobileFilters { display: none !important; }
+  .toolbar button, .tax-export-btn, #exportPositionsBtn { display: none !important; }
+  .pos-chevron, .pos-chevron-placeholder { display: none !important; }
+  .pos-detail-row { display: none !important; }
+  .page { display: block !important; page-break-before: always; }
+  .page:first-child { page-break-before: avoid; }
+  .data-table { font-size: 9px; }
+  .data-table th, .data-table td { padding: 2px 4px; }
+  .metric-card { border: 1px solid #ddd; }
+  .pagination { display: none !important; }
+  .pos .value, .pos { color: #059669 !important; }
+  .neg .value, .neg { color: #dc2626 !important; }
+  a { color: #111; text-decoration: none; }
+  h2 { font-size: 14px; margin-bottom: 0.3rem; }
+  h3 { font-size: 12px; }
+  .two-col { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .corr-table { font-size: 7px; }
+  .corr-cell { padding: 1px 2px; }
+}
+
+/* Correlation matrix */
+.corr-table { border-collapse: collapse; width: 100%; font-size: 0.7rem; }
+.corr-table th, .corr-table td { text-align: center; padding: 0.25rem 0.3rem; }
+.corr-th { transform: rotate(-45deg); white-space: nowrap; font-size: 0.65rem; color: var(--muted); font-weight: 500; }
+.corr-label { text-align: right !important; font-weight: 500; padding-right: 0.5rem !important; white-space: nowrap; font-size: 0.65rem; }
+.corr-cell { font-size: 0.65rem; border-radius: 2px; min-width: 2.5rem; }

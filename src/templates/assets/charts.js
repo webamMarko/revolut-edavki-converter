@@ -88,10 +88,10 @@ function buildPortfolioChart() {
       interaction: {mode:'index', intersect:false},
       scales: {
         x: {type:'time', time:{unit:'month', tooltipFormat:'yyyy-MM-dd'}, grid:{display:false}},
-        y: {title:{display:true, text:'EUR'}, ticks:{callback: v => v.toLocaleString()}}
+        y: {title:{display:true, text:_currency}, ticks:{callback: v => v.toLocaleString(_locale)}}
       },
       plugins: {
-        tooltip: {callbacks: {label: c => c.parsed.y != null ? c.dataset.label + ': ' + fmt(c.parsed.y) + ' EUR' : ''}},
+        tooltip: {callbacks: {label: c => c.parsed.y != null ? c.dataset.label + ': ' + fmt(c.parsed.y) + ' ' + _currency : ''}},
         zoom: zoomOpts
       }
     }
