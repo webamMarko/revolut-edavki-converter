@@ -63,6 +63,7 @@ function updateAll() {
     if (hint) hint.textContent = 'Drag to select a period';
   }
   updateSummary();
+  updateTopMovers();
   updateGains();
   updateAllocation();
   updatePositions();

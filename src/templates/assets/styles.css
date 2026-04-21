@@ -668,6 +668,22 @@ body {
   .card-grid, .card-grid.small { grid-template-columns: 1fr; }
 }
 
+/* ---- Top movers ---- */
+.movers-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.mover-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  background: var(--raised);
+}
+.mover-ticker { font-weight: 600; font-size: 0.85rem; }
+.mover-name { font-size: 0.72rem; color: var(--muted); margin-top: 0.1rem; }
+.mover-right { text-align: right; }
+.mover-gain { font-weight: 600; font-size: 0.85rem; }
+.mover-pct { font-size: 0.72rem; color: var(--muted); }
+
 /* ---- Allocation chart ---- */
 .allocation-wrap {
   display: flex;

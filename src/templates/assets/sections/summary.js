@@ -103,3 +103,39 @@ function updateSummary() {
     ).join('');
   }
 }
+
+function updateTopMovers() {
+  const positions = getActivePositions();
+  const section = document.getElementById('topMoversSection');
+  if (positions.length < 2) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  const names = D.company_names || {};
+
+  // Sort by unrealized gain % for meaningful ranking
+  const sorted = [...positions].filter(p => p.cost_basis_eur > 0);
+  const gainers = sorted.filter(p => p.unrealized_gain_eur > 0)
+    .sort((a, b) => b.unrealized_gain_pct - a.unrealized_gain_pct).slice(0, 5);
+  const losers = sorted.filter(p => p.unrealized_gain_eur < 0)
+    .sort((a, b) => a.unrealized_gain_pct - b.unrealized_gain_pct).slice(0, 5);
+
+  function renderList(items, el) {
+    if (items.length === 0) { el.innerHTML = '<div style="color:var(--muted);font-size:0.8rem;padding:0.5rem">None</div>'; return; }
+    el.innerHTML = items.map(p => {
+      const name = names[p.ticker] || '';
+      return `<div class="mover-row">
+        <div>
+          <div class="mover-ticker">${p.ticker}</div>
+          ${name ? `<div class="mover-name">${name}</div>` : ''}
+        </div>
+        <div class="mover-right">
+          <div class="mover-gain ${cls(p.unrealized_gain_eur)}">${sign(p.unrealized_gain_eur)} EUR</div>
+          <div class="mover-pct">${sign(p.unrealized_gain_pct)}%</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  renderList(gainers, document.getElementById('topGainers'));
+  renderList(losers, document.getElementById('topLosers'));
+}
