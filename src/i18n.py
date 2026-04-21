@@ -122,6 +122,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # --- Currency exposure ---
         "currency.title": "Currency Exposure",
 
+        # --- Sector allocation ---
+        "sector.title": "Sector Allocation",
+        "sector.industry_title": "Industry Breakdown",
+        "sector.col.industry": "Industry",
+        "sector.col.value": "Value",
+        "sector.col.pct": "Weight",
+
         # --- Concentration ---
         "concentration.title": "Diversification",
         "concentration.positions": "Positions",
@@ -400,6 +407,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # --- Currency exposure ---
         "currency.title": "Valutna izpostavljenost",
 
+        # --- Sector allocation ---
+        "sector.title": "Sektorska razporeditev",
+        "sector.industry_title": "Razčlenitev po panogah",
+        "sector.col.industry": "Panoga",
+        "sector.col.value": "Vrednost",
+        "sector.col.pct": "Delež",
+
         # --- Concentration ---
         "concentration.title": "Razpršenost",
         "concentration.positions": "Pozicije",
@@ -596,6 +610,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "tax.harvest.total_saving": "Gesamte potenzielle Ersparnis",
         "tax.harvest.total_loss": "Gesamte nicht realisierte Verluste",
         "tax.harvest.candidates": "Kandidaten",
+        "sector.title": "Sektorallokation",
+        "sector.industry_title": "Branchenaufschlüsselung",
+        "sector.col.industry": "Branche",
+        "sector.col.value": "Wert",
+        "sector.col.pct": "Anteil",
         "regime.title": "Steuerland",
         "regime.select": "Land wählen",
     },

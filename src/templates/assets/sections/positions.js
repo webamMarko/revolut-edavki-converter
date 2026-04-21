@@ -561,4 +561,89 @@ function updateClosedPositions() {
     document.body.removeChild(a);
     URL.revokeObjectURL(a.href);
   });
+
+  // --- Sector allocation ---
+  let _sectorChart = null;
+  const _SECTOR_COLORS = [
+    '#6366f1','#34d399','#f59e0b','#f87171','#a78bfa',
+    '#38bdf8','#fb923c','#4ade80','#e879f9','#fbbf24',
+    '#22d3ee','#c084fc','#f472b6','#2dd4bf','#818cf8',
+  ];
+
+  window.updateSectorAllocation = function() {
+    const sa = D.sector_allocation;
+    const row = document.getElementById('sectorRow');
+    if (!sa || !sa.sectors || sa.sectors.length === 0) {
+      if (row) row.style.display = 'none';
+      return;
+    }
+
+    // Filter out "Other" if it's the only sector
+    const sectors = sa.sectors.filter(s => s.pct > 0);
+    if (sectors.length === 0 || (sectors.length === 1 && sectors[0].name === 'Other')) {
+      if (row) row.style.display = 'none';
+      return;
+    }
+    row.style.display = '';
+
+    document.getElementById('sectorTitle').textContent = t('sector.title');
+    document.getElementById('industryTitle').textContent = t('sector.industry_title');
+
+    // Sector donut chart
+    if (_sectorChart) { _sectorChart.destroy(); _sectorChart = null; }
+    const canvas = document.getElementById('sectorChart');
+    _sectorChart = new Chart(canvas.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: sectors.map(s => s.name),
+        datasets: [{
+          data: sectors.map(s => s.value_eur),
+          backgroundColor: sectors.map((_, i) => _SECTOR_COLORS[i % _SECTOR_COLORS.length]),
+          borderWidth: 0,
+          hoverOffset: 6,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        cutout: '55%',
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(c) { return c.label + ': ' + fmtCcy(c.parsed) + ' (' + fmt(sectors[c.dataIndex].pct, 1) + '%)'; },
+            },
+          },
+        },
+      },
+    });
+
+    // Sector legend
+    const legend = document.getElementById('sectorLegend');
+    legend.innerHTML = sectors.map((s, i) =>
+      `<div class="alloc-item">`
+      + `<span class="alloc-dot" style="background:${_SECTOR_COLORS[i % _SECTOR_COLORS.length]}"></span>`
+      + `<span>${s.name}</span>`
+      + `<span class="alloc-pct">${fmt(s.pct, 1)}%</span>`
+      + `</div>`
+    ).join('');
+
+    // Industry table
+    const industries = (sa.industries || []).filter(i => i.pct > 0);
+    const it = document.getElementById('industryTable');
+    if (industries.length > 0) {
+      it.innerHTML =
+        '<thead><tr><th>'+t('sector.col.industry')+'</th><th>'+t('sector.col.value')+'</th><th>'+t('sector.col.pct')+'</th></tr></thead><tbody>' +
+        industries.map(function(ind, i) {
+          return `<tr>` +
+            `<td><span class="alloc-dot" style="background:${_SECTOR_COLORS[i % _SECTOR_COLORS.length]};display:inline-block;vertical-align:middle;margin-right:0.3rem"></span>${ind.name}</td>` +
+            `<td>${fmtCcy(ind.value_eur)}</td>` +
+            `<td>${fmt(ind.pct, 1)}%</td>` +
+            `</tr>`;
+        }).join('') +
+        '</tbody>';
+      makeSortable(it);
+    }
+  };
 })();

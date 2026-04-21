@@ -338,6 +338,58 @@ def _query_currency_exposure(conn: sqlite3.Connection, positions: list) -> list[
     )
 
 
+def _query_sector_allocation(conn: sqlite3.Connection | None, positions: list) -> dict:
+    """Build sector and industry allocation from position weights + metadata."""
+    if not conn or not positions:
+        return {"sectors": [], "industries": []}
+
+    # Load sector/industry metadata
+    sector_map = {}
+    industry_map = {}
+    rows = conn.execute("SELECT key, value FROM metadata WHERE key LIKE 'sector:%'").fetchall()
+    for k, v in rows:
+        sector_map[k[len("sector:"):]] = v
+    rows = conn.execute("SELECT key, value FROM metadata WHERE key LIKE 'industry:%'").fetchall()
+    for k, v in rows:
+        industry_map[k[len("industry:"):]] = v
+
+    # Aggregate by sector and industry
+    sector_totals = {}
+    industry_totals = {}
+    total_mv = 0
+    for pos in positions:
+        ticker = pos.ticker if hasattr(pos, 'ticker') else pos.get('ticker', '')
+        mv = pos.market_value_eur if hasattr(pos, 'market_value_eur') else pos.get('market_value_eur', 0)
+        if mv <= 0:
+            continue
+        # Strip prefix
+        db_ticker = ticker
+        for prefix in ("CFD:", "CRYPTO:", "SAVINGS:"):
+            if ticker.startswith(prefix):
+                db_ticker = ticker[len(prefix):]
+                break
+        sector = sector_map.get(db_ticker, "Other")
+        industry = industry_map.get(db_ticker, "Other")
+        sector_totals[sector] = sector_totals.get(sector, 0) + mv
+        industry_totals[industry] = industry_totals.get(industry, 0) + mv
+        total_mv += mv
+
+    if total_mv == 0:
+        return {"sectors": [], "industries": []}
+
+    sectors = sorted(
+        [{"name": s, "value_eur": round(v, 2), "pct": round(v / total_mv * 100, 1)}
+         for s, v in sector_totals.items()],
+        key=lambda x: x["value_eur"], reverse=True,
+    )
+    industries = sorted(
+        [{"name": i, "value_eur": round(v, 2), "pct": round(v / total_mv * 100, 1)}
+         for i, v in industry_totals.items()],
+        key=lambda x: x["value_eur"], reverse=True,
+    )
+    return {"sectors": sectors, "industries": industries}
+
+
 def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                            per_class: dict | None = None,
                            real_estate: dict | None = None,
@@ -614,6 +666,9 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
 
     # Currency exposure
     data["currency_exposure"] = _query_currency_exposure(conn, analytics.positions)
+
+    # Sector/industry allocation
+    data["sector_allocation"] = _query_sector_allocation(conn, analytics.positions)
 
     return data
 
