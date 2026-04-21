@@ -109,22 +109,57 @@
     }
   }
 
-  // --- Export functionality ---
+  // --- Export functionality (client-side, works in standalone HTML too) ---
   const exportBar = document.getElementById('taxExportBar');
   const exportBtn = document.getElementById('taxExportBtn');
   const exportSel = document.getElementById('taxExportSelect');
-  if (exportBar && D.user && D.user.role && D.user.role !== 'guest') {
+  if (exportBar) {
     exportBar.style.display = '';
     exportBtn.addEventListener('click', function() {
-      const fmt = exportSel.value;
-      const url = '/export/' + fmt + '?year=' + currentYear;
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = '';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const t = tby[currentYear];
+      if (!t || !t.realized_sales || t.realized_sales.length === 0) return;
+
+      const format = exportSel.value;
+      if (format === 'fifo-csv') {
+        _exportFifoCsv(t, currentYear);
+      } else {
+        // Try server-side export first (web mode), fall back to client-side CSV
+        if (D.user && D.user.role && D.user.role !== 'guest') {
+          const a = document.createElement('a');
+          a.href = '/export/edavki?year=' + currentYear;
+          a.download = '';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        } else {
+          _exportFifoCsv(t, currentYear);
+        }
+      }
     });
+  }
+
+  function _exportFifoCsv(t, year) {
+    const sales = isDefaultSelection()
+      ? t.realized_sales
+      : t.realized_sales.filter(function(s) { return activeClasses.has(s.asset_class); });
+    if (sales.length === 0) return;
+    const header = 'Ticker,Sell Date,Quantity,Proceeds (EUR),Cost Basis (EUR),Gain (EUR),Std Costs (EUR),Holding Years,Tax Rate,Tax (EUR),Asset Class';
+    const rows = sales.map(function(s) {
+      return [
+        s.ticker, s.sell_date, s.quantity, s.sell_price_eur, s.cost_basis_eur,
+        s.gain_eur, s.std_costs_eur, s.holding_years, Math.round(s.tax_rate * 100) + '%',
+        s.tax_eur, s.asset_class || ''
+      ].join(',');
+    });
+    const csv = header + '\n' + rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'tax_fifo_' + year + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
   }
 
   // Expose so updateAll() can call it
