@@ -23,6 +23,15 @@ class PositionDetail:
 
 
 @dataclass
+class ClosedPositionDetail:
+    ticker: str
+    total_cost_eur: float
+    total_proceeds_eur: float
+    realized_gain_eur: float
+    realized_gain_pct: float
+
+
+@dataclass
 class BenchmarkComparison:
     name: str
     ticker: str
@@ -50,6 +59,7 @@ class AnalyticsResult:
     total_fees_eur: float
     # Positions
     positions: list[PositionDetail]
+    closed_positions: list[ClosedPositionDetail]
     # Benchmarks
     benchmarks: list[BenchmarkComparison]
     # Daily series (for export and charting)
@@ -196,6 +206,8 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     total_dividends = 0.0
     total_realized_gain = 0.0
     per_ticker_realized = defaultdict(float)  # ticker -> cumulative realized gain EUR
+    per_ticker_cost_sold = defaultdict(float)  # ticker -> total cost basis of sold shares
+    per_ticker_proceeds = defaultdict(float)  # ticker -> total sale proceeds
     total_fees = 0.0  # commissions + overnight fees (CFD)
     cfd_cash = 0.0  # running cash balance for CFD account valuation
     stock_cash = 0.0  # uninvested cash from CASH TOP-UP (for sources with cash events)
@@ -282,11 +294,15 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                             # Realized gain on short close: entry - exit
                             total_realized_gain += (s_pps - pps_eur) * s_qty
                             per_ticker_realized[ticker] += (s_pps - pps_eur) * s_qty
+                            per_ticker_proceeds[ticker] += s_pps * s_qty
+                            per_ticker_cost_sold[ticker] += pps_eur * s_qty
                             remaining -= s_qty
                             holdings[ticker] += s_qty
                         else:
                             total_realized_gain += (s_pps - pps_eur) * remaining
                             per_ticker_realized[ticker] += (s_pps - pps_eur) * remaining
+                            per_ticker_proceeds[ticker] += s_pps * remaining
+                            per_ticker_cost_sold[ticker] += pps_eur * remaining
                             new_shorts.append((s_qty - remaining, s_pps, s_date))
                             holdings[ticker] += remaining
                             remaining = 0
@@ -362,12 +378,16 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                             # Realized gain on long close: exit - entry
                             total_realized_gain += (pps_eur - l_pps) * l_qty
                             per_ticker_realized[ticker] += (pps_eur - l_pps) * l_qty
+                            per_ticker_cost_sold[ticker] += l_qty * l_pps
+                            per_ticker_proceeds[ticker] += l_qty * pps_eur
                             cost_basis[ticker] -= l_qty * l_pps
                             remaining -= l_qty
                             holdings[ticker] -= l_qty
                         else:
                             total_realized_gain += (pps_eur - l_pps) * remaining
                             per_ticker_realized[ticker] += (pps_eur - l_pps) * remaining
+                            per_ticker_cost_sold[ticker] += remaining * l_pps
+                            per_ticker_proceeds[ticker] += remaining * pps_eur
                             cost_basis[ticker] -= remaining * l_pps
                             new_lots.append((l_qty - remaining, l_pps, l_date))
                             holdings[ticker] -= remaining
@@ -404,6 +424,8 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 cost_basis[ticker] -= cost_of_sold
                 total_realized_gain += sell_proceeds_eur - cost_of_sold
                 per_ticker_realized[ticker] += sell_proceeds_eur - cost_of_sold
+                per_ticker_cost_sold[ticker] += cost_of_sold
+                per_ticker_proceeds[ticker] += sell_proceeds_eur
                 cash_flows.append((date_str, sell_proceeds_eur))
                 total_invested -= sell_proceeds_eur
                 if pps_eur > 0:
@@ -431,6 +453,8 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 cost_basis[ticker] -= cost_of_sold
                 total_realized_gain += sell_proceeds_eur - cost_of_sold
                 per_ticker_realized[ticker] += sell_proceeds_eur - cost_of_sold
+                per_ticker_cost_sold[ticker] += cost_of_sold
+                per_ticker_proceeds[ticker] += sell_proceeds_eur
                 cash_flows.append((date_str, sell_proceeds_eur))
                 total_invested -= sell_proceeds_eur
                 last_known_price_eur[ticker] = pps_eur if pps_eur > 0 else 1.0
@@ -457,6 +481,8 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 cost_basis[ticker] -= cost_of_sold
                 total_realized_gain += sell_proceeds_eur - cost_of_sold
                 per_ticker_realized[ticker] += sell_proceeds_eur - cost_of_sold
+                per_ticker_cost_sold[ticker] += cost_of_sold
+                per_ticker_proceeds[ticker] += sell_proceeds_eur
 
                 # Track last known price (fallback for bonds/ISINs)
                 if pps_eur > 0:
@@ -540,6 +566,8 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                     cost_of_sold = cost_basis.get(ticker, 0)
                     total_realized_gain += sell_proceeds - cost_of_sold
                     per_ticker_realized[ticker] += sell_proceeds - cost_of_sold
+                    per_ticker_cost_sold[ticker] += cost_of_sold
+                    per_ticker_proceeds[ticker] += sell_proceeds
                     # For sources without cash events, MERGER CASH is an external outflow
                     source = tx.get("source_file", "")
                     if source not in cash_event_sources:
@@ -553,6 +581,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 cost_of_sold = cost_basis.get(ticker, 0)
                 total_realized_gain -= cost_of_sold  # total loss
                 per_ticker_realized[ticker] -= cost_of_sold
+                per_ticker_cost_sold[ticker] += cost_of_sold
                 holdings[ticker] = 0
                 cost_basis[ticker] = 0
                 fifo_lots[ticker] = []
@@ -794,6 +823,24 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             realized_gain_eur=per_ticker_realized.get(ticker, 0.0),
         ))
 
+    # Closed positions: tickers with realized gains but no current holdings
+    open_tickers = {p.ticker for p in positions}
+    closed_positions = []
+    for ticker in sorted(per_ticker_realized):
+        if ticker in open_tickers:
+            continue
+        realized = per_ticker_realized[ticker]
+        cost = per_ticker_cost_sold.get(ticker, 0.0)
+        proceeds = per_ticker_proceeds.get(ticker, 0.0)
+        gain_pct = (realized / cost * 100) if cost > 0 else 0.0
+        closed_positions.append(ClosedPositionDetail(
+            ticker=ticker,
+            total_cost_eur=cost,
+            total_proceeds_eur=proceeds,
+            realized_gain_eur=realized,
+            realized_gain_pct=gain_pct,
+        ))
+
     # Benchmark comparisons (skip for CFD/savings/realestate scope)
     if is_cfd or is_savings or is_realestate:
         benchmarks, benchmark_series = [], {}
@@ -815,6 +862,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
         total_unrealized_gain_eur=total_unrealized,
         total_fees_eur=total_fees,
         positions=positions,
+        closed_positions=closed_positions,
         benchmarks=benchmarks,
         daily_series=daily_df,
         benchmark_series=benchmark_series,

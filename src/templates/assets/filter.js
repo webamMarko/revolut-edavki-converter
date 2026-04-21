@@ -148,6 +148,13 @@ function getActivePositions() {
   return all.map(p => ({...p, weight_pct: p.market_value_eur / totalMV * 100})).sort((a, b) => b.market_value_eur - a.market_value_eur);
 }
 
+function getActiveClosedPositions() {
+  if (isDefaultSelection()) return D.closed_positions || [];
+  let all = [];
+  activeClasses.forEach(ac => { all = all.concat((perClass[ac].closed_positions || [])); });
+  return all.sort((a, b) => Math.abs(b.realized_gain_eur) - Math.abs(a.realized_gain_eur));
+}
+
 // --- Active series (initialised at load time) ---
 let ds = buildCombinedSeries();
 let allDates = ds.dates;

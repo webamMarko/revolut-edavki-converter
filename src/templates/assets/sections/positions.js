@@ -260,3 +260,31 @@ function updatePositions() {
     });
   });
 }
+
+function updateClosedPositions() {
+  const closed = getActiveClosedPositions();
+  const section = document.getElementById('closedPositionsSection');
+  if (closed.length === 0) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  const ct = document.getElementById('closedPositionsTable');
+  ct.innerHTML = '<thead><tr>'
+    + '<th>Ticker</th>'
+    + '<th>Cost Basis</th>'
+    + '<th>Proceeds</th>'
+    + '<th>Realized P&L</th>'
+    + '<th>Return %</th>'
+    + '</tr></thead><tbody>'
+    + closed.map(p =>
+      `<tr>`
+      + `<td><strong>${p.ticker}</strong></td>`
+      + `<td>${fmtEur(p.total_cost_eur)}</td>`
+      + `<td>${fmtEur(p.total_proceeds_eur)}</td>`
+      + `<td class="${cls(p.realized_gain_eur)}">${sign(p.realized_gain_eur)} EUR</td>`
+      + `<td class="${cls(p.realized_gain_pct)}">${sign(p.realized_gain_pct)}%</td>`
+      + `</tr>`
+    ).join('')
+    + '</tbody>';
+
+  makeSortable(ct);
+}

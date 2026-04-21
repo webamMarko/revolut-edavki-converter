@@ -296,6 +296,20 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
             key=lambda x: x["market_value_eur"],
             reverse=True,
         ),
+        "closed_positions": sorted(
+            [
+                {
+                    "ticker": p.ticker,
+                    "total_cost_eur": round(p.total_cost_eur, 2),
+                    "total_proceeds_eur": round(p.total_proceeds_eur, 2),
+                    "realized_gain_eur": round(p.realized_gain_eur, 2),
+                    "realized_gain_pct": round(p.realized_gain_pct, 2),
+                }
+                for p in analytics.closed_positions
+            ],
+            key=lambda x: abs(x["realized_gain_eur"]),
+            reverse=True,
+        ),
         "tax": None,
         "transactions": [
             {
@@ -394,6 +408,20 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                         for p in ac_analytics.positions
                     ],
                     key=lambda x: x["market_value_eur"],
+                    reverse=True,
+                ),
+                "closed_positions": sorted(
+                    [
+                        {
+                            "ticker": p.ticker,
+                            "total_cost_eur": round(p.total_cost_eur, 2),
+                            "total_proceeds_eur": round(p.total_proceeds_eur, 2),
+                            "realized_gain_eur": round(p.realized_gain_eur, 2),
+                            "realized_gain_pct": round(p.realized_gain_pct, 2),
+                        }
+                        for p in ac_analytics.closed_positions
+                    ],
+                    key=lambda x: abs(x["realized_gain_eur"]),
                     reverse=True,
                 ),
             }
