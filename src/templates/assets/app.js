@@ -65,6 +65,7 @@ function updateAll() {
   updateSummary();
   updateRiskMetrics();
   updateTopMovers();
+  updateMilestones();
   updateGains();
   updateAllocation();
   updateCurrencyExposure();

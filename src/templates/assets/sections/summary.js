@@ -164,3 +164,89 @@ function updateTopMovers() {
   renderList(gainers, document.getElementById('topGainers'));
   renderList(losers, document.getElementById('topLosers'));
 }
+
+function updateMilestones() {
+  const section = document.getElementById('milestonesSection');
+  if (isZoomed || !ds.dates || ds.dates.length < 10) { section.style.display = 'none'; return; }
+
+  const events = [];
+  const dates = ds.dates;
+  const values = ds.value_eur;
+
+  // First investment date
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] > 0) {
+      events.push({ date: dates[i], icon: '&#x1F680;', text: 'First investment', detail: fmtEur(values[i]) });
+      break;
+    }
+  }
+
+  // Value thresholds
+  const thresholds = [1000, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000];
+  const reached = new Set();
+  for (let i = 0; i < values.length; i++) {
+    for (const t of thresholds) {
+      if (!reached.has(t) && values[i] >= t) {
+        reached.add(t);
+        const label = t >= 1000000 ? (t / 1000000) + 'M' : t >= 1000 ? (t / 1000) + 'K' : t;
+        events.push({ date: dates[i], icon: '&#x1F3AF;', text: 'Reached ' + label + ' EUR', detail: fmtEur(values[i]) });
+      }
+    }
+  }
+
+  // All-time high (most recent)
+  let athIdx = 0;
+  for (let i = 1; i < values.length; i++) {
+    if (values[i] > values[athIdx]) athIdx = i;
+  }
+  if (athIdx > 0) {
+    events.push({ date: dates[athIdx], icon: '&#x1F451;', text: 'All-time high', detail: fmtEur(values[athIdx]) });
+  }
+
+  // Worst drawdown trough
+  const s = getActiveSummary();
+  if (s.max_drawdown_pct < -1) {
+    events.push({ date: s.max_drawdown_trough_date, icon: '&#x1F4C9;', text: 'Worst drawdown', detail: pct(s.max_drawdown_pct) });
+  }
+
+  // Largest single-day gain and loss (from perf_index)
+  const pi = ds.perf_index;
+  if (pi && pi.length > 1) {
+    let bestDayIdx = 1, worstDayIdx = 1, bestRet = -Infinity, worstRet = Infinity;
+    for (let i = 1; i < pi.length; i++) {
+      if (pi[i - 1] > 0) {
+        const ret = (pi[i] / pi[i - 1] - 1) * 100;
+        if (ret > bestRet) { bestRet = ret; bestDayIdx = i; }
+        if (ret < worstRet) { worstRet = ret; worstDayIdx = i; }
+      }
+    }
+    if (bestRet > 0.5) events.push({ date: dates[bestDayIdx], icon: '&#x2B06;&#xFE0F;', text: 'Best single day', detail: sign(bestRet) + '%' });
+    if (worstRet < -0.5) events.push({ date: dates[worstDayIdx], icon: '&#x2B07;&#xFE0F;', text: 'Worst single day', detail: sign(worstRet) + '%' });
+  }
+
+  // Current portfolio age
+  if (dates.length > 1) {
+    const days = Math.round((new Date(dates[dates.length - 1]) - new Date(dates[0])) / 86400000);
+    const years = Math.floor(days / 365);
+    const months = Math.floor((days % 365) / 30);
+    const ageStr = years > 0 ? years + 'y ' + months + 'm' : months + ' months';
+    events.push({ date: dates[dates.length - 1], icon: '&#x1F4C5;', text: 'Portfolio age: ' + ageStr, detail: days + ' days' });
+  }
+
+  if (events.length < 3) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  // Sort by date
+  events.sort((a, b) => a.date.localeCompare(b.date));
+
+  const el = document.getElementById('milestonesList');
+  el.innerHTML = events.map(e =>
+    `<div class="milestone-item">`
+    + `<div class="milestone-icon">${e.icon}</div>`
+    + `<div class="milestone-body">`
+    + `<div class="milestone-date">${e.date}</div>`
+    + `<div class="milestone-text">${e.text}</div>`
+    + `<div class="milestone-detail">${e.detail}</div>`
+    + `</div></div>`
+  ).join('');
+}
