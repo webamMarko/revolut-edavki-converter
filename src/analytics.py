@@ -60,6 +60,7 @@ class AnalyticsResult:
     # Positions
     positions: list[PositionDetail]
     closed_positions: list[ClosedPositionDetail]
+    position_lots: dict  # ticker -> [(qty, cost_per_share_eur, date)]
     # Benchmarks
     benchmarks: list[BenchmarkComparison]
     # Daily series (for export and charting)
@@ -863,6 +864,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
         total_fees_eur=total_fees,
         positions=positions,
         closed_positions=closed_positions,
+        position_lots={t: list(lots) for t, lots in fifo_lots.items() if lots and abs(holdings.get(t, 0)) > 1e-10},
         benchmarks=benchmarks,
         daily_series=daily_df,
         benchmark_series=benchmark_series,

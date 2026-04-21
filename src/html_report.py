@@ -355,6 +355,13 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
             key=lambda x: abs(x["realized_gain_eur"]),
             reverse=True,
         ),
+        "position_lots": {
+            ticker: [
+                {"qty": round(qty, 4), "cost_eur": round(cost, 4), "date": date}
+                for qty, cost, date in lots
+            ]
+            for ticker, lots in analytics.position_lots.items()
+        },
         "tax": None,
         "transactions": [
             {
@@ -469,6 +476,13 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                     key=lambda x: abs(x["realized_gain_eur"]),
                     reverse=True,
                 ),
+                "position_lots": {
+                    ticker: [
+                        {"qty": round(qty, 4), "cost_eur": round(cost, 4), "date": date}
+                        for qty, cost, date in lots
+                    ]
+                    for ticker, lots in ac_analytics.position_lots.items()
+                },
             }
 
     data["real_estate"] = real_estate or {}

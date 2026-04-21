@@ -70,6 +70,40 @@ function updateAllocation() {
   ).join('');
 }
 
+// --- Cost basis lots ---
+function _getLotsForTicker(ticker) {
+  if (isDefaultSelection()) return (D.position_lots || {})[ticker] || [];
+  let lots = [];
+  activeClasses.forEach(ac => {
+    const pcLots = ((perClass[ac] || {}).position_lots || {})[ticker];
+    if (pcLots) lots = lots.concat(pcLots);
+  });
+  return lots;
+}
+
+function _renderLots(ticker, currentPrice) {
+  const lots = _getLotsForTicker(ticker);
+  if (lots.length === 0) return '';
+  return `<div class="pos-lots">
+    <div class="pos-lots-title">Cost Basis Lots (FIFO)</div>
+    <table class="pos-lots-table">
+      <thead><tr><th>Date</th><th>Qty</th><th>Cost/Share</th><th>Cost</th><th>P&L</th></tr></thead>
+      <tbody>${lots.map(l => {
+        const cost = l.qty * l.cost_eur;
+        const mv = currentPrice != null ? l.qty * currentPrice : null;
+        const pl = mv != null ? mv - cost : null;
+        return `<tr>
+          <td>${l.date}</td>
+          <td>${fmt(l.qty, 4)}</td>
+          <td>${fmt(l.cost_eur, 4)} EUR</td>
+          <td>${fmtEur(cost)}</td>
+          <td class="${pl != null ? cls(pl) : ''}">${pl != null ? sign(pl) + ' EUR' : '—'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
 // --- Positions table ---
 const _posCharts = {};  // ticker -> Chart instance
 
@@ -285,6 +319,7 @@ function updatePositions() {
             <canvas id="pos-chart-${idx}" height="140"></canvas>
           </div>
           </div>
+          ${_renderLots(p.ticker, currentPrice)}
         </div>
       </td>
     </tr>`;

@@ -668,6 +668,33 @@ body {
   .card-grid, .card-grid.small { grid-template-columns: 1fr; }
 }
 
+/* ---- Cost basis lots ---- */
+.pos-lots { margin-top: 0.75rem; }
+.pos-lots-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.35rem;
+}
+.pos-lots-table {
+  width: 100%;
+  font-size: 0.78rem;
+  border-collapse: collapse;
+}
+.pos-lots-table th {
+  font-weight: 500;
+  color: var(--muted);
+  text-align: left;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--raised);
+}
+.pos-lots-table td {
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid rgba(30,42,58,0.4);
+}
+
 /* ---- Top movers ---- */
 .movers-list { display: flex; flex-direction: column; gap: 0.5rem; }
 .mover-row {
