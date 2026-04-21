@@ -15,10 +15,13 @@ function updateDividends() {
   const ttm = last12.reduce((s, m) => s + m.total_eur, 0);
   const avgMonthly = monthly.length > 0 ? div.total_eur / monthly.length : 0;
   const tickers = div.by_ticker.length;
+  const portfolioValue = D.summary ? D.summary.portfolio_value_eur : 0;
+  const portfolioYield = portfolioValue > 0 && ttm > 0 ? (ttm / portfolioValue * 100) : null;
 
   document.getElementById('dividendCards').innerHTML = [
     ['Total Income', fmtEur(div.total_eur), ''],
     ['Last 12 Months', fmtEur(ttm), ''],
+    ['TTM Yield', portfolioYield != null ? fmt(portfolioYield, 2) + '%' : '—', ''],
     ['Monthly Avg', fmtEur(avgMonthly), ''],
     ['Paying Tickers', tickers, ''],
   ].map(([l, v, c]) =>
@@ -33,14 +36,23 @@ function updateDividends() {
   dt.innerHTML = '<thead><tr>'
     + '<th>Ticker</th>'
     + '<th>Total Income</th>'
+    + '<th>TTM Income</th>'
+    + '<th>TTM Yield</th>'
     + '<th>Payments</th>'
     + '<th>Share</th>'
     + '</tr></thead><tbody>'
     + div.by_ticker.map(t => {
       const share = div.total_eur > 0 ? (t.total_eur / div.total_eur * 100) : 0;
+      const ttm = (div.ttm_by_ticker || {})[t.ticker] || 0;
+      // Find position market value for yield calc
+      const pos = D.positions.find(p => p.ticker === t.ticker);
+      const mv = pos ? pos.market_value_eur : 0;
+      const yieldPct = mv > 0 && ttm > 0 ? (ttm / mv * 100) : null;
       return `<tr>`
         + `<td><strong>${t.ticker}</strong></td>`
         + `<td>${fmtEur(t.total_eur)}</td>`
+        + `<td>${fmtEur(ttm)}</td>`
+        + `<td>${yieldPct != null ? fmt(yieldPct, 2) + '%' : '—'}</td>`
         + `<td>${t.count}</td>`
         + `<td>${fmt(share, 1)}%</td>`
         + `</tr>`;

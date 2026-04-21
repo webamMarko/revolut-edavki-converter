@@ -199,7 +199,23 @@ def _query_dividend_data(conn: sqlite3.Connection | None) -> dict:
 
     by_month = [{"month": r[0], "total_eur": round(r[1], 2)} for r in rows]
 
-    return {"by_ticker": by_ticker, "by_month": by_month, "total_eur": total_eur}
+    # TTM (trailing 12 months) per-ticker for yield calculation
+    from datetime import datetime as _dt, timedelta as _td
+    ttm_start = (_dt.now() - _td(days=365)).strftime("%Y-%m-%d")
+    rows = conn.execute(f"""
+        SELECT ticker, SUM(
+            CASE WHEN fx_rate > 0 AND currency != 'EUR' THEN ABS(total_amount) / fx_rate
+                 ELSE ABS(total_amount) END
+        ) as ttm_eur
+        FROM transactions
+        WHERE type IN ({placeholders}) AND total_amount IS NOT NULL AND total_amount != 0
+          AND date >= ?
+        GROUP BY ticker
+    """, (*dividend_types, ttm_start)).fetchall()
+    ttm_by_ticker = {r[0]: round(r[1], 2) for r in rows}
+
+    return {"by_ticker": by_ticker, "by_month": by_month, "total_eur": total_eur,
+            "ttm_by_ticker": ttm_by_ticker}
 
 
 def _query_position_price_history(conn: sqlite3.Connection, tickers: list[str]) -> dict:
