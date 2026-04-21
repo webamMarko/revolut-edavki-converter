@@ -772,6 +772,41 @@ body {
 .milestone-text { font-size: 0.85rem; font-weight: 600; }
 .milestone-detail { font-size: 0.75rem; color: var(--muted); }
 
+/* ---- Keyboard shortcut modal ---- */
+.shortcut-modal-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+}
+.shortcut-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.2rem 1.5rem;
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 0.8rem;
+  align-items: center;
+}
+.shortcut-key kbd {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.45rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  color: var(--text);
+  display: inline-block;
+  min-width: 1.6rem;
+  text-align: center;
+}
+.shortcut-desc { font-size: 0.8rem; color: var(--muted); }
+
 /* ---- Print styles ---- */
 @media print {
   :root {

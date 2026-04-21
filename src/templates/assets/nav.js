@@ -79,10 +79,29 @@
     item.addEventListener('click', function() { switchPage(item.dataset.page); });
   });
 
-  // Keyboard: ← → or ↑ ↓ to step through visible nav items
+  // Keyboard: ← → or ↑ ↓ to step through visible nav items, plus page shortcuts
+  var _shortcutMap = {
+    '1': 'overview', '2': 'charts', '3': 'positions', '4': 'dividends',
+    '5': 'notes', '6': 'tax', '7': 'history',
+    'o': 'overview', 'c': 'charts', 'p': 'positions', 'd': 'dividends',
+    'n': 'notes', 't': 'tax', 'h': 'history',
+  };
   document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if (e.altKey || e.ctrlKey || e.metaKey) return;
+
+    // ? or / to toggle help modal
+    if (e.key === '?' || (e.key === '/' && !e.shiftKey)) {
+      e.preventDefault();
+      _toggleShortcutHelp();
+      return;
+    }
+    // Escape to close help modal
+    if (e.key === 'Escape') {
+      var modal = document.getElementById('shortcutHelpModal');
+      if (modal && modal.style.display !== 'none') { modal.style.display = 'none'; return; }
+    }
+
     const ids = [...navItems]
       .filter(function(i) { return i.style.display !== 'none'; })
       .map(function(i) { return i.dataset.page; });
@@ -93,7 +112,50 @@
     if ((e.key === 'ArrowLeft' || e.key === 'ArrowUp') && idx > 0) {
       e.preventDefault(); switchPage(ids[idx - 1]);
     }
+    // Page shortcuts
+    var target = _shortcutMap[e.key];
+    if (target && document.getElementById('page-' + target)) {
+      e.preventDefault();
+      switchPage(target);
+    }
   });
+
+  // Shortcut help modal
+  function _toggleShortcutHelp() {
+    var modal = document.getElementById('shortcutHelpModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'shortcutHelpModal';
+      modal.className = 'shortcut-modal-overlay';
+      modal.innerHTML = '<div class="shortcut-modal">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">'
+        + '<h3 style="margin:0">Keyboard Shortcuts</h3>'
+        + '<button onclick="document.getElementById(\'shortcutHelpModal\').style.display=\'none\'" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem">&times;</button>'
+        + '</div>'
+        + '<div class="shortcut-grid">'
+        + _shortcutRow('?', 'Toggle this help')
+        + _shortcutRow('← →', 'Previous / next page')
+        + _shortcutRow('↑ ↓', 'Previous / next page')
+        + _shortcutRow('1-7', 'Jump to page by number')
+        + _shortcutRow('O', 'Overview')
+        + _shortcutRow('C', 'Charts')
+        + _shortcutRow('P', 'Positions')
+        + _shortcutRow('D', 'Dividends')
+        + _shortcutRow('N', 'Notes')
+        + _shortcutRow('T', 'Tax')
+        + _shortcutRow('H', 'History')
+        + _shortcutRow('Esc', 'Close modal')
+        + '</div></div>';
+      document.body.appendChild(modal);
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) modal.style.display = 'none';
+      });
+    }
+    modal.style.display = modal.style.display === 'none' ? '' : 'none';
+  }
+  function _shortcutRow(key, desc) {
+    return '<div class="shortcut-key"><kbd>' + key + '</kbd></div><div class="shortcut-desc">' + desc + '</div>';
+  }
 
   // Show real estate nav item only when data exists
   if (D.real_estate && D.real_estate.properties && D.real_estate.properties.length > 0) {
