@@ -154,6 +154,48 @@ function _renderLots(ticker, currentPrice) {
   </div>`;
 }
 
+// --- Diversification metrics ---
+function updateConcentration() {
+  const positions = getActivePositions();
+  const section = document.getElementById('concentrationSection');
+  if (positions.length < 3) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  const totalMV = positions.reduce((s, p) => s + p.market_value_eur, 0) || 1;
+  const weights = positions.map(p => p.market_value_eur / totalMV);
+
+  // HHI: sum of squared weights (0-10000 scale)
+  const hhi = Math.round(weights.reduce((s, w) => s + w * w, 0) * 10000);
+  const hhiLabel = hhi < 1500 ? 'Well diversified' : hhi < 2500 ? 'Moderate' : 'Concentrated';
+
+  // Top 5 concentration
+  const sorted = [...weights].sort((a, b) => b - a);
+  const top5Pct = sorted.slice(0, 5).reduce((s, w) => s + w, 0) * 100;
+  const top10Pct = sorted.slice(0, 10).reduce((s, w) => s + w, 0) * 100;
+
+  // Effective number of positions (1/HHI normalized)
+  const effective = weights.reduce((s, w) => s + w * w, 0);
+  const effectiveN = effective > 0 ? Math.round(1 / effective) : positions.length;
+
+  // Largest position
+  const largest = positions.length > 0
+    ? positions.reduce((a, b) => a.market_value_eur > b.market_value_eur ? a : b)
+    : null;
+  const largestPct = largest ? (largest.market_value_eur / totalMV * 100) : 0;
+
+  const el = document.getElementById('concentrationCards');
+  el.innerHTML = [
+    ['Positions', positions.length, ''],
+    ['Effective Positions', effectiveN, '', 'Equal-weight equivalent'],
+    ['HHI', hhi.toLocaleString(), '', hhiLabel],
+    ['Top 5 Concentration', fmt(top5Pct, 1) + '%', ''],
+    ['Top 10 Concentration', fmt(top10Pct, 1) + '%', ''],
+    ['Largest Position', largest ? largest.ticker : '—', '', largest ? fmt(largestPct, 1) + '% of portfolio' : ''],
+  ].map(([l, v, c, sub]) =>
+    `<div class="metric-card"><div class="label">${l}</div><div class="value ${c || ''}">${v}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`
+  ).join('');
+}
+
 // --- Positions table ---
 const _posCharts = {};  // ticker -> Chart instance
 

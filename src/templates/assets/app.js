@@ -68,6 +68,7 @@ function updateAll() {
   updateGains();
   updateAllocation();
   updateCurrencyExposure();
+  updateConcentration();
   updatePositions();
   updateClosedPositions();
   updateDividends();
