@@ -5,7 +5,10 @@
   </button>
 </div>
 <div class="mobile-filters" id="mobileFilters" style="display:none">
-  <div id="mobileAssetToggles" class="mobile-filter-row"></div>
+  <div class="mobile-filter-row">
+    <select id="mobileRegimeSelect" class="regime-select" style="max-width:160px;flex-shrink:0"></select>
+    <div id="mobileAssetToggles" class="mobile-filter-row" style="flex:1"></div>
+  </div>
   <div id="mobileFireRow" class="mobile-filter-row mobile-fire-row" style="display:none">
     <span class="mobile-fire-label">Projections</span>
     <div id="mobileFireToggleBtn" class="toggle-btn toggle-fire">FIRE</div>
@@ -27,8 +30,15 @@
     <div class="brand-dates">{{ start_date }} &ndash; {{ end_date }}</div>
   </div>
 
+  <div id="regimeFilter" class="sidebar-filter-block">
+    <div class="filter-label" id="regimeFilterLabel">Tax Country</div>
+    <select id="regimeSelect" class="regime-select">
+      <!-- Populated by JS from D.available_regimes -->
+    </select>
+  </div>
+
   <div id="assetFilter" class="sidebar-filter-block" style="display:none">
-    <div class="filter-label">Assets</div>
+    <div class="filter-label" id="assetFilterLabel">Assets</div>
     <div id="assetToggles" class="toggles"></div>
   </div>
 

@@ -19,11 +19,11 @@ function updateDividends() {
   const portfolioYield = portfolioValue > 0 && ttm > 0 ? (ttm / portfolioValue * 100) : null;
 
   document.getElementById('dividendCards').innerHTML = [
-    ['Total Income', fmtEur(div.total_eur), ''],
-    ['Last 12 Months', fmtEur(ttm), ''],
-    ['TTM Yield', portfolioYield != null ? fmt(portfolioYield, 2) + '%' : '—', ''],
-    ['Monthly Avg', fmtEur(avgMonthly), ''],
-    ['Paying Tickers', tickers, ''],
+    [t('div.total_income'), fmtCcy(div.total_eur), ''],
+    [t('div.last_12m'), fmtCcy(ttm), ''],
+    [t('div.ttm_yield'), portfolioYield != null ? fmt(portfolioYield, 2) + '%' : '—', ''],
+    [t('div.monthly_avg'), fmtCcy(avgMonthly), ''],
+    [t('div.paying_tickers'), tickers, ''],
   ].map(([l, v, c]) =>
     `<div class="metric-card"><div class="label">${l}</div><div class="value ${c}">${v}</div></div>`
   ).join('');
@@ -34,12 +34,12 @@ function updateDividends() {
   // Per-ticker table
   const dt = document.getElementById('dividendTable');
   dt.innerHTML = '<thead><tr>'
-    + '<th>Ticker</th>'
-    + '<th>Total Income</th>'
-    + '<th>TTM Income</th>'
-    + '<th>TTM Yield</th>'
-    + '<th>Payments</th>'
-    + '<th>Share</th>'
+    + '<th>' + t('pos.ticker') + '</th>'
+    + '<th>' + t('div.total') + '</th>'
+    + '<th>' + t('div.ttm_income') + '</th>'
+    + '<th>' + t('div.ttm_yield_col') + '</th>'
+    + '<th>' + t('div.payments') + '</th>'
+    + '<th>' + t('div.share') + '</th>'
     + '</tr></thead><tbody>'
     + div.by_ticker.map(t => {
       const share = div.total_eur > 0 ? (t.total_eur / div.total_eur * 100) : 0;
@@ -79,7 +79,7 @@ function _buildDividendChart(monthly) {
     data: {
       labels,
       datasets: [{
-        label: 'Dividend Income (EUR)',
+        label: t('div.chart_label') + ' (' + _currency + ')',
         data: values,
         backgroundColor: 'rgba(52,211,153,0.5)',
         borderColor: '#34d399',
@@ -159,7 +159,7 @@ function _buildDividendGrowth(monthly) {
     data: {
       labels: years,
       datasets: [{
-        label: 'Annual Dividend Income (EUR)',
+        label: t('div.annual_label') + ' (' + _currency + ')',
         data: totals,
         backgroundColor: 'rgba(99,102,241,0.5)',
         borderColor: '#6366f1',
@@ -188,7 +188,7 @@ function _buildDividendGrowth(monthly) {
 
   // Growth table
   const gt = document.getElementById('dividendGrowthTable');
-  gt.innerHTML = '<thead><tr><th>Year</th><th>Income</th><th>YoY Growth</th><th>Growth %</th></tr></thead><tbody>'
+  gt.innerHTML = '<thead><tr><th>' + t('div.growth.year') + '</th><th>' + t('div.growth.income') + '</th><th>' + t('div.growth.yoy') + '</th><th>' + t('div.growth.pct') + '</th></tr></thead><tbody>'
     + years.map((y, i) => {
       const val = yearTotals[y];
       const prev = i > 0 ? yearTotals[years[i - 1]] : null;
@@ -198,7 +198,7 @@ function _buildDividendGrowth(monthly) {
         + '<td><strong>' + y + '</strong></td>'
         + '<td>' + fmtEur(val) + '</td>'
         + '<td class="' + (growth != null ? cls(growth) : '') + '">'
-          + (growth != null ? sign(growth) + ' EUR' : '—') + '</td>'
+          + (growth != null ? sign(growth) + ' ' + _currency : '—') + '</td>'
         + '<td class="' + (growthPct != null ? cls(growthPct) : '') + '">'
           + (growthPct != null ? sign(growthPct) + '%' : '—') + '</td>'
         + '</tr>';

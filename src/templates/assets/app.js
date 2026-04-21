@@ -1,6 +1,17 @@
+// --- i18n translation helper ---
+const _i18n = D.i18n || {};
+function t(key, params) {
+  let s = _i18n[key] || key;
+  if (params) { for (const [k, v] of Object.entries(params)) s = s.replace('{' + k + '}', v); }
+  return s;
+}
+const _locale = D.locale || 'en-US';
+const _currency = D.currency || 'EUR';
+
 // --- Formatters ---
-const fmt    = (v, d=2) => v == null ? '—' : v.toLocaleString('en-US', {minimumFractionDigits:d, maximumFractionDigits:d});
-const fmtEur = v => v == null ? '—' : fmt(v) + ' EUR';
+const fmt    = (v, d=2) => v == null ? '—' : v.toLocaleString(_locale, {minimumFractionDigits:d, maximumFractionDigits:d});
+const fmtCcy = v => v == null ? '—' : fmt(v) + ' ' + _currency;
+const fmtEur = fmtCcy; // backwards compat alias
 const cls    = v => v == null ? '' : v >= 0 ? 'pos' : 'neg';
 const pct    = v => v == null ? '—' : fmt(v) + '%';
 const sign   = v => v == null ? '—' : (v >= 0 ? '+' : '') + fmt(v);
@@ -49,6 +60,47 @@ function computeYearlyAverages() {
   };
 }
 
+// --- Regime selector ---
+(function() {
+  const sel = document.getElementById('regimeSelect');
+  const regimes = D.available_regimes || [];
+  if (!sel || regimes.length === 0) return;
+  const current = D.country || 'SI';
+  const mobileSel = document.getElementById('mobileRegimeSelect');
+  [sel, mobileSel].forEach(function(s) {
+    if (!s) return;
+    regimes.forEach(function(r) {
+      const opt = document.createElement('option');
+      opt.value = r.code;
+      opt.textContent = r.name + ' (' + r.currency + ')';
+      if (r.code === current) opt.selected = true;
+      s.appendChild(opt);
+    });
+  });
+  // Localize labels
+  const lbl = document.getElementById('regimeFilterLabel');
+  if (lbl) lbl.textContent = t('regime.title');
+  const albl = document.getElementById('assetFilterLabel');
+  if (albl) albl.textContent = t('filter.assets');
+
+  function onRegimeChange(newCountry) {
+    if (newCountry === current) return;
+    if (window.location.pathname.includes('/report')) {
+      const url = new URL(window.location);
+      url.searchParams.set('country', newCountry);
+      window.location.href = url.toString();
+    } else {
+      [sel, mobileSel].forEach(function(s) { if (s) s.value = current; });
+      alert('To change tax country in standalone reports, regenerate with --country ' + newCountry);
+    }
+  }
+  sel.addEventListener('change', function() { onRegimeChange(sel.value); });
+  if (mobileSel) mobileSel.addEventListener('change', function() { onRegimeChange(mobileSel.value); });
+  // Show mobile filters row if we have regimes (even without asset filter)
+  const mobileFiltersEl = document.getElementById('mobileFilters');
+  if (mobileFiltersEl && regimes.length > 1) mobileFiltersEl.style.display = '';
+})();
+
 // --- Update all sections ---
 function updateAll() {
   const banner = document.getElementById('selectionBanner');
@@ -56,11 +108,11 @@ function updateAll() {
   if (isZoomed) {
     banner.style.display = '';
     document.getElementById('selectionLabel').textContent =
-      'Selected period: ' + allDates[selStart] + ' to ' + allDates[selEnd];
-    if (hint) hint.textContent = 'Drag to refine, or reset';
+      t('period.selected') + ': ' + allDates[selStart] + ' — ' + allDates[selEnd];
+    if (hint) hint.textContent = t('period.drag_refine');
   } else {
     banner.style.display = 'none';
-    if (hint) hint.textContent = 'Drag to select a period';
+    if (hint) hint.textContent = t('period.drag_hint');
   }
   updateSummary();
   updateRiskMetrics();

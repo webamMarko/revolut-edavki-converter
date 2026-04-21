@@ -150,7 +150,7 @@ def cmd_analytics(args):
 
 
 def cmd_tax(args):
-    """Compute Slovenian capital gains tax."""
+    """Compute capital gains tax for the specified country."""
     from .db import get_connection
     from .tax import compute_tax_report
     from .formatters import format_tax
@@ -162,6 +162,7 @@ def cmd_tax(args):
             year=args.year,
             include_unrealized=args.include_unrealized,
             scope=args.scope,
+            country=getattr(args, "country", "SI"),
         )
         format_tax(report, verbose=args.verbose)
     finally:
@@ -191,9 +192,11 @@ def cmd_report(args):
                     "WHERE asset_class != 'realestate' ORDER BY 1"
                 ).fetchall()
             ]
+            country = getattr(args, "country", "SI")
             for yr in years_with_tx:
                 try:
-                    t = compute_tax_report(conn, year=yr, include_unrealized=False, scope="all")
+                    t = compute_tax_report(conn, year=yr, include_unrealized=False, scope="all",
+                                           country=country)
                     tax_by_year[yr] = t
                 except Exception:
                     pass
@@ -222,7 +225,8 @@ def cmd_report(args):
         notes = query_investment_notes(conn)
         html = generate_html_report(analytics, tax_by_year, transactions, per_class=per_class,
                                      real_estate=re_data, fire_config=fire_cfg,
-                                     investment_notes=notes, conn=conn)
+                                     investment_notes=notes, conn=conn,
+                                     country=getattr(args, "country", "SI"))
 
         output = args.output or f"portfolio_report_{analytics.start_date}_{analytics.end_date}.html"
         with open(output, "w", encoding="utf-8") as f:
@@ -567,12 +571,14 @@ Examples:
     p_analytics.set_defaults(func=cmd_analytics)
 
     # --- tax ---
-    p_tax = subparsers.add_parser("tax", help="Compute Slovenian capital gains tax")
+    p_tax = subparsers.add_parser("tax", help="Compute capital gains tax")
     p_tax.add_argument("--year", type=int, required=True, help="Fiscal year")
     p_tax.add_argument("--include-unrealized", action="store_true",
                        help="Include unrealized tax liability")
     p_tax.add_argument("--scope", choices=["stock", "cfd", "crypto", "savings", "realestate", "all"], default="all",
                        help="Asset class scope (default: all)")
+    p_tax.add_argument("--country", default="SI",
+                       help="Country tax regime: SI, DE, AT, US, IT, ES, FR, NL (default: SI)")
     p_tax.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_tax.set_defaults(func=cmd_tax)
 
@@ -581,6 +587,8 @@ Examples:
     p_report.add_argument("--year", type=int, help="Limit to a specific year")
     p_report.add_argument("--from", dest="start_date", type=parse_date, help="Start date")
     p_report.add_argument("--to", dest="end_date", type=parse_date, help="End date")
+    p_report.add_argument("--country", default="SI",
+                          help="Country tax regime: SI, DE, AT, US, IT, ES, FR, NL (default: SI)")
     p_report.add_argument("--output", "-o", help="Output HTML file path")
     p_report.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_report.set_defaults(func=cmd_report)

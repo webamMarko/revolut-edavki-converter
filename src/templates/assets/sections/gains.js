@@ -8,26 +8,26 @@ function updateGains() {
     const m = computePeriodMetrics(selStart, selEnd);
     const unrealized = m.endVal - m.endInv - ds.realized_gain_eur[selEnd];
     gt.innerHTML='<tbody>'+[
-      ['Period Realized Gains', m.periodRealized],
-      ['Unrealized (at end)', unrealized],
-      ['Period Dividends', m.periodDividends],
-    ].map(([l,v])=>`<tr><td>${l}</td><td class="${cls(v)}">${sign(v)} EUR</td></tr>`).join('')+'</tbody>';
+      [t('gains.period_realized'), m.periodRealized],
+      [t('gains.unrealized_at_end'), unrealized],
+      [t('gains.period_dividends'), m.periodDividends],
+    ].map(([l,v])=>`<tr><td>${l}</td><td class="${cls(v)}">${sign(v)} ${_currency}</td></tr>`).join('')+'</tbody>';
     _buildGainsChart([
-      { label: 'Realized', value: m.periodRealized },
-      { label: 'Unrealized', value: unrealized },
-      { label: 'Dividends', value: m.periodDividends },
+      { label: t('gains.chart.realized'), value: m.periodRealized },
+      { label: t('gains.chart.unrealized'), value: unrealized },
+      { label: t('gains.chart.dividends'), value: m.periodDividends },
     ]);
   } else {
     const g = getActiveGains();
     gt.innerHTML='<tbody>'+[
-      ['Realized Gains',g.realized_eur],['Unrealized Gains',g.unrealized_eur],
-      ['Dividends',g.dividends_eur],['Fees',g.fees_eur],
-    ].map(([l,v])=>`<tr><td>${l}</td><td class="${cls(v)}">${sign(v)} EUR</td></tr>`).join('')+'</tbody>';
+      [t('gains.realized'),g.realized_eur],[t('gains.unrealized'),g.unrealized_eur],
+      [t('gains.dividends'),g.dividends_eur],[t('gains.fees'),g.fees_eur],
+    ].map(([l,v])=>`<tr><td>${l}</td><td class="${cls(v)}">${sign(v)} ${_currency}</td></tr>`).join('')+'</tbody>';
     _buildGainsChart([
-      { label: 'Realized', value: g.realized_eur },
-      { label: 'Unrealized', value: g.unrealized_eur },
-      { label: 'Dividends', value: g.dividends_eur },
-      { label: 'Fees', value: g.fees_eur },
+      { label: t('gains.chart.realized'), value: g.realized_eur },
+      { label: t('gains.chart.unrealized'), value: g.unrealized_eur },
+      { label: t('gains.chart.dividends'), value: g.dividends_eur },
+      { label: t('gains.chart.fees'), value: g.fees_eur },
     ]);
   }
 }

@@ -13,7 +13,7 @@ try {
       ['Properties', RE.properties.length, ''],
       ['Purchase Total', fmtEur(RE.total_purchase_eur), ''],
       ['ETN Estimate', fmtEur(RE.total_estimated_eur), ''],
-      ['Unrealized Gain', sign(RE.total_gain_eur) + ' EUR', cls(RE.total_gain_eur),
+      ['Unrealized Gain', sign(RE.total_gain_eur) + ' ' + _currency, cls(RE.total_gain_eur),
        sign(RE.total_gain_pct) + '%'],
     ];
     document.getElementById('reCards').innerHTML = reCards.map(([l, v, c, sub]) =>
@@ -47,7 +47,7 @@ try {
             x: {type: 'time', time: {unit: 'month', tooltipFormat: 'yyyy-MM-dd'}, grid: {display: false}},
             y: {title: {display: true, text: 'EUR'}, ticks: {callback: function(v) { return v.toLocaleString(); }}}
           },
-          plugins: {tooltip: {callbacks: {label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y) + ' EUR'; }}}}
+          plugins: {tooltip: {callbacks: {label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y) + ' ' + _currency; }}}}
         }
       });
     }

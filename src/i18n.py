@@ -1,0 +1,651 @@
+"""Internationalization (i18n) for portfolio report UI strings.
+
+Each language is a flat dict mapping string keys to translated values.
+Keys are used by the frontend t() function to look up translations.
+"""
+
+# All supported translations. English is the canonical reference.
+TRANSLATIONS: dict[str, dict[str, str]] = {
+    "en": {
+        # --- Navigation ---
+        "nav.overview": "Overview",
+        "nav.heatmap": "Heatmap",
+        "nav.positions": "Positions",
+        "nav.dividends": "Dividends",
+        "nav.notes": "Notes",
+        "nav.realestate": "Real Estate",
+        "nav.tax": "Tax",
+        "nav.history": "History",
+
+        # --- Filters ---
+        "filter.assets": "Assets",
+        "filter.projections": "Projections",
+        "filter.infl": "Infl %",
+        "filter.monthly_inv": "Mo. inv.",
+        "class.stock": "Stocks",
+        "class.cfd": "CFD",
+        "class.crypto": "Crypto",
+        "class.savings": "Savings",
+        "class.realestate": "Real Estate",
+
+        # --- Summary cards ---
+        "summary.portfolio_value": "Portfolio Value",
+        "summary.total_invested": "Total Invested",
+        "summary.absolute_gain": "Absolute Gain",
+        "summary.total_return": "Total Return",
+        "summary.cagr": "CAGR",
+        "summary.twr": "TWR",
+        "summary.max_drawdown": "Max Drawdown",
+        "summary.avg_yearly_growth": "Avg Yearly Growth",
+        "summary.avg_yearly_return": "Avg Yearly Return",
+        "summary.avg_yearly_invested": "Avg Yearly Invested",
+        "summary.fire_progress": "FIRE Progress",
+        "summary.fire_to_go": "to go",
+        "summary.fire_achieved": "Achieved!",
+        "summary.fire_years": "yrs",
+        "summary.fire_est": "est.",
+        "summary.yr_avg": "yr avg",
+
+        # --- Period (zoomed) ---
+        "period.start_value": "Start Value",
+        "period.end_value": "End Value",
+        "period.change": "Period Change",
+        "period.return": "Period Return",
+        "period.selected": "Selected period",
+        "period.drag_hint": "Drag to select a period",
+        "period.drag_refine": "Drag to refine, or reset",
+
+        # --- Risk metrics ---
+        "risk.volatility": "Volatility",
+        "risk.sharpe": "Sharpe Ratio",
+        "risk.sortino": "Sortino Ratio",
+        "risk.calmar": "Calmar Ratio",
+        "risk.best_day": "Best Day",
+        "risk.worst_day": "Worst Day",
+        "risk.best_month": "Best Month",
+        "risk.worst_month": "Worst Month",
+        "risk.positive_days": "Positive Days",
+        "risk.volatility_sub": "Annualized std dev",
+        "risk.sharpe_sub": "Risk-adj return (rf=3%)",
+        "risk.sortino_sub": "Downside risk-adj",
+        "risk.calmar_sub": "Return / max drawdown",
+
+        # --- Gains ---
+        "gains.title": "Gains Breakdown",
+        "gains.realized": "Realized Gains",
+        "gains.unrealized": "Unrealized Gains",
+        "gains.dividends": "Dividends",
+        "gains.fees": "Fees",
+        "gains.period_realized": "Period Realized Gains",
+        "gains.unrealized_at_end": "Unrealized (at end)",
+        "gains.period_dividends": "Period Dividends",
+        "gains.chart.realized": "Realized",
+        "gains.chart.unrealized": "Unrealized",
+        "gains.chart.dividends": "Dividends",
+        "gains.chart.fees": "Fees",
+        "gains.chart.total": "Total",
+
+        # --- Positions ---
+        "pos.ticker": "Ticker",
+        "pos.qty": "Qty",
+        "pos.avg_cost": "Avg Cost",
+        "pos.cost_basis": "Cost Basis",
+        "pos.market_value": "Market Value",
+        "pos.unrealized": "Unrealized",
+        "pos.realized": "Realized",
+        "pos.total_pl": "Total P&L",
+        "pos.weight": "Weight",
+        "pos.current_price": "Current Price",
+        "pos.avg_cost_share": "Avg Cost / Share",
+        "pos.qty_held": "Qty Held",
+        "pos.unrealized_pl": "Unrealized P&L",
+        "pos.realized_pl": "Realized P&L",
+        "pos.price_change_2yr": "2yr Price Change",
+        "pos.portfolio_weight": "Portfolio Weight",
+        "pos.lots_title": "Cost Basis Lots (FIFO)",
+        "pos.lots.date": "Date",
+        "pos.lots.cost_share": "Cost/Share",
+        "pos.lots.cost": "Cost",
+        "pos.lots.pl": "P&L",
+        "pos.export": "Export CSV",
+
+        # --- Closed positions ---
+        "closed.title": "Closed Positions",
+        "closed.proceeds": "Proceeds",
+        "closed.return_pct": "Return %",
+
+        # --- Allocation ---
+        "alloc.title": "Allocation",
+        "alloc.other": "Other",
+        "alloc.of_portfolio": "of portfolio",
+
+        # --- Currency exposure ---
+        "currency.title": "Currency Exposure",
+
+        # --- Concentration ---
+        "concentration.title": "Diversification",
+        "concentration.positions": "Positions",
+        "concentration.effective": "Effective Positions",
+        "concentration.effective_sub": "Equal-weight equivalent",
+        "concentration.hhi": "HHI",
+        "concentration.top5": "Top 5 Concentration",
+        "concentration.top10": "Top 10 Concentration",
+        "concentration.largest": "Largest Position",
+        "concentration.well_diversified": "Well diversified",
+        "concentration.moderate": "Moderate",
+        "concentration.concentrated": "Concentrated",
+
+        # --- Attribution ---
+        "attribution.title": "P&L Attribution",
+        "attribution.contribution": "Contribution",
+
+        # --- Top movers ---
+        "movers.gainers": "Top Gainers",
+        "movers.losers": "Top Losers",
+        "movers.none": "None",
+
+        # --- Milestones ---
+        "milestones.title": "Portfolio Milestones",
+        "milestones.first_investment": "First investment",
+        "milestones.ath": "All-time high",
+        "milestones.worst_drawdown": "Worst drawdown",
+        "milestones.reached": "Reached",
+        "milestones.best_day": "Best single day",
+        "milestones.worst_day": "Worst single day",
+        "milestones.portfolio_age": "Portfolio age",
+        "milestones.days": "days",
+
+        # --- Dividends ---
+        "div.total_income": "Total Income",
+        "div.last_12m": "Last 12 Months",
+        "div.ttm_yield": "TTM Yield",
+        "div.monthly_avg": "Monthly Avg",
+        "div.paying_tickers": "Paying Tickers",
+        "div.total": "Total Income",
+        "div.ttm_income": "TTM Income",
+        "div.ttm_yield_col": "TTM Yield",
+        "div.payments": "Payments",
+        "div.share": "Share",
+        "div.chart_label": "Dividend Income",
+        "div.annual_label": "Annual Dividend Income",
+        "div.growth.title": "Dividend Growth",
+        "div.growth.year": "Year",
+        "div.growth.income": "Income",
+        "div.growth.yoy": "YoY Growth",
+        "div.growth.pct": "Growth %",
+
+        # --- Tax ---
+        "tax.title": "Tax",
+        "tax.year": "Tax Year",
+        "tax.realized_gain": "Realized Gain",
+        "tax.realized_tax": "Realized Tax",
+        "tax.dividends": "Dividends",
+        "tax.fees": "Fees",
+        "tax.total_tax": "Total Tax",
+        "tax.no_sales": "No realized sales for this year / filter",
+        "tax.export": "Export",
+        "tax.export_fifo": "FIFO CSV",
+        "tax.export_edavki": "eDavki XML",
+        "tax.crypto_exempt": "Crypto gains below {threshold} {currency} threshold — exempt from tax",
+        "tax.col.ticker": "Ticker",
+        "tax.col.date": "Date",
+        "tax.col.qty": "Qty",
+        "tax.col.proceeds": "Proceeds",
+        "tax.col.cost_basis": "Cost Basis",
+        "tax.col.gain": "Gain",
+        "tax.col.std_costs": "Std Costs",
+        "tax.col.held": "Held",
+        "tax.col.rate": "Rate",
+        "tax.col.tax": "Tax",
+
+        # --- Transactions ---
+        "tx.title": "Transaction History",
+        "tx.filter_placeholder": "Filter by ticker or type...",
+        "tx.count": "transactions",
+        "tx.prev": "Prev",
+        "tx.next": "Next",
+        "tx.page_of": "Page {page} of {total}",
+        "tx.total_trades": "Total Trades",
+        "tx.buys_sells": "Buys / Sells",
+        "tx.avg_trade_size": "Avg Trade Size",
+        "tx.trades_month": "Trades/Month",
+        "tx.unique_tickers": "Unique Tickers",
+        "tx.most_traded": "Most Traded",
+        "tx.dividends_received": "Dividends Received",
+        "tx.trades": "trades",
+        "tx.col.date": "Date",
+        "tx.col.ticker": "Ticker",
+        "tx.col.type": "Type",
+        "tx.col.qty": "Qty",
+        "tx.col.price": "Price",
+        "tx.col.amount": "Amount",
+        "tx.col.ccy": "Ccy",
+        "tx.col.fx": "FX",
+        "tx.col.class": "Class",
+
+        # --- Charts / Heatmap ---
+        "chart.portfolio_value": "Portfolio Value",
+        "chart.range_hint": "Drag to select a period",
+        "chart.reset": "Reset",
+        "chart.heatmap_title": "Monthly Returns Heatmap",
+        "chart.drawdown_title": "Drawdown from Peak",
+        "chart.yearly_heatmap": "Yearly Returns",
+        "chart.rolling_title": "Rolling 12-Month Returns",
+        "chart.yearly_table": "Annual Summary",
+
+        # --- Benchmark ---
+        "bench.title": "Performance vs Benchmarks",
+        "bench.comparison": "Benchmark Comparison",
+
+        # --- Keyboard shortcuts ---
+        "shortcuts.title": "Keyboard Shortcuts",
+        "shortcuts.toggle_help": "Toggle this help",
+        "shortcuts.prev_next": "Previous / next page",
+        "shortcuts.jump": "Jump to page by number",
+        "shortcuts.close": "Close modal",
+
+        # --- Footer ---
+        "footer.generated": "Generated",
+        "footer.nav_hint": "navigate sections",
+
+        # --- Notes ---
+        "notes.title": "Investment Notes",
+        "notes.empty": "No notes yet",
+        "notes.add": "Add Note",
+        "notes.edit": "Edit",
+        "notes.delete": "Delete",
+        "notes.save": "Save",
+        "notes.cancel": "Cancel",
+
+        # --- Real Estate ---
+        "re.title": "Real Estate",
+        "re.total_value": "Total Value",
+        "re.total_cost": "Total Cost",
+        "re.total_gain": "Total Gain",
+
+        # --- Regime selector ---
+        "regime.title": "Tax Country",
+        "regime.select": "Select country",
+    },
+
+    "sl": {
+        # --- Navigation ---
+        "nav.overview": "Pregled",
+        "nav.heatmap": "Toplotni zemljevid",
+        "nav.positions": "Pozicije",
+        "nav.dividends": "Dividende",
+        "nav.notes": "Zapiski",
+        "nav.realestate": "Nepremičnine",
+        "nav.tax": "Davek",
+        "nav.history": "Zgodovina",
+
+        # --- Filters ---
+        "filter.assets": "Premoženje",
+        "filter.projections": "Projekcije",
+        "filter.infl": "Infl. %",
+        "filter.monthly_inv": "Mes. vl.",
+        "class.stock": "Delnice",
+        "class.cfd": "CFD",
+        "class.crypto": "Kripto",
+        "class.savings": "Varčevanja",
+        "class.realestate": "Nepremičnine",
+
+        # --- Summary cards ---
+        "summary.portfolio_value": "Vrednost portfelja",
+        "summary.total_invested": "Skupaj vloženo",
+        "summary.absolute_gain": "Absolutni dobiček",
+        "summary.total_return": "Skupni donos",
+        "summary.cagr": "CAGR",
+        "summary.twr": "TWR",
+        "summary.max_drawdown": "Maks. upad",
+        "summary.avg_yearly_growth": "Povp. letna rast",
+        "summary.avg_yearly_return": "Povp. letni donos",
+        "summary.avg_yearly_invested": "Povp. letni vložek",
+        "summary.fire_progress": "FIRE napredek",
+        "summary.fire_to_go": "do cilja",
+        "summary.fire_achieved": "Doseženo!",
+        "summary.fire_years": "let",
+        "summary.fire_est": "oce.",
+        "summary.yr_avg": "let povp.",
+
+        # --- Period ---
+        "period.start_value": "Začetna vrednost",
+        "period.end_value": "Končna vrednost",
+        "period.change": "Sprememba obdobja",
+        "period.return": "Donos obdobja",
+        "period.selected": "Izbrano obdobje",
+        "period.drag_hint": "Povlecite za izbor obdobja",
+        "period.drag_refine": "Povlecite za prilagoditev",
+
+        # --- Risk metrics ---
+        "risk.volatility": "Volatilnost",
+        "risk.sharpe": "Sharpov količnik",
+        "risk.sortino": "Sortinov količnik",
+        "risk.calmar": "Calmarov količnik",
+        "risk.best_day": "Najboljši dan",
+        "risk.worst_day": "Najslabši dan",
+        "risk.best_month": "Najboljši mesec",
+        "risk.worst_month": "Najslabši mesec",
+        "risk.positive_days": "Pozitivni dnevi",
+        "risk.volatility_sub": "Letna standardna deviacija",
+        "risk.sharpe_sub": "Prilagojeni donos (rf=3%)",
+        "risk.sortino_sub": "Prilagojen za negativno tveganje",
+        "risk.calmar_sub": "Donos / maks. upad",
+
+        # --- Gains ---
+        "gains.title": "Pregled dobičkov",
+        "gains.realized": "Realizirani dobički",
+        "gains.unrealized": "Nerealizirani dobički",
+        "gains.dividends": "Dividende",
+        "gains.fees": "Stroški",
+        "gains.period_realized": "Realizirani dobički obdobja",
+        "gains.unrealized_at_end": "Nerealizirani (ob koncu)",
+        "gains.period_dividends": "Dividende obdobja",
+        "gains.chart.realized": "Realizirani",
+        "gains.chart.unrealized": "Nerealizirani",
+        "gains.chart.dividends": "Dividende",
+        "gains.chart.fees": "Stroški",
+        "gains.chart.total": "Skupaj",
+
+        # --- Positions ---
+        "pos.ticker": "Oznaka",
+        "pos.qty": "Kol.",
+        "pos.avg_cost": "Povp. cena",
+        "pos.cost_basis": "Stroškovna osnova",
+        "pos.market_value": "Tržna vrednost",
+        "pos.unrealized": "Nerealizirani",
+        "pos.realized": "Realizirani",
+        "pos.total_pl": "Skupni D/I",
+        "pos.weight": "Delež",
+        "pos.current_price": "Trenutna cena",
+        "pos.avg_cost_share": "Povp. cena / delnica",
+        "pos.qty_held": "Količina",
+        "pos.unrealized_pl": "Nerealiziran D/I",
+        "pos.realized_pl": "Realiziran D/I",
+        "pos.price_change_2yr": "2-letna spr. cene",
+        "pos.portfolio_weight": "Delež v portfelju",
+        "pos.lots_title": "Osnove stroškov (FIFO)",
+        "pos.lots.date": "Datum",
+        "pos.lots.cost_share": "Cena/del.",
+        "pos.lots.cost": "Strošek",
+        "pos.lots.pl": "D/I",
+        "pos.export": "Izvozi CSV",
+
+        # --- Closed positions ---
+        "closed.title": "Zaprte pozicije",
+        "closed.proceeds": "Izkupiček",
+        "closed.return_pct": "Donos %",
+
+        # --- Allocation ---
+        "alloc.title": "Razporeditev",
+        "alloc.other": "Ostalo",
+        "alloc.of_portfolio": "portfelja",
+
+        # --- Currency exposure ---
+        "currency.title": "Valutna izpostavljenost",
+
+        # --- Concentration ---
+        "concentration.title": "Razpršenost",
+        "concentration.positions": "Pozicije",
+        "concentration.effective": "Efektivne pozicije",
+        "concentration.effective_sub": "Ekvivalent enakih uteži",
+        "concentration.hhi": "HHI",
+        "concentration.top5": "Top 5 koncentracija",
+        "concentration.top10": "Top 10 koncentracija",
+        "concentration.largest": "Največja pozicija",
+        "concentration.well_diversified": "Dobro razpršeno",
+        "concentration.moderate": "Zmerno",
+        "concentration.concentrated": "Koncentrirano",
+
+        # --- Attribution ---
+        "attribution.title": "Prispevek k D/I",
+        "attribution.contribution": "Prispevek",
+
+        # --- Top movers ---
+        "movers.gainers": "Najboljši",
+        "movers.losers": "Najslabši",
+        "movers.none": "Brez",
+
+        # --- Milestones ---
+        "milestones.title": "Mejniki portfelja",
+        "milestones.first_investment": "Prva naložba",
+        "milestones.ath": "Najvišja vrednost",
+        "milestones.worst_drawdown": "Najhujši upad",
+        "milestones.reached": "Doseženo",
+        "milestones.best_day": "Najboljši dan",
+        "milestones.worst_day": "Najslabši dan",
+        "milestones.portfolio_age": "Starost portfelja",
+        "milestones.days": "dni",
+
+        # --- Dividends ---
+        "div.total_income": "Skupni prihodek",
+        "div.last_12m": "Zadnjih 12 mesecev",
+        "div.ttm_yield": "TTM donos",
+        "div.monthly_avg": "Mesečno povp.",
+        "div.paying_tickers": "Plačniki",
+        "div.total": "Skupni prihodek",
+        "div.ttm_income": "TTM prihodek",
+        "div.ttm_yield_col": "TTM donos",
+        "div.payments": "Plačila",
+        "div.share": "Delež",
+        "div.chart_label": "Prihodek iz dividend",
+        "div.annual_label": "Letni prihodek iz dividend",
+        "div.growth.title": "Rast dividend",
+        "div.growth.year": "Leto",
+        "div.growth.income": "Prihodek",
+        "div.growth.yoy": "Letna rast",
+        "div.growth.pct": "Rast %",
+
+        # --- Tax ---
+        "tax.title": "Davek",
+        "tax.year": "Davčno leto",
+        "tax.realized_gain": "Realiziran dobiček",
+        "tax.realized_tax": "Realiziran davek",
+        "tax.dividends": "Dividende",
+        "tax.fees": "Stroški",
+        "tax.total_tax": "Skupni davek",
+        "tax.no_sales": "Ni realiziranih prodaj za to leto / filter",
+        "tax.export": "Izvozi",
+        "tax.export_fifo": "FIFO CSV",
+        "tax.export_edavki": "eDavki XML",
+        "tax.crypto_exempt": "Kripto dobički pod {threshold} {currency} pragom — oproščeni davka",
+        "tax.col.ticker": "Oznaka",
+        "tax.col.date": "Datum",
+        "tax.col.qty": "Kol.",
+        "tax.col.proceeds": "Izkupiček",
+        "tax.col.cost_basis": "Osnova",
+        "tax.col.gain": "Dobiček",
+        "tax.col.std_costs": "Norm. stroški",
+        "tax.col.held": "Držano",
+        "tax.col.rate": "Stopnja",
+        "tax.col.tax": "Davek",
+
+        # --- Transactions ---
+        "tx.title": "Zgodovina transakcij",
+        "tx.filter_placeholder": "Filtriraj po oznaki ali vrsti...",
+        "tx.count": "transakcij",
+        "tx.prev": "Nazaj",
+        "tx.next": "Naprej",
+        "tx.page_of": "Stran {page} od {total}",
+        "tx.total_trades": "Skupaj poslov",
+        "tx.buys_sells": "Nakupi / Prodaje",
+        "tx.avg_trade_size": "Povp. velikost posla",
+        "tx.trades_month": "Poslov/mesec",
+        "tx.unique_tickers": "Unikatne oznake",
+        "tx.most_traded": "Največkrat",
+        "tx.dividends_received": "Prejete dividende",
+        "tx.trades": "poslov",
+        "tx.col.date": "Datum",
+        "tx.col.ticker": "Oznaka",
+        "tx.col.type": "Vrsta",
+        "tx.col.qty": "Kol.",
+        "tx.col.price": "Cena",
+        "tx.col.amount": "Znesek",
+        "tx.col.ccy": "Valuta",
+        "tx.col.fx": "Tečaj",
+        "tx.col.class": "Razred",
+
+        # --- Charts / Heatmap ---
+        "chart.portfolio_value": "Vrednost portfelja",
+        "chart.range_hint": "Povlecite za izbor obdobja",
+        "chart.reset": "Ponastavi",
+        "chart.heatmap_title": "Mesečni donosi",
+        "chart.drawdown_title": "Upad od vrha",
+        "chart.yearly_heatmap": "Letni donosi",
+        "chart.rolling_title": "Drseči 12-mesečni donosi",
+        "chart.yearly_table": "Letni pregled",
+
+        # --- Benchmark ---
+        "bench.title": "Primerjava z indeksi",
+        "bench.comparison": "Primerjava z indeksi",
+
+        # --- Keyboard shortcuts ---
+        "shortcuts.title": "Bližnjice na tipkovnici",
+        "shortcuts.toggle_help": "Odpri/zapri pomoč",
+        "shortcuts.prev_next": "Prejšnja / naslednja stran",
+        "shortcuts.jump": "Skoči na stran po številki",
+        "shortcuts.close": "Zapri okno",
+
+        # --- Footer ---
+        "footer.generated": "Ustvarjeno",
+        "footer.nav_hint": "navigacija med razdelki",
+
+        # --- Notes ---
+        "notes.title": "Investicijski zapiski",
+        "notes.empty": "Ni zapiskov",
+        "notes.add": "Dodaj zapisek",
+        "notes.edit": "Uredi",
+        "notes.delete": "Izbriši",
+        "notes.save": "Shrani",
+        "notes.cancel": "Prekliči",
+
+        # --- Real Estate ---
+        "re.title": "Nepremičnine",
+        "re.total_value": "Skupna vrednost",
+        "re.total_cost": "Skupni strošek",
+        "re.total_gain": "Skupni dobiček",
+
+        # --- Regime selector ---
+        "regime.title": "Davčna država",
+        "regime.select": "Izberi državo",
+    },
+
+    "de": {
+        "nav.overview": "Übersicht",
+        "nav.heatmap": "Heatmap",
+        "nav.positions": "Positionen",
+        "nav.dividends": "Dividenden",
+        "nav.notes": "Notizen",
+        "nav.realestate": "Immobilien",
+        "nav.tax": "Steuer",
+        "nav.history": "Verlauf",
+        "filter.assets": "Vermögenswerte",
+        "filter.projections": "Prognosen",
+        "class.stock": "Aktien",
+        "class.cfd": "CFD",
+        "class.crypto": "Krypto",
+        "class.savings": "Sparen",
+        "class.realestate": "Immobilien",
+        "summary.portfolio_value": "Portfoliowert",
+        "summary.total_invested": "Gesamt investiert",
+        "summary.absolute_gain": "Absoluter Gewinn",
+        "summary.total_return": "Gesamtrendite",
+        "summary.max_drawdown": "Max. Drawdown",
+        "summary.fire_progress": "FIRE Fortschritt",
+        "tax.title": "Steuer",
+        "tax.year": "Steuerjahr",
+        "tax.realized_gain": "Realisierter Gewinn",
+        "tax.realized_tax": "Realisierte Steuer",
+        "tax.total_tax": "Gesamtsteuer",
+        "tax.crypto_exempt": "Kryptogewinne unter {threshold} {currency} Schwelle — steuerfrei",
+        "regime.title": "Steuerland",
+        "regime.select": "Land wählen",
+    },
+
+    "fr": {
+        "nav.overview": "Aperçu",
+        "nav.positions": "Positions",
+        "nav.dividends": "Dividendes",
+        "nav.tax": "Impôts",
+        "nav.history": "Historique",
+        "summary.portfolio_value": "Valeur du portefeuille",
+        "summary.total_invested": "Total investi",
+        "summary.absolute_gain": "Gain absolu",
+        "summary.total_return": "Rendement total",
+        "tax.title": "Impôts",
+        "tax.crypto_exempt": "Gains crypto inférieurs au seuil de {threshold} {currency} — exonérés d'impôt",
+        "regime.title": "Pays fiscal",
+        "regime.select": "Choisir le pays",
+    },
+
+    "it": {
+        "nav.overview": "Panoramica",
+        "nav.positions": "Posizioni",
+        "nav.dividends": "Dividendi",
+        "nav.tax": "Tasse",
+        "nav.history": "Cronologia",
+        "summary.portfolio_value": "Valore portafoglio",
+        "summary.total_invested": "Totale investito",
+        "tax.title": "Tasse",
+        "tax.crypto_exempt": "Guadagni crypto sotto la soglia di {threshold} {currency} — esenti da imposta",
+        "regime.title": "Paese fiscale",
+        "regime.select": "Seleziona paese",
+    },
+
+    "es": {
+        "nav.overview": "Resumen",
+        "nav.positions": "Posiciones",
+        "nav.dividends": "Dividendos",
+        "nav.tax": "Impuestos",
+        "nav.history": "Historial",
+        "summary.portfolio_value": "Valor de la cartera",
+        "summary.total_invested": "Total invertido",
+        "tax.title": "Impuestos",
+        "tax.crypto_exempt": "Ganancias cripto por debajo del umbral de {threshold} {currency} — exentas de impuestos",
+        "regime.title": "País fiscal",
+        "regime.select": "Seleccionar país",
+    },
+
+    "nl": {
+        "nav.overview": "Overzicht",
+        "nav.positions": "Posities",
+        "nav.dividends": "Dividenden",
+        "nav.tax": "Belasting",
+        "nav.history": "Geschiedenis",
+        "summary.portfolio_value": "Portfoliowaarde",
+        "summary.total_invested": "Totaal geïnvesteerd",
+        "tax.title": "Belasting",
+        "tax.crypto_exempt": "Cryptowinsten onder {threshold} {currency} drempel — vrijgesteld van belasting",
+        "regime.title": "Belastingland",
+        "regime.select": "Selecteer land",
+    },
+}
+
+# Map country codes to their default UI language
+COUNTRY_LOCALE_MAP: dict[str, str] = {
+    "SI": "sl",
+    "DE": "de",
+    "AT": "de",
+    "US": "en",
+    "IT": "it",
+    "ES": "es",
+    "FR": "fr",
+    "NL": "nl",
+}
+
+
+def get_translations(lang: str) -> dict[str, str]:
+    """Return translation dict for a language, falling back to English for missing keys."""
+    en = TRANSLATIONS["en"]
+    if lang == "en":
+        return en
+    target = TRANSLATIONS.get(lang, {})
+    # Merge: target overrides en
+    merged = dict(en)
+    merged.update(target)
+    return merged
+
+
+def get_locale_for_country(country_code: str) -> str:
+    """Return the default UI language for a given country code."""
+    return COUNTRY_LOCALE_MAP.get(country_code.upper(), "en")

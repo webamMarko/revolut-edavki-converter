@@ -135,9 +135,9 @@ function _renderLots(ticker, currentPrice) {
   const lots = _getLotsForTicker(ticker);
   if (lots.length === 0) return '';
   return `<div class="pos-lots">
-    <div class="pos-lots-title">Cost Basis Lots (FIFO)</div>
+    <div class="pos-lots-title">${t('pos.lots_title')}</div>
     <table class="pos-lots-table">
-      <thead><tr><th>Date</th><th>Qty</th><th>Cost/Share</th><th>Cost</th><th>P&L</th></tr></thead>
+      <thead><tr><th>${t('pos.lots.date')}</th><th>${t('pos.qty')}</th><th>${t('pos.lots.cost_share')}</th><th>${t('pos.lots.cost')}</th><th>${t('pos.lots.pl')}</th></tr></thead>
       <tbody>${lots.map(l => {
         const cost = l.qty * l.cost_eur;
         const mv = currentPrice != null ? l.qty * currentPrice : null;
@@ -145,9 +145,9 @@ function _renderLots(ticker, currentPrice) {
         return `<tr>
           <td>${l.date}</td>
           <td>${fmt(l.qty, 4)}</td>
-          <td>${fmt(l.cost_eur, 4)} EUR</td>
-          <td>${fmtEur(cost)}</td>
-          <td class="${pl != null ? cls(pl) : ''}">${pl != null ? sign(pl) + ' EUR' : '—'}</td>
+          <td>${fmt(l.cost_eur, 4)} ${_currency}</td>
+          <td>${fmtCcy(cost)}</td>
+          <td class="${pl != null ? cls(pl) : ''}">${pl != null ? sign(pl) + ' ' + _currency : '—'}</td>
         </tr>`;
       }).join('')}</tbody>
     </table>
@@ -166,7 +166,7 @@ function updateConcentration() {
 
   // HHI: sum of squared weights (0-10000 scale)
   const hhi = Math.round(weights.reduce((s, w) => s + w * w, 0) * 10000);
-  const hhiLabel = hhi < 1500 ? 'Well diversified' : hhi < 2500 ? 'Moderate' : 'Concentrated';
+  const hhiLabel = hhi < 1500 ? t('concentration.well_diversified') : hhi < 2500 ? t('concentration.moderate') : t('concentration.concentrated');
 
   // Top 5 concentration
   const sorted = [...weights].sort((a, b) => b - a);
@@ -185,12 +185,12 @@ function updateConcentration() {
 
   const el = document.getElementById('concentrationCards');
   el.innerHTML = [
-    ['Positions', positions.length, ''],
-    ['Effective Positions', effectiveN, '', 'Equal-weight equivalent'],
-    ['HHI', hhi.toLocaleString(), '', hhiLabel],
-    ['Top 5 Concentration', fmt(top5Pct, 1) + '%', ''],
-    ['Top 10 Concentration', fmt(top10Pct, 1) + '%', ''],
-    ['Largest Position', largest ? largest.ticker : '—', '', largest ? fmt(largestPct, 1) + '% of portfolio' : ''],
+    [t('concentration.positions'), positions.length, ''],
+    [t('concentration.effective'), effectiveN, '', t('concentration.effective_sub')],
+    [t('concentration.hhi'), hhi.toLocaleString(_locale), '', hhiLabel],
+    [t('concentration.top5'), fmt(top5Pct, 1) + '%', ''],
+    [t('concentration.top10'), fmt(top10Pct, 1) + '%', ''],
+    [t('concentration.largest'), largest ? largest.ticker : '—', '', largest ? fmt(largestPct, 1) + '% ' + t('alloc.of_portfolio') : ''],
   ].map(([l, v, c, sub]) =>
     `<div class="metric-card"><div class="label">${l}</div><div class="value ${c || ''}">${v}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`
   ).join('');
@@ -222,7 +222,7 @@ function _buildPosChart(ticker, canvasEl, avgCost) {
   const fillColor = isUp ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)';
 
   const datasets = [{
-    label: 'Price (EUR)',
+    label: t('pos.current_price') + ' (' + _currency + ')',
     data,
     borderColor: lineColor,
     backgroundColor: fillColor,
@@ -263,14 +263,14 @@ function _buildPosChart(ticker, canvasEl, avgCost) {
           position: 'right',
           grid: { color: 'rgba(30,42,58,0.8)' },
           ticks: { color: '#556075', font: { size: 10 }, maxTicksLimit: 5,
-                   callback: v => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+                   callback: v => v.toLocaleString(_locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
         },
       },
       plugins: {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: c => c.dataset.label + ': ' + fmt(c.parsed.y, 4) + ' EUR',
+            label: c => c.dataset.label + ': ' + fmt(c.parsed.y, 4) + ' ' + _currency,
           },
         },
       },
@@ -340,12 +340,12 @@ function updateAttribution() {
 
   const at = document.getElementById('attributionTable');
   at.innerHTML = '<thead><tr>'
-    + '<th>Ticker</th>'
-    + '<th>Weight</th>'
-    + '<th>Unrealized</th>'
-    + '<th>Realized</th>'
-    + '<th>Total P&L</th>'
-    + '<th>Contribution</th>'
+    + '<th>' + t('pos.ticker') + '</th>'
+    + '<th>' + t('pos.weight') + '</th>'
+    + '<th>' + t('pos.unrealized') + '</th>'
+    + '<th>' + t('pos.realized') + '</th>'
+    + '<th>' + t('pos.total_pl') + '</th>'
+    + '<th>' + t('attribution.contribution') + '</th>'
     + '</tr></thead><tbody>'
     + items.map(p => {
       const barWidth = Math.min(Math.abs(p.contribution) * 5, 100);
@@ -354,9 +354,9 @@ function updateAttribution() {
       return `<tr>`
         + `<td><strong>${p.ticker}</strong></td>`
         + `<td>${fmt(p.weight_pct, 1)}%</td>`
-        + `<td class="${cls(p.unrealized_gain_eur)}">${sign(p.unrealized_gain_eur)} EUR</td>`
-        + `<td class="${cls(p.realized_gain_eur || 0)}">${sign(p.realized_gain_eur || 0)} EUR</td>`
-        + `<td class="${cls(p.totalPL)}">${sign(p.totalPL)} EUR</td>`
+        + `<td class="${cls(p.unrealized_gain_eur)}">${sign(p.unrealized_gain_eur)} ${_currency}</td>`
+        + `<td class="${cls(p.realized_gain_eur || 0)}">${sign(p.realized_gain_eur || 0)} ${_currency}</td>`
+        + `<td class="${cls(p.totalPL)}">${sign(p.totalPL)} ${_currency}</td>`
         + `<td class="${cls(p.contribution)}"><div style="position:relative">`
           + `<div style="position:absolute;top:0;${barAlign}:0;height:100%;width:${barWidth}%;background:${barColor};border-radius:2px"></div>`
           + `<span style="position:relative">${sign(p.contribution)}%</span>`
@@ -392,9 +392,9 @@ function updatePositions() {
       <td>${fmtEur(p.avg_cost_eur)}</td>
       <td>${fmtEur(p.cost_basis_eur)}</td>
       <td>${fmtEur(p.market_value_eur)}</td>
-      <td class="${cls(p.unrealized_gain_eur)}">${sign(p.unrealized_gain_eur)} EUR</td>
-      <td class="${cls(p.realized_gain_eur || 0)}">${sign(p.realized_gain_eur || 0)} EUR</td>
-      <td class="${cls(totalGain)}">${sign(totalGain)} EUR</td>
+      <td class="${cls(p.unrealized_gain_eur)}">${sign(p.unrealized_gain_eur)} ${_currency}</td>
+      <td class="${cls(p.realized_gain_eur || 0)}">${sign(p.realized_gain_eur || 0)} ${_currency}</td>
+      <td class="${cls(totalGain)}">${sign(totalGain)} ${_currency}</td>
       <td>${fmt(p.weight_pct, 1)}%</td>
     </tr>`;
 
@@ -412,43 +412,43 @@ function updatePositions() {
           <div class="pos-detail-body">
           <div class="pos-detail-stats">
             <div class="pos-stat">
-              <span class="pos-stat-label">Current Price</span>
-              <span class="pos-stat-value">${currentPrice != null ? fmt(currentPrice, 4) + ' EUR' : '—'}</span>
+              <span class="pos-stat-label">${t('pos.current_price')}</span>
+              <span class="pos-stat-value">${currentPrice != null ? fmt(currentPrice, 4) + ' ' + _currency : '—'}</span>
             </div>
             <div class="pos-stat">
-              <span class="pos-stat-label">Avg Cost / Share</span>
-              <span class="pos-stat-value">${p.avg_cost_eur > 0 ? fmt(p.avg_cost_eur, 4) + ' EUR' : '—'}</span>
+              <span class="pos-stat-label">${t('pos.avg_cost_share')}</span>
+              <span class="pos-stat-value">${p.avg_cost_eur > 0 ? fmt(p.avg_cost_eur, 4) + ' ' + _currency : '—'}</span>
             </div>
             <div class="pos-stat">
-              <span class="pos-stat-label">Qty Held</span>
+              <span class="pos-stat-label">${t('pos.qty_held')}</span>
               <span class="pos-stat-value">${fmt(p.quantity, 4)}</span>
             </div>
             <div class="pos-stat">
-              <span class="pos-stat-label">Cost Basis</span>
-              <span class="pos-stat-value">${fmtEur(p.cost_basis_eur)}</span>
+              <span class="pos-stat-label">${t('pos.cost_basis')}</span>
+              <span class="pos-stat-value">${fmtCcy(p.cost_basis_eur)}</span>
             </div>
             <div class="pos-stat">
-              <span class="pos-stat-label">Market Value</span>
-              <span class="pos-stat-value">${fmtEur(p.market_value_eur)}</span>
+              <span class="pos-stat-label">${t('pos.market_value')}</span>
+              <span class="pos-stat-value">${fmtCcy(p.market_value_eur)}</span>
             </div>
             <div class="pos-stat">
-              <span class="pos-stat-label">Unrealized P&L</span>
-              <span class="pos-stat-value ${cls(p.unrealized_gain_eur)}">${sign(p.unrealized_gain_eur)} EUR (${sign(p.unrealized_gain_pct)}%)</span>
+              <span class="pos-stat-label">${t('pos.unrealized_pl')}</span>
+              <span class="pos-stat-value ${cls(p.unrealized_gain_eur)}">${sign(p.unrealized_gain_eur)} ${_currency} (${sign(p.unrealized_gain_pct)}%)</span>
             </div>
             <div class="pos-stat">
-              <span class="pos-stat-label">Realized P&L</span>
-              <span class="pos-stat-value ${cls(p.realized_gain_eur || 0)}">${sign(p.realized_gain_eur || 0)} EUR</span>
+              <span class="pos-stat-label">${t('pos.realized_pl')}</span>
+              <span class="pos-stat-value ${cls(p.realized_gain_eur || 0)}">${sign(p.realized_gain_eur || 0)} ${_currency}</span>
             </div>
             <div class="pos-stat">
-              <span class="pos-stat-label">Total P&L</span>
-              <span class="pos-stat-value ${cls(totalGain)}">${sign(totalGain)} EUR</span>
+              <span class="pos-stat-label">${t('pos.total_pl')}</span>
+              <span class="pos-stat-value ${cls(totalGain)}">${sign(totalGain)} ${_currency}</span>
             </div>
             <div class="pos-stat">
-              <span class="pos-stat-label">2yr Price Change</span>
+              <span class="pos-stat-label">${t('pos.price_change_2yr')}</span>
               <span class="pos-stat-value ${priceChange != null ? cls(priceChange) : ''}">${priceChange != null ? sign(priceChange) + '%' : '—'}</span>
             </div>
             <div class="pos-stat">
-              <span class="pos-stat-label">Portfolio Weight</span>
+              <span class="pos-stat-label">${t('pos.portfolio_weight')}</span>
               <span class="pos-stat-value">${fmt(p.weight_pct, 1)}%</span>
             </div>
           </div>
@@ -465,15 +465,15 @@ function updatePositions() {
   }).join('');
 
   pt.innerHTML = '<thead><tr>'
-    + '<th>Ticker</th>'
-    + '<th>Qty</th>'
-    + '<th>Avg Cost</th>'
-    + '<th>Cost Basis</th>'
-    + '<th>Market Value</th>'
-    + '<th>Unrealized</th>'
-    + '<th>Realized</th>'
-    + '<th>Total P&L</th>'
-    + '<th>Weight</th>'
+    + '<th>' + t('pos.ticker') + '</th>'
+    + '<th>' + t('pos.qty') + '</th>'
+    + '<th>' + t('pos.avg_cost') + '</th>'
+    + '<th>' + t('pos.cost_basis') + '</th>'
+    + '<th>' + t('pos.market_value') + '</th>'
+    + '<th>' + t('pos.unrealized') + '</th>'
+    + '<th>' + t('pos.realized') + '</th>'
+    + '<th>' + t('pos.total_pl') + '</th>'
+    + '<th>' + t('pos.weight') + '</th>'
     + '</tr></thead><tbody>' + tbody + '</tbody>';
 
   // Custom sortable that keeps detail rows paired with their parent rows
@@ -513,18 +513,18 @@ function updateClosedPositions() {
 
   const ct = document.getElementById('closedPositionsTable');
   ct.innerHTML = '<thead><tr>'
-    + '<th>Ticker</th>'
-    + '<th>Cost Basis</th>'
-    + '<th>Proceeds</th>'
-    + '<th>Realized P&L</th>'
-    + '<th>Return %</th>'
+    + '<th>' + t('pos.ticker') + '</th>'
+    + '<th>' + t('pos.cost_basis') + '</th>'
+    + '<th>' + t('closed.proceeds') + '</th>'
+    + '<th>' + t('pos.realized_pl') + '</th>'
+    + '<th>' + t('closed.return_pct') + '</th>'
     + '</tr></thead><tbody>'
     + closed.map(p =>
       `<tr>`
       + `<td><strong>${p.ticker}</strong></td>`
-      + `<td>${fmtEur(p.total_cost_eur)}</td>`
-      + `<td>${fmtEur(p.total_proceeds_eur)}</td>`
-      + `<td class="${cls(p.realized_gain_eur)}">${sign(p.realized_gain_eur)} EUR</td>`
+      + `<td>${fmtCcy(p.total_cost_eur)}</td>`
+      + `<td>${fmtCcy(p.total_proceeds_eur)}</td>`
+      + `<td class="${cls(p.realized_gain_eur)}">${sign(p.realized_gain_eur)} ${_currency}</td>`
       + `<td class="${cls(p.realized_gain_pct)}">${sign(p.realized_gain_pct)}%</td>`
       + `</tr>`
     ).join('')

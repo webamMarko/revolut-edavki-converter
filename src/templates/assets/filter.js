@@ -5,7 +5,7 @@ const hasFilter = classKeys.length > 1;
 // These classes start inactive by default (different time horizon / skews the main chart)
 const defaultInactive = new Set(['realestate', 'savings']);
 let activeClasses = new Set(classKeys.filter(k => !defaultInactive.has(k)));
-const classLabels = {stock:'Stocks', cfd:'CFD', crypto:'Crypto', savings:'Savings', realestate:'Real Estate'};
+const classLabels = {stock:t('class.stock'), cfd:t('class.cfd'), crypto:t('class.crypto'), savings:t('class.savings'), realestate:t('class.realestate')};
 
 // FIRE projection lines: off by default
 let showFire = false;

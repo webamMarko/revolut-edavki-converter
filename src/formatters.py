@@ -150,8 +150,11 @@ def _analytics_to_dict(result) -> dict:
 def format_tax(report, verbose: bool = False):
     """Print tax report as formatted terminal output."""
     scope_label = {"stock": "STOCKS", "cfd": "CFD", "crypto": "CRYPTO", "savings": "SAVINGS", "all": "ALL"}.get(report.scope, "ALL")
+    country = getattr(report, "country", "SI")
+    from .tax_regimes import get_regime
+    regime = get_regime(country)
     print("=" * 60)
-    print(f"SLOVENIAN CAPITAL GAINS TAX — {report.year} — {scope_label}")
+    print(f"{regime.country_name.upper()} CAPITAL GAINS TAX — {report.year} — {scope_label}")
     print("=" * 60)
 
     # Realized sales

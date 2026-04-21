@@ -343,11 +343,47 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                            real_estate: dict | None = None,
                            fire_config: dict | None = None,
                            investment_notes: list[dict] | None = None,
-                           conn: sqlite3.Connection | None = None) -> dict:
+                           conn: sqlite3.Connection | None = None,
+                           country: str = "SI") -> dict:
     """Convert analytics/tax results + transactions to JSON-safe dict."""
+    from .tax_regimes import get_regime, REGIMES
+    from .i18n import get_translations, get_locale_for_country
+
+    regime = get_regime(country)
+    lang = get_locale_for_country(country)
+
     daily = analytics.daily_series
     data = {
         "scope": analytics.scope,
+        "country": country,
+        "locale": regime.locale,
+        "currency": regime.currency,
+        "lang": lang,
+        "regime": {
+            "country_code": regime.country_code,
+            "country_name": regime.country_name,
+            "currency": regime.currency,
+            "locale": regime.locale,
+            "description": regime.description,
+            "netting": regime.netting,
+            "std_cost_rate": regime.std_cost_rate,
+            "std_cost_rate_leveraged": regime.std_cost_rate_leveraged,
+            "crypto_exemption_threshold": regime.crypto_exemption_threshold,
+            "crypto_exemption_type": regime.crypto_exemption_type,
+            "crypto_holding_exempt_years": regime.crypto_holding_exempt_years,
+            "dividend_tax_rate": regime.dividend_tax_rate,
+            "flat_rate": regime.flat_rate,
+            "legal_refs": regime.legal_refs,
+            "stock_brackets": [{"min_years": b.min_years, "rate": b.rate} for b in regime.stock_brackets],
+            "cfd_brackets": [{"min_years": b.min_years, "rate": b.rate} for b in regime.cfd_brackets],
+            "crypto_brackets": [{"min_years": b.min_years, "rate": b.rate} for b in regime.crypto_brackets],
+            "savings_brackets": [{"min_years": b.min_years, "rate": b.rate} for b in regime.savings_brackets],
+        },
+        "available_regimes": [
+            {"code": r.country_code, "name": r.country_name, "currency": r.currency}
+            for r in REGIMES.values()
+        ],
+        "i18n": get_translations(lang),
         "start_date": analytics.start_date,
         "end_date": analytics.end_date,
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -571,11 +607,13 @@ def generate_html_report(analytics, tax_by_year, transactions: list[dict],
                          real_estate: dict | None = None,
                          fire_config: dict | None = None,
                          investment_notes: list[dict] | None = None,
-                         conn: sqlite3.Connection | None = None) -> str:
+                         conn: sqlite3.Connection | None = None,
+                         country: str = "SI") -> str:
     """Generate a self-contained HTML report."""
     data = _serialize_report_data(analytics, tax_by_year, transactions, per_class=per_class,
                                   real_estate=real_estate, fire_config=fire_config,
-                                  investment_notes=investment_notes, conn=conn)
+                                  investment_notes=investment_notes, conn=conn,
+                                  country=country)
 
     template = _env.get_template("report.html.j2")
     return template.render(

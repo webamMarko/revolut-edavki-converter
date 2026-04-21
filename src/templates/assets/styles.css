@@ -132,6 +132,19 @@ body {
   margin-bottom: 0.5rem;
 }
 .toggles { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.regime-select {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+}
+.regime-select:focus { border-color: var(--accent, #6366f1); }
 
 /* Sidebar nav */
 .sidebar-nav { flex: 1; padding: 0.5rem 0; }
