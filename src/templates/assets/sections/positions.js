@@ -322,6 +322,51 @@ function _makePositionsSortable(table, positions) {
   });
 }
 
+function updateAttribution() {
+  const positions = getActivePositions();
+  const section = document.getElementById('attributionSection');
+  if (positions.length < 2) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  const s = getActiveSummary();
+  const totalInvested = s.total_invested_eur || 1;
+
+  // Compute each position's total P&L contribution
+  const items = positions.map(p => {
+    const totalPL = p.unrealized_gain_eur + (p.realized_gain_eur || 0);
+    const contribution = totalPL / totalInvested * 100;
+    return { ...p, totalPL, contribution };
+  }).sort((a, b) => b.contribution - a.contribution);
+
+  const at = document.getElementById('attributionTable');
+  at.innerHTML = '<thead><tr>'
+    + '<th>Ticker</th>'
+    + '<th>Weight</th>'
+    + '<th>Unrealized</th>'
+    + '<th>Realized</th>'
+    + '<th>Total P&L</th>'
+    + '<th>Contribution</th>'
+    + '</tr></thead><tbody>'
+    + items.map(p => {
+      const barWidth = Math.min(Math.abs(p.contribution) * 5, 100);
+      const barColor = p.contribution >= 0 ? 'rgba(52,211,153,0.4)' : 'rgba(248,113,113,0.4)';
+      const barAlign = p.contribution >= 0 ? 'left' : 'right';
+      return `<tr>`
+        + `<td><strong>${p.ticker}</strong></td>`
+        + `<td>${fmt(p.weight_pct, 1)}%</td>`
+        + `<td class="${cls(p.unrealized_gain_eur)}">${sign(p.unrealized_gain_eur)} EUR</td>`
+        + `<td class="${cls(p.realized_gain_eur || 0)}">${sign(p.realized_gain_eur || 0)} EUR</td>`
+        + `<td class="${cls(p.totalPL)}">${sign(p.totalPL)} EUR</td>`
+        + `<td class="${cls(p.contribution)}"><div style="position:relative">`
+          + `<div style="position:absolute;top:0;${barAlign}:0;height:100%;width:${barWidth}%;background:${barColor};border-radius:2px"></div>`
+          + `<span style="position:relative">${sign(p.contribution)}%</span>`
+        + `</div></td>`
+        + `</tr>`;
+    }).join('')
+    + '</tbody>';
+  makeSortable(at);
+}
+
 function updatePositions() {
   const positions = getActivePositions();
   const section = document.getElementById('positionsSection');

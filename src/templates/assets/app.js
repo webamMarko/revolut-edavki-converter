@@ -70,6 +70,7 @@ function updateAll() {
   updateAllocation();
   updateCurrencyExposure();
   updateConcentration();
+  updateAttribution();
   updatePositions();
   updateClosedPositions();
   updateDividends();
