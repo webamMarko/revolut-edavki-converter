@@ -280,9 +280,9 @@ function buildYearlyTable() {
         + '<td>' + fmtEur(startVal) + '</td>'
         + '<td>' + fmtEur(endVal) + '</td>'
         + '<td class="' + (ret != null ? cls(ret) : '') + '">' + (ret != null ? sign(ret) + '%' : '—') + '</td>'
-        + '<td class="' + cls(netDeposits) + '">' + sign(netDeposits) + ' EUR</td>'
+        + '<td class="' + cls(netDeposits) + '">' + signCcy(netDeposits) + '</td>'
         + '<td>' + fmtEur(yearDivs) + '</td>'
-        + '<td class="' + cls(yearRealized) + '">' + sign(yearRealized) + ' EUR</td>'
+        + '<td class="' + cls(yearRealized) + '">' + signCcy(yearRealized) + '</td>'
         + '<td class="neg">' + pct(maxDD) + '</td>'
         + '</tr>';
     }).join('')

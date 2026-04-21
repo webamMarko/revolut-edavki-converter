@@ -83,10 +83,10 @@
 
     document.getElementById('taxCards').innerHTML = [
       [t('tax.year'),          currentYear,                                               ''],
-      [t('tax.realized_gain'), sign(totalGain) + ' ' + _currency,                         cls(totalGain)],
+      [t('tax.realized_gain'), signCcy(totalGain),                                         cls(totalGain)],
       [t('tax.realized_tax'),  fmtCcy(totalTax),                                          ''],
       [t('tax.dividends'),     showTotals ? fmtCcy(ty.total_dividends_eur) : '—',         ''],
-      [t('tax.fees'),          showTotals ? sign(ty.total_fees_eur) + ' ' + _currency : '—', cls(ty.total_fees_eur)],
+      [t('tax.fees'),          showTotals ? signCcy(ty.total_fees_eur) : '—',              cls(ty.total_fees_eur)],
       [t('tax.total_tax'),     fmtCcy(totalTax),                                          'neg'],
     ].map(([l, v, c]) =>
       `<div class="metric-card"><div class="label">${l}</div><div class="value ${c}">${v}</div></div>`
@@ -104,8 +104,8 @@
           `<td>${fmt(s.quantity, 4)}</td>` +
           `<td>${fmtCcy(s.sell_price_eur)}</td>` +
           `<td>${fmtCcy(s.cost_basis_eur)}</td>` +
-          `<td class="${cls(s.gain_eur)}">${sign(s.gain_eur)} ${_currency}</td>` +
-          `<td style="color:var(--muted)">${s.std_costs_eur > 0 ? '-' + fmt(s.std_costs_eur) + ' ' + _currency : '—'}</td>` +
+          `<td class="${cls(s.gain_eur)}">${signCcy(s.gain_eur)}</td>` +
+          `<td style="color:var(--muted)">${s.std_costs_eur > 0 ? '-' + fmt(s.std_costs_eur * _fx) + ' ' + _currency : '—'}</td>` +
           `<td>${fmt(s.holding_years, 1)}y</td>` +
           `<td>${Math.round(s.tax_rate * 100)}%</td>` +
           `<td>${fmtCcy(s.tax_eur)}</td>` +
@@ -155,9 +155,11 @@
     const header = 'Ticker,Sell Date,Quantity,Proceeds ('+_currency+'),Cost Basis ('+_currency+'),Gain ('+_currency+'),Std Costs ('+_currency+'),Holding Years,Tax Rate,Tax ('+_currency+'),Asset Class';
     const rows = sales.map(function(s) {
       return [
-        s.ticker, s.sell_date, s.quantity, s.sell_price_eur, s.cost_basis_eur,
-        s.gain_eur, s.std_costs_eur, s.holding_years, Math.round(s.tax_rate * 100) + '%',
-        s.tax_eur, s.asset_class || ''
+        s.ticker, s.sell_date, s.quantity,
+        +(s.sell_price_eur * _fx).toFixed(2), +(s.cost_basis_eur * _fx).toFixed(2),
+        +(s.gain_eur * _fx).toFixed(2), +(s.std_costs_eur * _fx).toFixed(2),
+        s.holding_years, Math.round(s.tax_rate * 100) + '%',
+        +(s.tax_eur * _fx).toFixed(2), s.asset_class || ''
       ].join(',');
     });
     const csv = header + '\n' + rows.join('\n');
@@ -198,7 +200,7 @@
 
     document.getElementById('harvestCards').innerHTML = [
       [t('tax.harvest.total_saving'), fmtCcy(totalSaving), 'pos'],
-      [t('tax.harvest.total_loss'), sign(totalLoss) + ' ' + _currency, 'neg'],
+      [t('tax.harvest.total_loss'), signCcy(totalLoss), 'neg'],
       [t('tax.harvest.candidates'), filtered.length, ''],
     ].map(([l, v, c]) =>
       `<div class="metric-card"><div class="label">${l}</div><div class="value ${c}">${v}</div></div>`
@@ -224,7 +226,7 @@
         `<td>${fmt(c.quantity, 4)}</td>` +
         `<td>${fmtCcy(c.cost_basis_eur)}</td>` +
         `<td>${fmtCcy(c.market_value_eur)}</td>` +
-        `<td class="neg">${sign(c.unrealized_loss_eur)} ${_currency}</td>` +
+        `<td class="neg">${signCcy(c.unrealized_loss_eur)}</td>` +
         `<td>${fmt(c.avg_holding_years, 1)}y</td>` +
         `<td>${Math.round(c.tax_rate * 100)}%</td>` +
         `<td class="pos">${fmtCcy(c.potential_tax_saving_eur)}</td>` +

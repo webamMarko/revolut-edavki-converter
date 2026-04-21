@@ -198,7 +198,7 @@ function _buildDividendGrowth(monthly) {
         + '<td><strong>' + y + '</strong></td>'
         + '<td>' + fmtEur(val) + '</td>'
         + '<td class="' + (growth != null ? cls(growth) : '') + '">'
-          + (growth != null ? sign(growth) + ' ' + _currency : '—') + '</td>'
+          + (growth != null ? sign(growth * _fx) + ' ' + _currency : '—') + '</td>'
         + '<td class="' + (growthPct != null ? cls(growthPct) : '') + '">'
           + (growthPct != null ? sign(growthPct) + '%' : '—') + '</td>'
         + '</tr>';

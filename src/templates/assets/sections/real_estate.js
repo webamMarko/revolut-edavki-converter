@@ -13,7 +13,7 @@ try {
       ['Properties', RE.properties.length, ''],
       ['Purchase Total', fmtEur(RE.total_purchase_eur), ''],
       ['ETN Estimate', fmtEur(RE.total_estimated_eur), ''],
-      ['Unrealized Gain', sign(RE.total_gain_eur) + ' ' + _currency, cls(RE.total_gain_eur),
+      ['Unrealized Gain', signCcy(RE.total_gain_eur), cls(RE.total_gain_eur),
        sign(RE.total_gain_pct) + '%'],
     ];
     document.getElementById('reCards').innerHTML = reCards.map(([l, v, c, sub]) =>
@@ -45,9 +45,9 @@ try {
           interaction: {mode: 'index', intersect: false},
           scales: {
             x: {type: 'time', time: {unit: 'month', tooltipFormat: 'yyyy-MM-dd'}, grid: {display: false}},
-            y: {title: {display: true, text: 'EUR'}, ticks: {callback: function(v) { return v.toLocaleString(); }}}
+            y: {title: {display: true, text: _currency}, ticks: {callback: function(v) { return (v * _fx).toLocaleString(_locale); }}}
           },
-          plugins: {tooltip: {callbacks: {label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y) + ' ' + _currency; }}}}
+          plugins: {tooltip: {callbacks: {label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y * _fx) + ' ' + _currency; }}}}
         }
       });
     }
@@ -65,7 +65,7 @@ try {
           '<td>' + p.purchase_date + '</td>' +
           '<td>' + fmtEur(p.purchase_price_eur) + '</td>' +
           '<td>' + fmtEur(p.estimated_value_eur) + '</td>' +
-          '<td class="' + cls(p.unrealized_gain_eur) + '">' + sign(p.unrealized_gain_eur) + ' EUR</td>' +
+          '<td class="' + cls(p.unrealized_gain_eur) + '">' + signCcy(p.unrealized_gain_eur) + '</td>' +
           '<td class="' + cls(p.unrealized_gain_pct) + '">' + sign(p.unrealized_gain_pct) + '%</td>' +
           '<td style="color:var(--muted);font-size:0.8rem">' + (p.estimated_date || '—') + '</td>' +
           '</tr>';

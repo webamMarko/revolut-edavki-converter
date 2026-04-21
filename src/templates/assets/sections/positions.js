@@ -145,9 +145,9 @@ function _renderLots(ticker, currentPrice) {
         return `<tr>
           <td>${l.date}</td>
           <td>${fmt(l.qty, 4)}</td>
-          <td>${fmt(l.cost_eur, 4)} ${_currency}</td>
+          <td>${fmt(l.cost_eur * _fx, 4)} ${_currency}</td>
           <td>${fmtCcy(cost)}</td>
-          <td class="${pl != null ? cls(pl) : ''}">${pl != null ? sign(pl) + ' ' + _currency : '—'}</td>
+          <td class="${pl != null ? cls(pl) : ''}">${pl != null ? signCcy(pl) : '—'}</td>
         </tr>`;
       }).join('')}</tbody>
     </table>
@@ -263,14 +263,14 @@ function _buildPosChart(ticker, canvasEl, avgCost) {
           position: 'right',
           grid: { color: 'rgba(30,42,58,0.8)' },
           ticks: { color: '#556075', font: { size: 10 }, maxTicksLimit: 5,
-                   callback: v => v.toLocaleString(_locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+                   callback: v => (v * _fx).toLocaleString(_locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
         },
       },
       plugins: {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: c => c.dataset.label + ': ' + fmt(c.parsed.y, 4) + ' ' + _currency,
+            label: c => c.dataset.label + ': ' + fmt(c.parsed.y * _fx, 4) + ' ' + _currency,
           },
         },
       },
@@ -354,9 +354,9 @@ function updateAttribution() {
       return `<tr>`
         + `<td><strong>${p.ticker}</strong></td>`
         + `<td>${fmt(p.weight_pct, 1)}%</td>`
-        + `<td class="${cls(p.unrealized_gain_eur)}">${sign(p.unrealized_gain_eur)} ${_currency}</td>`
-        + `<td class="${cls(p.realized_gain_eur || 0)}">${sign(p.realized_gain_eur || 0)} ${_currency}</td>`
-        + `<td class="${cls(p.totalPL)}">${sign(p.totalPL)} ${_currency}</td>`
+        + `<td class="${cls(p.unrealized_gain_eur)}">${signCcy(p.unrealized_gain_eur)}</td>`
+        + `<td class="${cls(p.realized_gain_eur || 0)}">${signCcy(p.realized_gain_eur || 0)}</td>`
+        + `<td class="${cls(p.totalPL)}">${signCcy(p.totalPL)}</td>`
         + `<td class="${cls(p.contribution)}"><div style="position:relative">`
           + `<div style="position:absolute;top:0;${barAlign}:0;height:100%;width:${barWidth}%;background:${barColor};border-radius:2px"></div>`
           + `<span style="position:relative">${sign(p.contribution)}%</span>`
@@ -392,9 +392,9 @@ function updatePositions() {
       <td>${fmtEur(p.avg_cost_eur)}</td>
       <td>${fmtEur(p.cost_basis_eur)}</td>
       <td>${fmtEur(p.market_value_eur)}</td>
-      <td class="${cls(p.unrealized_gain_eur)}">${sign(p.unrealized_gain_eur)} ${_currency}</td>
-      <td class="${cls(p.realized_gain_eur || 0)}">${sign(p.realized_gain_eur || 0)} ${_currency}</td>
-      <td class="${cls(totalGain)}">${sign(totalGain)} ${_currency}</td>
+      <td class="${cls(p.unrealized_gain_eur)}">${signCcy(p.unrealized_gain_eur)}</td>
+      <td class="${cls(p.realized_gain_eur || 0)}">${signCcy(p.realized_gain_eur || 0)}</td>
+      <td class="${cls(totalGain)}">${signCcy(totalGain)}</td>
       <td>${fmt(p.weight_pct, 1)}%</td>
     </tr>`;
 
@@ -413,11 +413,11 @@ function updatePositions() {
           <div class="pos-detail-stats">
             <div class="pos-stat">
               <span class="pos-stat-label">${t('pos.current_price')}</span>
-              <span class="pos-stat-value">${currentPrice != null ? fmt(currentPrice, 4) + ' ' + _currency : '—'}</span>
+              <span class="pos-stat-value">${currentPrice != null ? fmt(currentPrice * _fx, 4) + ' ' + _currency : '—'}</span>
             </div>
             <div class="pos-stat">
               <span class="pos-stat-label">${t('pos.avg_cost_share')}</span>
-              <span class="pos-stat-value">${p.avg_cost_eur > 0 ? fmt(p.avg_cost_eur, 4) + ' ' + _currency : '—'}</span>
+              <span class="pos-stat-value">${p.avg_cost_eur > 0 ? fmt(p.avg_cost_eur * _fx, 4) + ' ' + _currency : '—'}</span>
             </div>
             <div class="pos-stat">
               <span class="pos-stat-label">${t('pos.qty_held')}</span>
@@ -433,15 +433,15 @@ function updatePositions() {
             </div>
             <div class="pos-stat">
               <span class="pos-stat-label">${t('pos.unrealized_pl')}</span>
-              <span class="pos-stat-value ${cls(p.unrealized_gain_eur)}">${sign(p.unrealized_gain_eur)} ${_currency} (${sign(p.unrealized_gain_pct)}%)</span>
+              <span class="pos-stat-value ${cls(p.unrealized_gain_eur)}">${signCcy(p.unrealized_gain_eur)} (${sign(p.unrealized_gain_pct)}%)</span>
             </div>
             <div class="pos-stat">
               <span class="pos-stat-label">${t('pos.realized_pl')}</span>
-              <span class="pos-stat-value ${cls(p.realized_gain_eur || 0)}">${sign(p.realized_gain_eur || 0)} ${_currency}</span>
+              <span class="pos-stat-value ${cls(p.realized_gain_eur || 0)}">${signCcy(p.realized_gain_eur || 0)}</span>
             </div>
             <div class="pos-stat">
               <span class="pos-stat-label">${t('pos.total_pl')}</span>
-              <span class="pos-stat-value ${cls(totalGain)}">${sign(totalGain)} ${_currency}</span>
+              <span class="pos-stat-value ${cls(totalGain)}">${signCcy(totalGain)}</span>
             </div>
             <div class="pos-stat">
               <span class="pos-stat-label">${t('pos.price_change_2yr')}</span>
@@ -524,7 +524,7 @@ function updateClosedPositions() {
       + `<td><strong>${p.ticker}</strong></td>`
       + `<td>${fmtCcy(p.total_cost_eur)}</td>`
       + `<td>${fmtCcy(p.total_proceeds_eur)}</td>`
-      + `<td class="${cls(p.realized_gain_eur)}">${sign(p.realized_gain_eur)} ${_currency}</td>`
+      + `<td class="${cls(p.realized_gain_eur)}">${signCcy(p.realized_gain_eur)}</td>`
       + `<td class="${cls(p.realized_gain_pct)}">${sign(p.realized_gain_pct)}%</td>`
       + `</tr>`
     ).join('')
@@ -541,14 +541,18 @@ function updateClosedPositions() {
     const positions = getActivePositions();
     if (positions.length === 0) return;
     const names = D.company_names || {};
-    const header = 'Ticker,Company,Quantity,Avg Cost (EUR),Cost Basis (EUR),Market Value (EUR),Unrealized P&L (EUR),Unrealized %,Realized P&L (EUR),Weight %';
+    const header = 'Ticker,Company,Quantity,Avg Cost ('+_currency+'),Cost Basis ('+_currency+'),Market Value ('+_currency+'),Unrealized P&L ('+_currency+'),Unrealized %,Realized P&L ('+_currency+'),Weight %';
     const rows = positions.map(p => {
       const name = (names[p.ticker] || '').replace(/,/g, ' ');
       return [
-        p.ticker, name, p.quantity, p.avg_cost_eur,
-        p.cost_basis_eur, p.market_value_eur,
-        p.unrealized_gain_eur, p.unrealized_gain_pct,
-        p.realized_gain_eur || 0, p.weight_pct
+        p.ticker, name, p.quantity,
+        +(p.avg_cost_eur * _fx).toFixed(4),
+        +(p.cost_basis_eur * _fx).toFixed(2),
+        +(p.market_value_eur * _fx).toFixed(2),
+        +(p.unrealized_gain_eur * _fx).toFixed(2),
+        p.unrealized_gain_pct,
+        +((p.realized_gain_eur || 0) * _fx).toFixed(2),
+        p.weight_pct
       ].join(',');
     });
     const csv = header + '\n' + rows.join('\n');
@@ -598,7 +602,7 @@ function updateClosedPositions() {
     document.getElementById('simCards').innerHTML = [
       [t('sim.current_value'), fmtCcy(totalCurrent), ''],
       [t('sim.simulated_value'), fmtCcy(totalAdj), ''],
-      [t('sim.change'), sign(totalChange) + ' ' + _currency, cls(totalChange)],
+      [t('sim.change'), signCcy(totalChange), cls(totalChange)],
     ].map(function(row) {
       return '<div class="metric-card"><div class="label">' + row[0] + '</div><div class="value ' + row[2] + '">' + row[1] + '</div></div>';
     }).join('');

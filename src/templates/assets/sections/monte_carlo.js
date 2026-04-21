@@ -143,7 +143,7 @@
           },
           y: {
             title: { display: true, text: _currency },
-            ticks: { color: '#556075', callback: function(v) { return v.toLocaleString(_locale); } },
+            ticks: { color: '#556075', callback: function(v) { return (v * _fx).toLocaleString(_locale); } },
             grid: { color: 'rgba(30,42,58,0.5)' },
           },
         },

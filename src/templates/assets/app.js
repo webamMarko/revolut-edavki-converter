@@ -7,14 +7,16 @@ function t(key, params) {
 }
 const _locale = D.locale || 'en-US';
 const _currency = D.currency || 'EUR';
+const _fx = D.fx_display_rate || 1; // EUR → display currency
 
 // --- Formatters ---
 const fmt    = (v, d=2) => v == null ? '—' : v.toLocaleString(_locale, {minimumFractionDigits:d, maximumFractionDigits:d});
-const fmtCcy = v => v == null ? '—' : fmt(v) + ' ' + _currency;
+const fmtCcy = v => v == null ? '—' : fmt(v * _fx) + ' ' + _currency;
 const fmtEur = fmtCcy; // backwards compat alias
 const cls    = v => v == null ? '' : v >= 0 ? 'pos' : 'neg';
 const pct    = v => v == null ? '—' : fmt(v) + '%';
 const sign   = v => v == null ? '—' : (v >= 0 ? '+' : '') + fmt(v);
+const signCcy = v => v == null ? '—' : (v >= 0 ? '+' : '') + fmt(v * _fx) + ' ' + _currency;
 
 // --- Years to FIRE with annual contributions ---
 // Solves: PV*(1+r)^t + C*((1+r)^t - 1)/r = target  for t

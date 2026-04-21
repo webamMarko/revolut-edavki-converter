@@ -44,7 +44,7 @@ function updateSummary() {
     const cards = [
       [t('period.start_value'), fmtCcy(m.startVal), '', allDates[selStart]],
       [t('period.end_value'), fmtCcy(m.endVal), '', allDates[selEnd]],
-      [t('period.change'), sign(m.change)+' '+_currency, cls(m.change)],
+      [t('period.change'), signCcy(m.change), cls(m.change)],
       [t('period.return'), sign(m.returnPct)+'%', cls(m.returnPct)],
       [t('summary.cagr'), m.cagr!=null?sign(m.cagr)+'%':'—', cls(m.cagr)],
       [t('summary.max_drawdown'), pct(m.maxDD), 'neg', m.peakDate+' → '+m.troughDate],
@@ -57,7 +57,7 @@ function updateSummary() {
     const cards = [
       [t('summary.portfolio_value'), fmtCcy(s.portfolio_value_eur)],
       [t('summary.total_invested'), fmtCcy(s.total_invested_eur)],
-      [t('summary.absolute_gain'), sign(s.absolute_gain_eur)+' '+_currency, cls(s.absolute_gain_eur)],
+      [t('summary.absolute_gain'), signCcy(s.absolute_gain_eur), cls(s.absolute_gain_eur)],
       [t('summary.total_return'), sign(s.total_return_pct)+'%', cls(s.total_return_pct)],
       [t('summary.cagr'), s.cagr_pct!=null?sign(s.cagr_pct)+'%':'—', cls(s.cagr_pct)],
       [t('summary.twr'), s.twr_pct!=null?sign(s.twr_pct)+'%':'—', cls(s.twr_pct)],
@@ -69,10 +69,10 @@ function updateSummary() {
         ? (new Date(allDates[allDates.length-1]) - new Date(allDates[0])) / (365.25 * 86400000)
         : 1;
       const sub = yearly.numYears + ' ' + t('summary.yr_avg');
-      cards.push([t('summary.avg_yearly_growth'),   sign(yearly.avgValueGrowth)+' '+_currency,              cls(yearly.avgValueGrowth), sub]);
+      cards.push([t('summary.avg_yearly_growth'),   signCcy(yearly.avgValueGrowth),              cls(yearly.avgValueGrowth), sub]);
       if (s.total_return_pct != null && totalYears > 0)
         cards.push([t('summary.avg_yearly_return'), sign(s.total_return_pct / totalYears)+'%',       cls(s.total_return_pct),    sub]);
-      cards.push([t('summary.avg_yearly_invested'), sign(yearly.avgCashAdded)+' '+_currency,                cls(yearly.avgCashAdded),   sub]);
+      cards.push([t('summary.avg_yearly_invested'), signCcy(yearly.avgCashAdded),                cls(yearly.avgCashAdded),   sub]);
     }
     if (D.fire != null) {
       const fire = D.fire;
@@ -154,7 +154,7 @@ function updateTopMovers() {
           ${name ? `<div class="mover-name">${name}</div>` : ''}
         </div>
         <div class="mover-right">
-          <div class="mover-gain ${cls(p.unrealized_gain_eur)}">${sign(p.unrealized_gain_eur)} ${_currency}</div>
+          <div class="mover-gain ${cls(p.unrealized_gain_eur)}">${signCcy(p.unrealized_gain_eur)}</div>
           <div class="mover-pct">${sign(p.unrealized_gain_pct)}%</div>
         </div>
       </div>`;

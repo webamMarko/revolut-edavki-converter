@@ -510,12 +510,22 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
     regime = get_regime(country)
     lang = get_locale_for_country(country)
 
+    # FX rate for display currency conversion (EUR → regime currency)
+    fx_display_rate = 1.0  # EUR→EUR
+    if regime.currency != "EUR" and conn is not None:
+        row = conn.execute(
+            "SELECT eur_usd FROM fx_rates ORDER BY date DESC LIMIT 1"
+        ).fetchone()
+        if row:
+            fx_display_rate = row[0]  # 1 EUR = X USD
+
     daily = analytics.daily_series
     data = {
         "scope": analytics.scope,
         "country": country,
         "locale": regime.locale,
         "currency": regime.currency,
+        "fx_display_rate": round(fx_display_rate, 6),
         "lang": lang,
         "regime": {
             "country_code": regime.country_code,

@@ -11,7 +11,7 @@ function updateGains() {
       [t('gains.period_realized'), m.periodRealized],
       [t('gains.unrealized_at_end'), unrealized],
       [t('gains.period_dividends'), m.periodDividends],
-    ].map(([l,v])=>`<tr><td>${l}</td><td class="${cls(v)}">${sign(v)} ${_currency}</td></tr>`).join('')+'</tbody>';
+    ].map(([l,v])=>`<tr><td>${l}</td><td class="${cls(v)}">${signCcy(v)}</td></tr>`).join('')+'</tbody>';
     _buildGainsChart([
       { label: t('gains.chart.realized'), value: m.periodRealized },
       { label: t('gains.chart.unrealized'), value: unrealized },
@@ -22,7 +22,7 @@ function updateGains() {
     gt.innerHTML='<tbody>'+[
       [t('gains.realized'),g.realized_eur],[t('gains.unrealized'),g.unrealized_eur],
       [t('gains.dividends'),g.dividends_eur],[t('gains.fees'),g.fees_eur],
-    ].map(([l,v])=>`<tr><td>${l}</td><td class="${cls(v)}">${sign(v)} ${_currency}</td></tr>`).join('')+'</tbody>';
+    ].map(([l,v])=>`<tr><td>${l}</td><td class="${cls(v)}">${signCcy(v)}</td></tr>`).join('')+'</tbody>';
     _buildGainsChart([
       { label: t('gains.chart.realized'), value: g.realized_eur },
       { label: t('gains.chart.unrealized'), value: g.unrealized_eur },
