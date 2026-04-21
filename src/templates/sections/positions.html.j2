@@ -1,12 +1,23 @@
-<section class="card" id="allocationSection" style="display:none">
-  <h2>Portfolio Allocation</h2>
-  <div class="allocation-wrap">
-    <div class="allocation-chart-col">
-      <canvas id="allocationChart"></canvas>
+<div class="two-col" id="chartsRow">
+  <section class="card" id="allocationSection" style="display:none">
+    <h2>Portfolio Allocation</h2>
+    <div class="allocation-wrap">
+      <div class="allocation-chart-col">
+        <canvas id="allocationChart"></canvas>
+      </div>
+      <div class="allocation-legend" id="allocationLegend"></div>
     </div>
-    <div class="allocation-legend" id="allocationLegend"></div>
-  </div>
-</section>
+  </section>
+  <section class="card" id="currencySection" style="display:none">
+    <h2>Currency Exposure</h2>
+    <div class="allocation-wrap">
+      <div class="allocation-chart-col">
+        <canvas id="currencyChart"></canvas>
+      </div>
+      <div class="allocation-legend" id="currencyLegend"></div>
+    </div>
+  </section>
+</div>
 
 <section class="card" id="positionsSection" style="display:none">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem">

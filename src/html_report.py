@@ -291,6 +291,53 @@ def _query_company_names(conn: sqlite3.Connection | None, tickers: list[str]) ->
     return names
 
 
+def _query_currency_exposure(conn: sqlite3.Connection, positions: list) -> list[dict]:
+    """Determine native currency of each position and compute exposure breakdown."""
+    if not conn or not positions:
+        return []
+
+    # Get the most recent trade currency for each ticker
+    ticker_currency = {}
+    for pos in positions:
+        ticker = pos.ticker if hasattr(pos, 'ticker') else pos.get('ticker', '')
+        # Strip prefix for DB lookup
+        db_ticker = ticker
+        for prefix in ("CFD:", "CRYPTO:", "SAVINGS:"):
+            if ticker.startswith(prefix):
+                db_ticker = ticker[len(prefix):]
+                break
+        row = conn.execute(
+            "SELECT currency FROM transactions WHERE ticker = ? AND type IN ('BUY','SELL') "
+            "AND currency IS NOT NULL ORDER BY date DESC LIMIT 1",
+            (db_ticker,)
+        ).fetchone()
+        if row:
+            ticker_currency[ticker] = row[0]
+        else:
+            # Check daily_prices for currency
+            row = conn.execute(
+                "SELECT currency FROM daily_prices WHERE ticker = ? LIMIT 1",
+                (db_ticker,)
+            ).fetchone()
+            ticker_currency[ticker] = row[0] if row else "EUR"
+
+    # Group market value by currency
+    currency_totals = {}
+    for pos in positions:
+        ticker = pos.ticker if hasattr(pos, 'ticker') else pos.get('ticker', '')
+        mv = pos.market_value_eur if hasattr(pos, 'market_value_eur') else pos.get('market_value_eur', 0)
+        cur = ticker_currency.get(ticker, "EUR")
+        currency_totals[cur] = currency_totals.get(cur, 0) + mv
+
+    total = sum(currency_totals.values()) or 1
+    return sorted(
+        [{"currency": c, "value_eur": round(v, 2), "pct": round(v / total * 100, 1)}
+         for c, v in currency_totals.items()],
+        key=lambda x: x["value_eur"],
+        reverse=True,
+    )
+
+
 def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                            per_class: dict | None = None,
                            real_estate: dict | None = None,
@@ -512,6 +559,9 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
     pos_tickers = [p["ticker"] for p in data["positions"]]
     data["position_price_history"] = _query_position_price_history(conn, pos_tickers)
     data["company_names"] = _query_company_names(conn, pos_tickers)
+
+    # Currency exposure
+    data["currency_exposure"] = _query_currency_exposure(conn, analytics.positions)
 
     return data
 

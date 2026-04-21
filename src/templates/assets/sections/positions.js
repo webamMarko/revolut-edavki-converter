@@ -70,6 +70,56 @@ function updateAllocation() {
   ).join('');
 }
 
+// --- Currency exposure chart ---
+let _currencyChart = null;
+const _CURRENCY_COLORS = ['#6366f1','#f59e0b','#34d399','#f87171','#a78bfa','#38bdf8','#fb923c'];
+
+function updateCurrencyExposure() {
+  const section = document.getElementById('currencySection');
+  const data = D.currency_exposure;
+  if (!data || data.length === 0) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  if (_currencyChart) { _currencyChart.destroy(); _currencyChart = null; }
+  const canvas = document.getElementById('currencyChart');
+
+  _currencyChart = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: data.map(d => d.currency),
+      datasets: [{
+        data: data.map(d => d.value_eur),
+        backgroundColor: data.map((_, i) => _CURRENCY_COLORS[i % _CURRENCY_COLORS.length]),
+        borderWidth: 0,
+        hoverOffset: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      cutout: '55%',
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: c => c.label + ': ' + fmtEur(c.parsed) + ' (' + fmt(data[c.dataIndex].pct, 1) + '%)',
+          },
+        },
+      },
+    },
+  });
+
+  const legend = document.getElementById('currencyLegend');
+  legend.innerHTML = data.map((d, i) =>
+    `<div class="alloc-item">`
+    + `<span class="alloc-dot" style="background:${_CURRENCY_COLORS[i % _CURRENCY_COLORS.length]}"></span>`
+    + `<span>${d.currency}</span>`
+    + `<span class="alloc-pct">${fmt(d.pct, 1)}%</span>`
+    + `</div>`
+  ).join('');
+}
+
 // --- Cost basis lots ---
 function _getLotsForTicker(ticker) {
   if (isDefaultSelection()) return (D.position_lots || {})[ticker] || [];
