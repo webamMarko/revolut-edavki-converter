@@ -171,7 +171,71 @@
     URL.revokeObjectURL(a.href);
   }
 
+  function renderHarvest() {
+    const ty = tby[currentYear];
+    if (!ty) return;
+
+    const candidates = ty.harvest_candidates || [];
+    const section = document.getElementById('harvestSection');
+    if (!section) return;
+
+    // Filter by active asset classes
+    const filtered = isDefaultSelection()
+      ? candidates
+      : candidates.filter(c => activeClasses.has(c.asset_class));
+
+    if (filtered.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = '';
+    document.getElementById('harvestTitle').textContent = t('tax.harvest.title');
+    document.getElementById('harvestDesc').textContent = t('tax.harvest.desc');
+
+    const totalSaving = filtered.reduce((s, c) => s + c.potential_tax_saving_eur, 0);
+    const totalLoss = filtered.reduce((s, c) => s + c.unrealized_loss_eur, 0);
+
+    document.getElementById('harvestCards').innerHTML = [
+      [t('tax.harvest.total_saving'), fmtCcy(totalSaving), 'pos'],
+      [t('tax.harvest.total_loss'), sign(totalLoss) + ' ' + _currency, 'neg'],
+      [t('tax.harvest.candidates'), filtered.length, ''],
+    ].map(([l, v, c]) =>
+      `<div class="metric-card"><div class="label">${l}</div><div class="value ${c}">${v}</div></div>`
+    ).join('');
+
+    const ht = document.getElementById('harvestTable');
+    ht.innerHTML =
+      '<thead><tr>' +
+      '<th>'+t('tax.harvest.col.ticker')+'</th>' +
+      '<th>'+t('tax.harvest.col.class')+'</th>' +
+      '<th>'+t('tax.harvest.col.qty')+'</th>' +
+      '<th>'+t('tax.harvest.col.cost_basis')+'</th>' +
+      '<th>'+t('tax.harvest.col.mkt_value')+'</th>' +
+      '<th>'+t('tax.harvest.col.loss')+'</th>' +
+      '<th>'+t('tax.harvest.col.held')+'</th>' +
+      '<th>'+t('tax.harvest.col.rate')+'</th>' +
+      '<th>'+t('tax.harvest.col.saving')+'</th>' +
+      '</tr></thead><tbody>' +
+      filtered.map(c =>
+        `<tr>` +
+        `<td><strong>${c.ticker}</strong></td>` +
+        `<td>${c.asset_class}</td>` +
+        `<td>${fmt(c.quantity, 4)}</td>` +
+        `<td>${fmtCcy(c.cost_basis_eur)}</td>` +
+        `<td>${fmtCcy(c.market_value_eur)}</td>` +
+        `<td class="neg">${sign(c.unrealized_loss_eur)} ${_currency}</td>` +
+        `<td>${fmt(c.avg_holding_years, 1)}y</td>` +
+        `<td>${Math.round(c.tax_rate * 100)}%</td>` +
+        `<td class="pos">${fmtCcy(c.potential_tax_saving_eur)}</td>` +
+        `</tr>`
+      ).join('') +
+      '</tbody>';
+    makeSortable(ht);
+  }
+
   // Expose so updateAll() can call it
-  window.updateTaxTable = renderTax;
+  window.updateTaxTable = function() { renderTax(); renderHarvest(); };
   renderTax();
+  renderHarvest();
 })();

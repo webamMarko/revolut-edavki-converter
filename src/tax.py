@@ -86,6 +86,19 @@ class UnrealizedTaxDetail:
 
 
 @dataclass
+class TaxLossHarvestCandidate:
+    ticker: str
+    asset_class: str
+    quantity: float
+    cost_basis_eur: float
+    market_value_eur: float
+    unrealized_loss_eur: float    # negative = loss
+    tax_rate: float
+    potential_tax_saving_eur: float  # positive = money saved
+    avg_holding_years: float
+
+
+@dataclass
 class TaxReport:
     year: int
     # Realized
@@ -107,6 +120,8 @@ class TaxReport:
     scope: str
     # Country regime used
     country: str = "SI"
+    # Tax-loss harvesting candidates
+    harvest_candidates: list[TaxLossHarvestCandidate] | None = None
 
 
 def compute_tax_report(conn: sqlite3.Connection, year: int,
@@ -558,6 +573,70 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
             total_unrealized_gain += gain
             total_unrealized_tax += tax
 
+    # --- Tax-loss harvesting candidates ---
+    # Find positions with unrealized losses that could offset realized gains
+    harvest_candidates = []
+    today = datetime.now()
+    for ticker, qty in sorted(holdings.items()):
+        if abs(qty) < 1e-10:
+            continue
+        lots = fifo_lots.get(ticker, [])
+        if not lots:
+            continue
+
+        # Get current price
+        row = conn.execute(
+            "SELECT close, currency FROM daily_prices WHERE ticker = ? ORDER BY date DESC LIMIT 1",
+            (ticker,)
+        ).fetchone()
+        if not row:
+            continue
+
+        close, currency = row[0], row[1]
+        fx_row = conn.execute(
+            "SELECT eur_usd FROM fx_rates ORDER BY date DESC LIMIT 1"
+        ).fetchone()
+        fx_rate = fx_row[0] if fx_row else 1.10
+        price_eur = close / fx_rate if currency != "EUR" else close
+        market_value = qty * price_eur
+        cost = sum(lq * lc for lq, lc, _ in lots)
+        unrealized = market_value - cost
+
+        # Only include positions with losses
+        if unrealized >= 0:
+            continue
+
+        # Weighted average holding period
+        weighted_days = sum(
+            lq * (today - datetime.strptime(ld, "%Y-%m-%d")).days
+            for lq, lc, ld in lots
+        )
+        total_qty = sum(lq for lq, _, _ in lots)
+        avg_years = (weighted_days / total_qty / 365.25) if total_qty > 0 else 0
+
+        is_cfd_ticker = is_cfd_scope or ticker.startswith("CFD:")
+        is_crypto_ticker = ticker.startswith("CRYPTO:")
+        is_savings_ticker = ticker.startswith("SAVINGS:")
+        ac = "cfd" if is_cfd_ticker else "crypto" if is_crypto_ticker else "savings" if is_savings_ticker else "stock"
+        rate = _get_rate_for_class(regime, ac, avg_years)
+        potential_saving = abs(unrealized) * rate
+
+        if potential_saving > 0.01:  # skip trivial amounts
+            harvest_candidates.append(TaxLossHarvestCandidate(
+                ticker=ticker,
+                asset_class=ac,
+                quantity=qty,
+                cost_basis_eur=round(cost, 2),
+                market_value_eur=round(market_value, 2),
+                unrealized_loss_eur=round(unrealized, 2),
+                tax_rate=rate,
+                potential_tax_saving_eur=round(potential_saving, 2),
+                avg_holding_years=round(avg_years, 1),
+            ))
+
+    # Sort by potential saving descending
+    harvest_candidates.sort(key=lambda c: c.potential_tax_saving_eur, reverse=True)
+
     total_realized_gain = sum(s.gain_eur for s in realized_sales)
 
     # Net gains/losses — netting rules depend on the regime
@@ -598,4 +677,5 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
         total_tax_eur=total_realized_tax,  # realized only; unrealized is informational
         scope=scope,
         country=country,
+        harvest_candidates=harvest_candidates if harvest_candidates else None,
     )

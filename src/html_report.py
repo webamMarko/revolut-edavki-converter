@@ -490,7 +490,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
 
     # Tax data — keyed by year so the client can switch years
     def _ser_tax(t) -> dict:
-        return {
+        d = {
             "year": t.year,
             "total_dividends_eur": round(t.total_dividends_eur, 2),
             "total_fees_eur": round(t.total_fees_eur, 2),
@@ -511,6 +511,22 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                 for s in t.realized_sales
             ],
         }
+        if t.harvest_candidates:
+            d["harvest_candidates"] = [
+                {
+                    "ticker": c.ticker,
+                    "asset_class": c.asset_class,
+                    "quantity": round(c.quantity, 4),
+                    "cost_basis_eur": round(c.cost_basis_eur, 2),
+                    "market_value_eur": round(c.market_value_eur, 2),
+                    "unrealized_loss_eur": round(c.unrealized_loss_eur, 2),
+                    "tax_rate": round(c.tax_rate, 2),
+                    "potential_tax_saving_eur": round(c.potential_tax_saving_eur, 2),
+                    "avg_holding_years": round(c.avg_holding_years, 1),
+                }
+                for c in t.harvest_candidates
+            ]
+        return d
 
     if tax_by_year:
         data["tax_by_year"] = {str(yr): _ser_tax(t) for yr, t in tax_by_year.items()}

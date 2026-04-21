@@ -213,6 +213,29 @@ def format_tax(report, verbose: bool = False):
 
         print(f"\nTotal Unrealized Tax:  {report.total_unrealized_tax_eur:,.2f} EUR")
 
+    # Tax-loss harvesting
+    if report.harvest_candidates:
+        print("\n--- Tax-Loss Harvesting Opportunities ---")
+        rows = []
+        for c in report.harvest_candidates:
+            rows.append([
+                c.ticker,
+                c.asset_class,
+                f"{c.quantity:,.4f}",
+                f"{c.cost_basis_eur:,.2f}",
+                f"{c.market_value_eur:,.2f}",
+                f"{c.unrealized_loss_eur:+,.2f}",
+                f"{c.avg_holding_years:,.1f}y",
+                f"{c.tax_rate:.0%}",
+                f"{c.potential_tax_saving_eur:,.2f}",
+            ])
+        print(tabulate(rows,
+                       headers=["Ticker", "Class", "Qty", "Cost Basis", "Mkt Value",
+                                "Loss", "Held", "Rate", "Tax Saving"],
+                       tablefmt="simple"))
+        total_saving = sum(c.potential_tax_saving_eur for c in report.harvest_candidates)
+        print(f"\nTotal Potential Tax Saving:  {total_saving:,.2f} EUR")
+
     print(f"\n{'=' * 60}")
     print(f"TOTAL TAX LIABILITY:  {report.total_tax_eur:,.2f} EUR")
     print(f"{'=' * 60}")
