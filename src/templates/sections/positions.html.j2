@@ -9,7 +9,10 @@
 </section>
 
 <section class="card" id="positionsSection" style="display:none">
-  <h2>Current Positions</h2>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem">
+    <h2 style="margin:0">Current Positions</h2>
+    <button id="exportPositionsBtn" class="tax-export-btn" style="font-size:0.72rem;padding:0.3rem 0.7rem">Export CSV</button>
+  </div>
   <div class="table-scroll">
     <table id="positionsTable" class="data-table sortable"></table>
   </div>

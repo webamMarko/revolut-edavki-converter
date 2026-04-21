@@ -360,3 +360,33 @@ function updateClosedPositions() {
 
   makeSortable(ct);
 }
+
+// --- Export positions to CSV ---
+(function() {
+  const btn = document.getElementById('exportPositionsBtn');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    const positions = getActivePositions();
+    if (positions.length === 0) return;
+    const names = D.company_names || {};
+    const header = 'Ticker,Company,Quantity,Avg Cost (EUR),Cost Basis (EUR),Market Value (EUR),Unrealized P&L (EUR),Unrealized %,Realized P&L (EUR),Weight %';
+    const rows = positions.map(p => {
+      const name = (names[p.ticker] || '').replace(/,/g, ' ');
+      return [
+        p.ticker, name, p.quantity, p.avg_cost_eur,
+        p.cost_basis_eur, p.market_value_eur,
+        p.unrealized_gain_eur, p.unrealized_gain_pct,
+        p.realized_gain_eur || 0, p.weight_pct
+      ].join(',');
+    });
+    const csv = header + '\n' + rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'portfolio_positions_' + D.end_date + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  });
+})();
