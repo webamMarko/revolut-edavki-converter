@@ -59,6 +59,82 @@ function buildHeatmap() {
   el.innerHTML = h;
 }
 
+// --- Drawdown chart ---
+let _drawdownChart = null;
+
+function buildDrawdownChart() {
+  if (_drawdownChart) { _drawdownChart.destroy(); _drawdownChart = null; }
+
+  const section = document.getElementById('drawdownSection');
+  const canvas = document.getElementById('drawdownChart');
+  if (!canvas || !ds.dates || ds.dates.length < 10) { section.style.display = 'none'; return; }
+
+  const pi = (ds.perf_index && ds.perf_index.length === ds.dates.length) ? ds.perf_index : ds.value_eur;
+  // Skip leading zeros
+  var startIdx = 0;
+  while (startIdx < pi.length && pi[startIdx] <= 0) startIdx++;
+  if (pi.length - startIdx < 10) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  var peak = pi[startIdx];
+  const ddData = [];
+  const labels = [];
+  for (var i = startIdx; i < pi.length; i++) {
+    if (pi[i] > peak) peak = pi[i];
+    const dd = peak > 0 ? (pi[i] - peak) / peak * 100 : 0;
+    ddData.push(dd);
+    labels.push(ds.dates[i]);
+  }
+
+  _drawdownChart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Drawdown',
+        data: ddData,
+        borderColor: '#f87171',
+        backgroundColor: 'rgba(248,113,113,0.15)',
+        fill: true,
+        tension: 0.15,
+        pointRadius: 0,
+        borderWidth: 1.5,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: 'month', tooltipFormat: 'yyyy-MM-dd' },
+          grid: { display: false },
+          ticks: { color: '#556075', font: { size: 10 }, maxTicksLimit: 8 },
+        },
+        y: {
+          max: 0,
+          grid: { color: 'rgba(30,42,58,0.8)' },
+          ticks: {
+            color: '#556075',
+            font: { size: 10 },
+            callback: function(v) { return v.toFixed(0) + '%'; },
+          },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(c) { return 'Drawdown: ' + fmt(c.parsed.y) + '%'; },
+          },
+        },
+      },
+    },
+  });
+}
+
 // --- Yearly heatmap ---
 function buildYearlyHeatmap() {
   const el = document.getElementById('yearly-heatmap');

@@ -379,6 +379,7 @@ function onFilterChange() {
   rebuildCharts();
   updateAll();
   buildHeatmap();
+  buildDrawdownChart();
   buildYearlyHeatmap();
   buildYearlyTable();
   buildRollingReturns();
