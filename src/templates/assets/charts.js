@@ -30,30 +30,44 @@ function buildPortfolioChart() {
   if (D.fire != null && showFire) {
     const fire = D.fire;
     const fireTarget = fire.target;
-    const inflation = fire.inflation_rate / 100;
-    const nominalCAGR = (D.summary.cagr_pct != null ? D.summary.cagr_pct : 8) / 100;
+    const inflation = getFireInflation() / 100;
+    const activeSummary = getActiveSummary();
+    const nominalCAGR = (activeSummary.cagr_pct != null ? activeSummary.cagr_pct : 8) / 100;
     const realReturn = (1 + nominalCAGR) / (1 + inflation) - 1;
     const currentValue = ds.value_eur[ds.value_eur.length - 1];
     const lastDate = new Date(allDates[allDates.length - 1]);
-    const yearsToFire = realReturn > 0 && currentValue < fireTarget
-      ? Math.log(fireTarget / currentValue) / Math.log(1 + realReturn)
-      : null;
+    const monthlyContrib = getFireMonthlyContrib();
+    const annualContrib = monthlyContrib * 12;
+    let yearsToFire = null;
+    if (realReturn > 0 && currentValue < fireTarget) {
+      yearsToFire = annualContrib > 0
+        ? yearsToFireWithContrib(currentValue, fireTarget, realReturn, annualContrib)
+        : Math.log(fireTarget / currentValue) / Math.log(1 + realReturn);
+    }
     const horizonMonths = yearsToFire != null && yearsToFire < 50
       ? Math.ceil(yearsToFire * 12) + 24
       : 36;
     const futureDates = [];
     const futureProj  = [currentValue];
+    const monthlyRate = Math.pow(1 + nominalCAGR, 1/12) - 1;
     for (let m = 1; m <= horizonMonths; m++) {
       const d = new Date(lastDate);
       d.setMonth(d.getMonth() + m);
       futureDates.push(d.toISOString().slice(0, 10));
-      futureProj.push(Math.round(currentValue * Math.pow(1 + nominalCAGR, m / 12)));
+      // Compound previous value + monthly contribution
+      const prev = futureProj[m - 1];
+      futureProj.push(Math.round(prev * (1 + monthlyRate) + monthlyContrib));
     }
     chartLabels  = allDates.concat(futureDates);
     const futurePad = new Array(futureDates.length).fill(null);
     portfolioData = ds.value_eur.concat(futurePad);
     investedData  = ds.invested_eur.concat(futurePad);
-    fireData = new Array(chartLabels.length).fill(fireTarget);
+    // FIRE target: flat for historical dates, inflating for future dates
+    const monthlyInflation = Math.pow(1 + inflation, 1/12) - 1;
+    fireData = new Array(allDates.length).fill(fireTarget);
+    for (let m = 1; m <= futureDates.length; m++) {
+      fireData.push(Math.round(fireTarget * Math.pow(1 + monthlyInflation, m)));
+    }
     projData = new Array(allDates.length - 1).fill(null).concat(futureProj);
   }
 

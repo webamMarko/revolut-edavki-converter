@@ -4,6 +4,13 @@
     <div class="range-bar" id="taxYearBar"></div>
   </div>
   <div id="taxCards" class="card-grid small"></div>
+  <div id="taxExportBar" class="tax-export-bar" style="display:none">
+    <select id="taxExportSelect" class="tax-export-select">
+      <option value="edavki">eDavki XML (Doh-KDVP)</option>
+      <option value="fifo-csv">FIFO Transactions CSV</option>
+    </select>
+    <button id="taxExportBtn" class="tax-export-btn">Export</button>
+  </div>
   <div class="table-scroll">
     <table id="taxTable" class="data-table sortable"></table>
   </div>

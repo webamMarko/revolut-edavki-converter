@@ -204,16 +204,85 @@ if (hasFilter) {
   });
 }
 
-// --- FIRE toggle ---
+// --- FIRE toggle + settings ---
+let fireInflationOverride = null;   // null = use D.fire.inflation_rate
+let fireMonthlyContribOverride = null; // null = use computed avg
+
+function getFireInflation() {
+  return fireInflationOverride != null ? fireInflationOverride : (D.fire ? D.fire.inflation_rate : 2.5);
+}
+function getFireMonthlyContrib() {
+  if (fireMonthlyContribOverride != null) return fireMonthlyContribOverride;
+  const yearly = computeYearlyAverages();
+  return yearly ? yearly.avgCashAdded / 12 : 0;
+}
+
 if (D.fire != null) {
   document.getElementById('fireFilter').style.display = '';
   const fireBtn = document.getElementById('fireToggleBtn');
-  fireBtn.addEventListener('click', function() {
-    showFire = !showFire;
-    fireBtn.classList.toggle('active', showFire);
+  const fireInputsEl = document.getElementById('fireInputs');
+  const mobileFireRow = document.getElementById('mobileFireRow');
+  const mobileFireBtn = document.getElementById('mobileFireToggleBtn');
+  const mobileFireInputsEl = document.getElementById('mobileFireInputs');
+  const mobileFiltersContainer = document.getElementById('mobileFilters');
+  if (mobileFireRow) mobileFireRow.style.display = '';
+  if (mobileFiltersContainer && !hasFilter) mobileFiltersContainer.style.display = '';
+
+  // Input elements
+  const inflInput = document.getElementById('fireInflationInput');
+  const contribInput = document.getElementById('fireContribInput');
+  const mInflInput = document.getElementById('mobileFireInflationInput');
+  const mContribInput = document.getElementById('mobileFireContribInput');
+
+  // Set defaults
+  const defaultInflation = D.fire.inflation_rate;
+  const yearly0 = computeYearlyAverages();
+  const defaultMonthly = yearly0 ? Math.round(yearly0.avgCashAdded / 12) : 0;
+  [inflInput, mInflInput].forEach(el => { if (el) el.value = defaultInflation; });
+  [contribInput, mContribInput].forEach(el => { if (el) el.value = defaultMonthly; });
+
+  function showFireInputs(visible) {
+    if (fireInputsEl) fireInputsEl.style.display = visible ? '' : 'none';
+    if (mobileFireInputsEl) mobileFireInputsEl.style.display = visible ? '' : 'none';
+  }
+
+  function onFireInputChange() {
+    fireInflationOverride = parseFloat(inflInput.value);
+    if (isNaN(fireInflationOverride)) fireInflationOverride = null;
+    fireMonthlyContribOverride = parseFloat(contribInput.value);
+    if (isNaN(fireMonthlyContribOverride)) fireMonthlyContribOverride = null;
+    // Sync mobile inputs
+    if (mInflInput) mInflInput.value = inflInput.value;
+    if (mContribInput) mContribInput.value = contribInput.value;
     rebuildCharts();
     updateAll();
-  });
+  }
+  function onMobileFireInputChange() {
+    fireInflationOverride = parseFloat(mInflInput.value);
+    if (isNaN(fireInflationOverride)) fireInflationOverride = null;
+    fireMonthlyContribOverride = parseFloat(mContribInput.value);
+    if (isNaN(fireMonthlyContribOverride)) fireMonthlyContribOverride = null;
+    // Sync sidebar inputs
+    inflInput.value = mInflInput.value;
+    contribInput.value = mContribInput.value;
+    rebuildCharts();
+    updateAll();
+  }
+  inflInput.addEventListener('change', onFireInputChange);
+  contribInput.addEventListener('change', onFireInputChange);
+  if (mInflInput) mInflInput.addEventListener('change', onMobileFireInputChange);
+  if (mContribInput) mContribInput.addEventListener('change', onMobileFireInputChange);
+
+  function toggleFire() {
+    showFire = !showFire;
+    fireBtn.classList.toggle('active', showFire);
+    if (mobileFireBtn) mobileFireBtn.classList.toggle('active', showFire);
+    showFireInputs(showFire);
+    rebuildCharts();
+    updateAll();
+  }
+  fireBtn.addEventListener('click', toggleFire);
+  if (mobileFireBtn) mobileFireBtn.addEventListener('click', toggleFire);
 }
 
 function onFilterChange() {

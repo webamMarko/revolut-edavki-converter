@@ -109,6 +109,24 @@
     }
   }
 
+  // --- Export functionality ---
+  const exportBar = document.getElementById('taxExportBar');
+  const exportBtn = document.getElementById('taxExportBtn');
+  const exportSel = document.getElementById('taxExportSelect');
+  if (exportBar && D.user && D.user.role && D.user.role !== 'guest') {
+    exportBar.style.display = '';
+    exportBtn.addEventListener('click', function() {
+      const fmt = exportSel.value;
+      const url = '/export/' + fmt + '?year=' + currentYear;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
+  }
+
   // Expose so updateAll() can call it
   window.updateTaxTable = renderTax;
   renderTax();

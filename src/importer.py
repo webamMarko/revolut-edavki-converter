@@ -84,13 +84,35 @@ def _parse_crypto_date(date_str: str) -> str | None:
     from datetime import datetime as dt
     if pd.isna(date_str) or not date_str:
         return None
-    s = str(date_str).strip().strip('"')
+    # Replace narrow no-break space (U+202F) used by newer Revolut exports before AM/PM
+    s = str(date_str).strip().strip('"').replace('\u202f', ' ')
     for fmt in ("%b %d, %Y, %I:%M:%S %p", "%b %d, %Y, %H:%M:%S"):
         try:
             return dt.strptime(s, fmt).strftime("%Y-%m-%d %H:%M:%S")
         except ValueError:
             continue
     return None
+
+
+def normalize_date(date_val) -> str | None:
+    """Normalize any date value stored in the DB to YYYY-MM-DD.
+
+    Handles:
+    - 'YYYY-MM-DD'                     → returned as-is
+    - 'YYYY-MM-DD HH:MM:SS'            → truncated to date part
+    - 'YYYY-MM-DDTHH:MM:SS...'         → truncated to date part (ISO 8601)
+    - 'Apr 1, 2026, 12:24:31 PM'       → parsed (localized Revolut format)
+    - 'Apr 1, 2026, 0:22:14'           → parsed (localized, 24h variant)
+    Returns None if the date cannot be parsed.
+    """
+    if not date_val:
+        return None
+    s = str(date_val).strip()
+    # Fast path: already YYYY-MM-DD or starts with it (ISO timestamp or datetime)
+    if len(s) >= 10 and s[4] == '-' and s[7] == '-':
+        return s[:10]
+    # Slow path: localized format (with possible narrow no-break space)
+    return _parse_crypto_date(s)[:10] if _parse_crypto_date(s) else None
 
 
 def _parse_savings_row(row) -> dict | None:

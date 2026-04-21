@@ -36,32 +36,6 @@ function computePeriodMetrics(si, ei) {
   };
 }
 
-// --- Yearly averages (arithmetic mean across calendar years) ---
-function computeYearlyAverages() {
-  if (!allDates || allDates.length < 2) return null;
-  // Build year -> {first, last} index map
-  const yearMap = {};
-  for (let i = 0; i < allDates.length; i++) {
-    const y = allDates[i].slice(0, 4);
-    if (!yearMap[y]) yearMap[y] = { first: i, last: i };
-    else yearMap[y].last = i;
-  }
-  const years = Object.keys(yearMap).sort();
-  if (years.length === 0) return null;
-  const valueGrowths = [], cashAdded = [];
-  for (const y of years) {
-    const { first, last } = yearMap[y];
-    valueGrowths.push(ds.value_eur[last] - ds.value_eur[first]);
-    cashAdded.push(ds.invested_eur[last] - ds.invested_eur[first]);
-  }
-  const avg = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
-  return {
-    avgValueGrowth: avg(valueGrowths),
-    avgCashAdded:   avg(cashAdded),
-    numYears:       years.length,
-  };
-}
-
 // --- Summary cards ---
 function updateSummary() {
   const el = document.getElementById('summary');
@@ -108,12 +82,18 @@ function updateSummary() {
       let fireSub = remaining > 0 ? '−'+fmtEur(remaining)+' to go' : '🎉 Achieved!';
       if (remaining > 0 && s.cagr_pct != null && s.cagr_pct > 0) {
         const nominalCAGR = s.cagr_pct / 100;
-        const inflation = fire.inflation_rate / 100;
+        const inflation = getFireInflation() / 100;
         const realReturn = (1 + nominalCAGR) / (1 + inflation) - 1;
         if (realReturn > 0) {
-          const yearsToFire = Math.log(fireTarget / s.portfolio_value_eur) / Math.log(1 + realReturn);
-          const fireYear = new Date().getFullYear() + Math.ceil(yearsToFire);
-          fireSub = '~' + fmt(yearsToFire, 1) + ' yrs · est. ' + fireYear;
+          const monthlyContrib = getFireMonthlyContrib();
+          const annualContrib = monthlyContrib * 12;
+          const yearsToFire = annualContrib > 0
+            ? yearsToFireWithContrib(s.portfolio_value_eur, fireTarget, realReturn, annualContrib)
+            : Math.log(fireTarget / s.portfolio_value_eur) / Math.log(1 + realReturn);
+          if (yearsToFire != null) {
+            const fireYear = new Date().getFullYear() + Math.ceil(yearsToFire);
+            fireSub = '~' + fmt(yearsToFire, 1) + ' yrs · est. ' + fireYear;
+          }
         }
       }
       cards.push(['FIRE Progress', fmt(progress, 1)+'%', progress >= 100 ? 'pos' : '', fireSub]);

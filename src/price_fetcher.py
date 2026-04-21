@@ -34,7 +34,7 @@ FX_TICKER = "EURUSD=X"
 FX_EURCHF = "EURCHF=X"
 
 # Suffixes to try when a bare ticker fails on yfinance
-_EXCHANGE_SUFFIXES = [".DE", ".AS", ".L", ".PA"]
+_EXCHANGE_SUFFIXES = [".DE", ".F", ".AS", ".L", ".PA"]
 
 
 def _yf_ticker(revolut_ticker: str) -> str:
@@ -179,7 +179,7 @@ def sync_stock_prices(conn: sqlite3.Connection, start_date: datetime | None = No
 
         if df is not None and not df.empty:
             # Determine currency by exchange suffix
-            if yf_ticker.endswith((".DE", ".AS", ".PA", ".L")):
+            if yf_ticker.endswith((".DE", ".F", ".AS", ".PA", ".L")):
                 currency = "EUR"
             elif yf_ticker.endswith(".SW"):
                 # Swiss franc — convert to EUR at storage time using EURCHF rate

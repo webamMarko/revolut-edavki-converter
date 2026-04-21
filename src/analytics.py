@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
+from .importer import normalize_date
+
 
 @dataclass
 class PositionDetail:
@@ -17,6 +19,7 @@ class PositionDetail:
     unrealized_gain_eur: float
     unrealized_gain_pct: float
     weight_pct: float
+    realized_gain_eur: float = 0.0
 
 
 @dataclass
@@ -169,7 +172,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     cash_event_sources = _sources_with_cash_events(conn)
 
     # Determine date range
-    first_date = transactions[0]["date"][:10]
+    first_date = normalize_date(transactions[0]["date"])
     today = datetime.now().strftime("%Y-%m-%d")
 
     if year:
@@ -192,6 +195,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     total_invested = 0.0
     total_dividends = 0.0
     total_realized_gain = 0.0
+    per_ticker_realized = defaultdict(float)  # ticker -> cumulative realized gain EUR
     total_fees = 0.0  # commissions + overnight fees (CFD)
     cfd_cash = 0.0  # running cash balance for CFD account valuation
     stock_cash = 0.0  # uninvested cash from CASH TOP-UP (for sources with cash events)
@@ -217,7 +221,9 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     daily_records = []
     tx_by_date = defaultdict(list)
     for tx in transactions:
-        tx_by_date[tx["date"][:10]].append(tx)
+        d = normalize_date(tx["date"])
+        if d:
+            tx_by_date[d].append(tx)
 
     # Generate date range from first transaction to today/period_end
     current = datetime.strptime(first_date, "%Y-%m-%d")
@@ -275,10 +281,12 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                         if s_qty <= remaining:
                             # Realized gain on short close: entry - exit
                             total_realized_gain += (s_pps - pps_eur) * s_qty
+                            per_ticker_realized[ticker] += (s_pps - pps_eur) * s_qty
                             remaining -= s_qty
                             holdings[ticker] += s_qty
                         else:
                             total_realized_gain += (s_pps - pps_eur) * remaining
+                            per_ticker_realized[ticker] += (s_pps - pps_eur) * remaining
                             new_shorts.append((s_qty - remaining, s_pps, s_date))
                             holdings[ticker] += remaining
                             remaining = 0
@@ -288,13 +296,13 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 if remaining > 0:
                     holdings[ticker] += remaining
                     cost_basis[ticker] += remaining * pps_eur
-                    fifo_lots[ticker].append((remaining, pps_eur, tx["date"][:10]))
+                    fifo_lots[ticker].append((remaining, pps_eur, date_str))
 
             elif ("BUY" in tx_type or tx_type == "RECEIVE") and ticker and (is_crypto or is_crypto_tx):
                 # Crypto BUY/RECEIVE: opens a long
                 holdings[ticker] += qty
                 cost_basis[ticker] += amount_eur
-                fifo_lots[ticker].append((qty, pps_eur, tx["date"][:10]))
+                fifo_lots[ticker].append((qty, pps_eur, date_str))
                 cash_flows.append((date_str, -amount_eur))
                 if "BUY" in tx_type and amount_eur > 0:
                     total_invested += amount_eur
@@ -305,7 +313,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 # Savings BUY: deposit into money market fund (shares at 1.00)
                 holdings[ticker] += qty
                 cost_basis[ticker] += amount_eur
-                fifo_lots[ticker].append((qty, pps_eur, tx["date"][:10]))
+                fifo_lots[ticker].append((qty, pps_eur, date_str))
                 cash_flows.append((date_str, -amount_eur))
                 total_invested += amount_eur
                 last_known_price_eur[ticker] = pps_eur if pps_eur > 0 else 1.0
@@ -314,7 +322,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 # Stock BUY: always opens a long
                 holdings[ticker] += qty
                 cost_basis[ticker] += amount_eur
-                fifo_lots[ticker].append((qty, pps_eur, tx["date"][:10]))
+                fifo_lots[ticker].append((qty, pps_eur, date_str))
 
                 # For sources without cash events, BUY is the external cash flow
                 source = tx.get("source_file", "")
@@ -323,6 +331,11 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                     cash_flows.append((date_str, -amount_eur))
                 else:
                     stock_cash -= amount_eur  # cash moves into stock position
+
+                # Track last known price (used as fallback for bonds/ISINs
+                # that have no yfinance prices)
+                if pps_eur > 0:
+                    last_known_price_eur[ticker] = pps_eur
 
                 # Update price correction factor
                 if pps > 0:
@@ -348,11 +361,13 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                         if l_qty <= remaining:
                             # Realized gain on long close: exit - entry
                             total_realized_gain += (pps_eur - l_pps) * l_qty
+                            per_ticker_realized[ticker] += (pps_eur - l_pps) * l_qty
                             cost_basis[ticker] -= l_qty * l_pps
                             remaining -= l_qty
                             holdings[ticker] -= l_qty
                         else:
                             total_realized_gain += (pps_eur - l_pps) * remaining
+                            per_ticker_realized[ticker] += (pps_eur - l_pps) * remaining
                             cost_basis[ticker] -= remaining * l_pps
                             new_lots.append((l_qty - remaining, l_pps, l_date))
                             holdings[ticker] -= remaining
@@ -362,7 +377,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 # Open short with any remainder
                 if remaining > 0:
                     holdings[ticker] -= remaining
-                    short_lots[ticker].append((remaining, pps_eur, tx["date"][:10]))
+                    short_lots[ticker].append((remaining, pps_eur, date_str))
 
             elif ("SELL" in tx_type or tx_type == "PAYMENT") and ticker and (is_crypto or is_crypto_tx):
                 # Crypto SELL/PAYMENT: closes a long (FIFO)
@@ -388,6 +403,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 fifo_lots[ticker] = new_lots
                 cost_basis[ticker] -= cost_of_sold
                 total_realized_gain += sell_proceeds_eur - cost_of_sold
+                per_ticker_realized[ticker] += sell_proceeds_eur - cost_of_sold
                 cash_flows.append((date_str, sell_proceeds_eur))
                 total_invested -= sell_proceeds_eur
                 if pps_eur > 0:
@@ -414,6 +430,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 fifo_lots[ticker] = new_lots
                 cost_basis[ticker] -= cost_of_sold
                 total_realized_gain += sell_proceeds_eur - cost_of_sold
+                per_ticker_realized[ticker] += sell_proceeds_eur - cost_of_sold
                 cash_flows.append((date_str, sell_proceeds_eur))
                 total_invested -= sell_proceeds_eur
                 last_known_price_eur[ticker] = pps_eur if pps_eur > 0 else 1.0
@@ -439,6 +456,11 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 fifo_lots[ticker] = new_lots
                 cost_basis[ticker] -= cost_of_sold
                 total_realized_gain += sell_proceeds_eur - cost_of_sold
+                per_ticker_realized[ticker] += sell_proceeds_eur - cost_of_sold
+
+                # Track last known price (fallback for bonds/ISINs)
+                if pps_eur > 0:
+                    last_known_price_eur[ticker] = pps_eur
 
                 # For sources without cash events, SELL is the external cash flow
                 source = tx.get("source_file", "")
@@ -480,7 +502,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 # Crypto rewards: add to holdings at zero cost (income recorded as dividend)
                 if qty and qty > 0:
                     holdings[ticker] += qty
-                    fifo_lots[ticker].append((qty, 0.0, tx["date"][:10]))
+                    fifo_lots[ticker].append((qty, 0.0, date_str))
                 if amount_eur > 0:
                     total_dividends += amount_eur
 
@@ -517,6 +539,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                     sell_proceeds = amount_eur
                     cost_of_sold = cost_basis.get(ticker, 0)
                     total_realized_gain += sell_proceeds - cost_of_sold
+                    per_ticker_realized[ticker] += sell_proceeds - cost_of_sold
                     # For sources without cash events, MERGER CASH is an external outflow
                     source = tx.get("source_file", "")
                     if source not in cash_event_sources:
@@ -529,6 +552,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             elif tx_type == "POSITION CLOSURE" and ticker:
                 cost_of_sold = cost_basis.get(ticker, 0)
                 total_realized_gain -= cost_of_sold  # total loss
+                per_ticker_realized[ticker] -= cost_of_sold
                 holdings[ticker] = 0
                 cost_basis[ticker] = 0
                 fifo_lots[ticker] = []
@@ -602,6 +626,9 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                     portfolio_value += qty * actual_close
                 else:
                     portfolio_value += qty * actual_close / fx_rate
+            elif ticker in last_known_price_eur:
+                # No yfinance data (e.g. bonds/ISINs): use last trade price
+                portfolio_value += qty * last_known_price_eur[ticker]
             else:
                 portfolio_value += cost_basis.get(ticker, 0)
 
@@ -711,9 +738,13 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
         else:
             if qty < 0:
                 continue
-            total_unrealized += (qty * _get_current_value_eur(
+            val_per_share = _get_current_value_eur(
                 ticker, period_end if period_end <= today else today, conn, fx_cache, price_cache
-            )) - cost_basis.get(ticker, 0)
+            )
+            # Fallback for bonds/ISINs with no yfinance prices
+            if val_per_share == 0 and ticker in last_known_price_eur:
+                val_per_share = last_known_price_eur[ticker]
+            total_unrealized += (qty * val_per_share) - cost_basis.get(ticker, 0)
 
     # Position details
     positions = []
@@ -741,10 +772,14 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
         else:
             if qty < 0:
                 continue
-            mv = qty * _get_current_value_eur(
+            val_per_share = _get_current_value_eur(
                 ticker, period_end if period_end <= today else today, conn, fx_cache, price_cache,
                 per_share=True
             )
+            # Fallback for bonds/ISINs with no yfinance prices
+            if val_per_share == 0 and ticker in last_known_price_eur:
+                val_per_share = last_known_price_eur[ticker]
+            mv = qty * val_per_share
             cb = cost_basis.get(ticker, 0)
         ug = mv - cb
         ug_pct = (ug / cb * 100) if cb > 0 else 0.0
@@ -756,6 +791,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             unrealized_gain_eur=ug,
             unrealized_gain_pct=ug_pct,
             weight_pct=mv / total_val * 100,
+            realized_gain_eur=per_ticker_realized.get(ticker, 0.0),
         ))
 
     # Benchmark comparisons (skip for CFD/savings/realestate scope)

@@ -227,6 +227,10 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._api_list_notes()
         elif path == "/import":
             self._serve_import_wizard()
+        elif path == "/export/edavki":
+            self._handle_export_edavki()
+        elif path == "/export/fifo-csv":
+            self._handle_export_fifo_csv()
         else:
             self.send_error(404)
 
@@ -555,6 +559,110 @@ class UploadHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/plain")
             self.end_headers()
             self.wfile.write(f"Error generating report: {e}".encode("utf-8"))
+        finally:
+            conn.close()
+
+    # ------------------------------------------------------------------
+    # Tax exports
+    # ------------------------------------------------------------------
+
+    def _export_year(self):
+        """Parse year from query string and validate session. Returns (session, year) or sends error."""
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return None, None
+        qs = parse_qs(urlparse(self.path).query)
+        try:
+            year = int(qs.get("year", [0])[0])
+        except (ValueError, IndexError):
+            self._json_response({"error": "Invalid year."}, status=400)
+            return None, None
+        if year < 2000 or year > 2100:
+            self._json_response({"error": "Invalid year."}, status=400)
+            return None, None
+        return session, year
+
+    def _handle_export_edavki(self):
+        session, year = self._export_year()
+        if session is None:
+            return
+        import pandas as pd
+        from .revolut_parser import RevolutTransaction
+        from .edavki_generator import EDavkiGenerator
+
+        conn = _portfolio_conn(session)
+        try:
+            rows = conn.execute(
+                "SELECT date, ticker, type, quantity, price_per_share, total_amount, "
+                "currency, fx_rate, asset_class FROM transactions "
+                "WHERE asset_class = 'stock' ORDER BY date"
+            ).fetchall()
+            # Convert DB rows to RevolutTransaction objects
+            transactions = []
+            for r in rows:
+                s = pd.Series({
+                    "Type": r[2], "Ticker": r[1], "Quantity": r[3],
+                    "Price per share": r[4], "Total Amount": r[5],
+                    "Currency": r[6], "FX Rate": r[7],
+                    "Completed Date": r[0], "Date": r[0],
+                    "State": "COMPLETED",
+                })
+                transactions.append(RevolutTransaction(s))
+
+            gen = EDavkiGenerator()
+            gen.generate_xml(transactions, year)
+            xml_bytes = gen.to_string(pretty_print=True).encode("utf-8")
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/xml; charset=utf-8")
+            self.send_header("Content-Disposition",
+                             f'attachment; filename="Doh_KDVP_{year}.xml"')
+            self.send_header("Content-Length", str(len(xml_bytes)))
+            self.end_headers()
+            self.wfile.write(xml_bytes)
+        except Exception as e:
+            self._json_response({"error": str(e)}, status=500)
+        finally:
+            conn.close()
+
+    def _handle_export_fifo_csv(self):
+        session, year = self._export_year()
+        if session is None:
+            return
+        from .tax import compute_tax_report
+        import csv
+        import io
+
+        conn = _portfolio_conn(session)
+        try:
+            report = compute_tax_report(conn, year=year, include_unrealized=False, scope="all")
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            writer.writerow([
+                "Ticker", "Asset Class", "Sell Date", "Quantity",
+                "Proceeds EUR", "Cost Basis EUR", "Gain EUR",
+                "Std Costs EUR", "Holding Years", "Tax Rate", "Tax EUR",
+            ])
+            for s in report.realized_sales:
+                writer.writerow([
+                    s.ticker, s.asset_class, s.sell_date,
+                    f"{s.quantity:.6f}", f"{s.sell_price_eur:.2f}",
+                    f"{s.cost_basis_eur:.2f}", f"{s.gain_eur:.2f}",
+                    f"{s.std_costs_eur:.2f}", f"{s.holding_years:.2f}",
+                    f"{s.tax_rate:.4f}", f"{s.tax_eur:.2f}",
+                ])
+            csv_bytes = buf.getvalue().encode("utf-8")
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Disposition",
+                             f'attachment; filename="fifo_transactions_{year}.csv"')
+            self.send_header("Content-Length", str(len(csv_bytes)))
+            self.end_headers()
+            self.wfile.write(csv_bytes)
+        except Exception as e:
+            self._json_response({"error": str(e)}, status=500)
         finally:
             conn.close()
 

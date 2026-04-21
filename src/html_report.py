@@ -289,6 +289,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                     "unrealized_gain_eur": round(p.unrealized_gain_eur, 2),
                     "unrealized_gain_pct": round(p.unrealized_gain_pct, 2),
                     "weight_pct": round(p.weight_pct, 2),
+                    "realized_gain_eur": round(p.realized_gain_eur, 2),
                 }
                 for p in analytics.positions
             ],
@@ -388,6 +389,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                             "unrealized_gain_eur": round(p.unrealized_gain_eur, 2),
                             "unrealized_gain_pct": round(p.unrealized_gain_pct, 2),
                             "weight_pct": round(p.weight_pct, 2),
+                            "realized_gain_eur": round(p.realized_gain_eur, 2),
                         }
                         for p in ac_analytics.positions
                     ],

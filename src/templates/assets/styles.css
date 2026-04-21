@@ -381,6 +381,38 @@ body {
 .toggle-realestate{ background: rgba(251,113,133,0.12); color: var(--re-color);      border-color: rgba(251,113,133,0.25); }
 .toggle-fire      { background: rgba(52,211,153,0.08);  color: var(--green);         border-color: rgba(52,211,153,0.25); }
 
+/* FIRE inputs */
+.fire-row { flex-wrap: wrap; }
+.fire-inputs { display: flex; gap: 0.4rem; align-items: center; }
+.fire-input-label {
+  font-size: 0.6rem; font-weight: 600; color: var(--muted);
+  display: flex; align-items: center; gap: 0.25rem;
+}
+.fire-input {
+  width: 3.5rem; padding: 0.15rem 0.3rem; border-radius: 4px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  font-size: 0.65rem; font-family: inherit; text-align: right;
+}
+.fire-input:focus { outline: none; border-color: var(--accent); }
+
+/* Tax export bar */
+.tax-export-bar {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem 0; margin-bottom: 0.25rem;
+}
+.tax-export-select {
+  padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.7rem;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  font-family: inherit; cursor: pointer;
+}
+.tax-export-select:focus { outline: none; border-color: var(--accent); }
+.tax-export-btn {
+  padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  font-family: inherit; cursor: pointer; transition: all 0.12s;
+}
+.tax-export-btn:hover { background: var(--raised); border-color: var(--accent); color: var(--accent); }
+
 /* ---- Range buttons ---- */
 .range-bar { display: flex; gap: 0.25rem; flex-wrap: wrap; margin-left: auto; }
 .range-btn {
@@ -543,6 +575,19 @@ body {
     flex-wrap: wrap;
     gap: 0.35rem;
     padding: 0.4rem 0.9rem 0.5rem;
+  }
+  .mobile-fire-row {
+    border-top: 1px solid var(--border);
+    padding-top: 0.35rem;
+    align-items: center;
+  }
+  .mobile-fire-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    margin-right: 0.25rem;
   }
 
   .sidebar {

@@ -5,6 +5,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 
+from .importer import normalize_date
+
 
 def slovenian_tax_rate(holding_years: float) -> float:
     """Return the Slovenian capital gains tax rate for stocks/crypto/savings.
@@ -152,7 +154,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
         amount = tx["total_amount"] or 0
         fx = tx["fx_rate"] or 1.0
         pps = tx["price_per_share"] or 0
-        date_str = tx["date"][:10]
+        date_str = normalize_date(tx["date"]) or ""
 
         # In 'all' scope, prefix CFD/crypto/savings tickers to avoid mixing with stocks
         is_cfd_tx = tx.get("asset_class") == "cfd"

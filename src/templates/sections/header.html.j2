@@ -6,6 +6,14 @@
 </div>
 <div class="mobile-filters" id="mobileFilters" style="display:none">
   <div id="mobileAssetToggles" class="mobile-filter-row"></div>
+  <div id="mobileFireRow" class="mobile-filter-row mobile-fire-row" style="display:none">
+    <span class="mobile-fire-label">Projections</span>
+    <div id="mobileFireToggleBtn" class="toggle-btn toggle-fire">FIRE</div>
+    <div id="mobileFireInputs" class="fire-inputs" style="display:none">
+      <label class="fire-input-label">Infl %<input id="mobileFireInflationInput" type="number" class="fire-input" step="0.1" min="0" max="20"></label>
+      <label class="fire-input-label">Mo. inv.<input id="mobileFireContribInput" type="number" class="fire-input" step="50" min="0"></label>
+    </div>
+  </div>
 </div>
 
 <nav class="sidebar">
@@ -26,8 +34,12 @@
 
   <div id="fireFilter" class="sidebar-filter-block" style="display:none">
     <div class="filter-label">Projections</div>
-    <div class="toggles">
+    <div class="toggles fire-row">
       <div id="fireToggleBtn" class="toggle-btn toggle-fire">FIRE</div>
+      <div id="fireInputs" class="fire-inputs" style="display:none">
+        <label class="fire-input-label">Infl %<input id="fireInflationInput" type="number" class="fire-input" step="0.1" min="0" max="20"></label>
+        <label class="fire-input-label">Mo. inv.<input id="fireContribInput" type="number" class="fire-input" step="50" min="0"></label>
+      </div>
     </div>
   </div>
 

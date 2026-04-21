@@ -142,6 +142,7 @@ function updatePositions() {
       ? `<span class="pos-chevron" data-idx="${idx}">&#x25B6;</span>`
       : `<span class="pos-chevron-placeholder"></span>`;
 
+    const totalGain = p.unrealized_gain_eur + (p.realized_gain_eur || 0);
     const row = `<tr class="pos-row ${expandable}" data-idx="${idx}" data-ticker="${p.ticker}">
       <td><div class="pos-ticker-cell">${chevron}<strong>${p.ticker}</strong></div></td>
       <td>${fmt(p.quantity, 4)}</td>
@@ -149,7 +150,8 @@ function updatePositions() {
       <td>${fmtEur(p.cost_basis_eur)}</td>
       <td>${fmtEur(p.market_value_eur)}</td>
       <td class="${cls(p.unrealized_gain_eur)}">${sign(p.unrealized_gain_eur)} EUR</td>
-      <td class="${cls(p.unrealized_gain_pct)}">${sign(p.unrealized_gain_pct)}%</td>
+      <td class="${cls(p.realized_gain_eur || 0)}">${sign(p.realized_gain_eur || 0)} EUR</td>
+      <td class="${cls(totalGain)}">${sign(totalGain)} EUR</td>
       <td>${fmt(p.weight_pct, 1)}%</td>
     </tr>`;
 
@@ -161,7 +163,7 @@ function updatePositions() {
 
     const companyName = (D.company_names || {})[p.ticker] || '';
     const detail = `<tr class="pos-detail-row" id="pos-detail-${idx}" style="display:none">
-      <td colspan="8">
+      <td colspan="9">
         <div class="pos-detail">
           ${companyName ? `<div class="pos-detail-name">${companyName}</div>` : ''}
           <div class="pos-detail-body">
@@ -191,6 +193,14 @@ function updatePositions() {
               <span class="pos-stat-value ${cls(p.unrealized_gain_eur)}">${sign(p.unrealized_gain_eur)} EUR (${sign(p.unrealized_gain_pct)}%)</span>
             </div>
             <div class="pos-stat">
+              <span class="pos-stat-label">Realized P&L</span>
+              <span class="pos-stat-value ${cls(p.realized_gain_eur || 0)}">${sign(p.realized_gain_eur || 0)} EUR</span>
+            </div>
+            <div class="pos-stat">
+              <span class="pos-stat-label">Total P&L</span>
+              <span class="pos-stat-value ${cls(totalGain)}">${sign(totalGain)} EUR</span>
+            </div>
+            <div class="pos-stat">
               <span class="pos-stat-label">2yr Price Change</span>
               <span class="pos-stat-value ${priceChange != null ? cls(priceChange) : ''}">${priceChange != null ? sign(priceChange) + '%' : '—'}</span>
             </div>
@@ -217,7 +227,8 @@ function updatePositions() {
     + '<th>Cost Basis</th>'
     + '<th>Market Value</th>'
     + '<th>Unrealized</th>'
-    + '<th>Return %</th>'
+    + '<th>Realized</th>'
+    + '<th>Total P&L</th>'
     + '<th>Weight</th>'
     + '</tr></thead><tbody>' + tbody + '</tbody>';
 

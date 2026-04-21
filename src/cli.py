@@ -2,6 +2,7 @@
 """Command-line interface for Revolut to eDavki converter and portfolio analytics."""
 
 import argparse
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -97,11 +98,34 @@ def cmd_sync(args):
     from .db import get_connection
     from .price_fetcher import sync_all
 
-    conn = get_connection()
-    try:
-        sync_all(conn, start_date=args.start_date, end_date=args.end_date, verbose=args.verbose)
-    finally:
-        conn.close()
+    if getattr(args, 'all_users', False):
+        data_dir = Path(os.environ.get("REVOLUT_DATA_DIR", "/data"))
+        if not data_dir.is_dir():
+            print(f"Data directory not found: {data_dir}")
+            return
+        synced = 0
+        for user_dir in sorted(data_dir.iterdir()):
+            if not user_dir.is_dir() or user_dir.name.startswith("_"):
+                continue
+            db_path = user_dir / "portfolio.db"
+            if not db_path.exists():
+                continue
+            print(f"Syncing {user_dir.name} ...")
+            conn = get_connection(db_path=db_path)
+            try:
+                sync_all(conn, start_date=args.start_date, end_date=args.end_date, verbose=args.verbose)
+                synced += 1
+            except Exception as e:
+                print(f"  Error syncing {user_dir.name}: {e}")
+            finally:
+                conn.close()
+        print(f"Synced {synced} portfolio(s).")
+    else:
+        conn = get_connection()
+        try:
+            sync_all(conn, start_date=args.start_date, end_date=args.end_date, verbose=args.verbose)
+        finally:
+            conn.close()
 
 
 def cmd_analytics(args):
@@ -526,6 +550,7 @@ Examples:
     p_sync.add_argument("--from", dest="start_date", type=parse_date, help="Start date (YYYY-MM-DD)")
     p_sync.add_argument("--to", dest="end_date", type=parse_date, help="End date (YYYY-MM-DD)")
     p_sync.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    p_sync.add_argument("--all-users", action="store_true", help="Sync all user portfolios in REVOLUT_DATA_DIR")
     p_sync.set_defaults(func=cmd_sync)
 
     # --- analytics ---
