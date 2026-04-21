@@ -287,6 +287,19 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "bench.title": "Performance vs Benchmarks",
         "bench.comparison": "Benchmark Comparison",
 
+        # --- Monte Carlo ---
+        "mc.title": "Monte Carlo Projection",
+        "mc.desc": "{sims} simulations over {years}-year horizon based on historical daily returns",
+        "mc.median_outcome": "Median Outcome",
+        "mc.best_case": "Best Case",
+        "mc.worst_case": "Worst Case",
+        "mc.loss_probability": "Loss Probability",
+        "mc.percentile": "percentile",
+        "mc.median": "Median",
+        "mc.current": "Current Value",
+        "mc.now": "Now",
+        "mc.months": "mo",
+
         # --- Keyboard shortcuts ---
         "shortcuts.title": "Keyboard Shortcuts",
         "shortcuts.toggle_help": "Toggle this help",
@@ -598,6 +611,19 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # --- Benchmark ---
         "bench.title": "Primerjava z indeksi",
         "bench.comparison": "Primerjava z indeksi",
+
+        # --- Monte Carlo ---
+        "mc.title": "Monte Carlo projekcija",
+        "mc.desc": "{sims} simulacij za {years}-letni horizont na podlagi zgodovinskih dnevnih donosov",
+        "mc.median_outcome": "Mediani izid",
+        "mc.best_case": "Najboljši scenarij",
+        "mc.worst_case": "Najslabši scenarij",
+        "mc.loss_probability": "Verjetnost izgube",
+        "mc.percentile": "percentil",
+        "mc.median": "Mediana",
+        "mc.current": "Trenutna vrednost",
+        "mc.now": "Zdaj",
+        "mc.months": "mes",
 
         # --- Keyboard shortcuts ---
         "shortcuts.title": "Bližnjice na tipkovnici",
