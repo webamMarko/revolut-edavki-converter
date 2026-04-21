@@ -26,7 +26,54 @@ function applyTxFilter() {
   renderTxPage();
 }
 
-function updateTransactions() { applyTxFilter(); }
+function updateTxStats() {
+  const section = document.getElementById('txStatsSection');
+  const txs = getDateFilteredTx();
+  const trades = txs.filter(t => t.type === 'BUY' || t.type === 'SELL');
+  if (trades.length < 2) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  const buys = trades.filter(t => t.type === 'BUY');
+  const sells = trades.filter(t => t.type === 'SELL');
+
+  // Average trade size
+  const amounts = trades.filter(t => t.total_amount != null).map(t => Math.abs(t.total_amount));
+  const avgSize = amounts.length > 0 ? amounts.reduce((a, b) => a + b, 0) / amounts.length : 0;
+
+  // Most traded ticker
+  const tickerCount = {};
+  trades.forEach(t => { if (t.ticker) tickerCount[t.ticker] = (tickerCount[t.ticker] || 0) + 1; });
+  const topTicker = Object.entries(tickerCount).sort((a, b) => b[1] - a[1])[0];
+
+  // Unique tickers traded
+  const uniqueTickers = Object.keys(tickerCount).length;
+
+  // Trading frequency: trades per month
+  const firstDate = trades[trades.length - 1].date;
+  const lastDate = trades[0].date;
+  const months = Math.max(1, (new Date(lastDate) - new Date(firstDate)) / (30.44 * 86400000));
+  const tradesPerMonth = trades.length / months;
+
+  // Dividend transactions
+  const divTypes = new Set(['DIVIDEND', 'BOND COUPON', 'INTEREST PAID', 'STAKING REWARD', 'LEARN REWARD']);
+  const dividends = txs.filter(t => divTypes.has(t.type));
+
+  const el = document.getElementById('txStats');
+  const cards = [
+    ['Total Trades', trades.length, ''],
+    ['Buys / Sells', buys.length + ' / ' + sells.length, ''],
+    ['Avg Trade Size', fmtEur(avgSize), ''],
+    ['Trades/Month', fmt(tradesPerMonth, 1), ''],
+    ['Unique Tickers', uniqueTickers, ''],
+    ['Most Traded', topTicker ? topTicker[0] : '—', '', topTicker ? topTicker[1] + ' trades' : ''],
+    ['Dividends Received', dividends.length, ''],
+  ];
+  el.innerHTML = cards.map(([l, v, c, sub]) =>
+    `<div class="metric-card"><div class="label">${l}</div><div class="value ${c || ''}">${v}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`
+  ).join('');
+}
+
+function updateTransactions() { updateTxStats(); applyTxFilter(); }
 
 function renderTxPage() {
   const start = txPage * PAGE_SIZE, end = start + PAGE_SIZE;
