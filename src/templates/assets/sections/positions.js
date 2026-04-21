@@ -1,3 +1,75 @@
+// --- Allocation chart ---
+let _allocationChart = null;
+const _ALLOC_COLORS = [
+  '#6366f1','#34d399','#f59e0b','#f87171','#a78bfa',
+  '#38bdf8','#fb923c','#4ade80','#e879f9','#fbbf24',
+  '#22d3ee','#c084fc','#f472b6','#2dd4bf','#818cf8',
+];
+
+function updateAllocation() {
+  const positions = getActivePositions();
+  const section = document.getElementById('allocationSection');
+  if (positions.length === 0) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  // Sort by market value descending, group small (<2%) into "Other"
+  const sorted = [...positions].sort((a, b) => b.market_value_eur - a.market_value_eur);
+  const totalMV = sorted.reduce((s, p) => s + p.market_value_eur, 0) || 1;
+  const items = [];
+  let otherVal = 0;
+  for (const p of sorted) {
+    const pct = p.market_value_eur / totalMV * 100;
+    if (pct >= 2 || items.length < 10) {
+      items.push({ ticker: p.ticker, value: p.market_value_eur, pct });
+    } else {
+      otherVal += p.market_value_eur;
+    }
+  }
+  if (otherVal > 0) {
+    items.push({ ticker: 'Other', value: otherVal, pct: otherVal / totalMV * 100 });
+  }
+
+  // Build chart
+  if (_allocationChart) { _allocationChart.destroy(); _allocationChart = null; }
+  const canvas = document.getElementById('allocationChart');
+  _allocationChart = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: items.map(i => i.ticker),
+      datasets: [{
+        data: items.map(i => i.value),
+        backgroundColor: items.map((_, i) => _ALLOC_COLORS[i % _ALLOC_COLORS.length]),
+        borderWidth: 0,
+        hoverOffset: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      cutout: '55%',
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: c => c.label + ': ' + fmtEur(c.parsed) + ' (' + fmt(items[c.dataIndex].pct, 1) + '%)',
+          },
+        },
+      },
+    },
+  });
+
+  // Build legend
+  const legend = document.getElementById('allocationLegend');
+  legend.innerHTML = items.map((item, i) =>
+    `<div class="alloc-item">`
+    + `<span class="alloc-dot" style="background:${_ALLOC_COLORS[i % _ALLOC_COLORS.length]}"></span>`
+    + `<span>${item.ticker}</span>`
+    + `<span class="alloc-pct">${fmt(item.pct, 1)}%</span>`
+    + `</div>`
+  ).join('');
+}
+
 // --- Positions table ---
 const _posCharts = {};  // ticker -> Chart instance
 

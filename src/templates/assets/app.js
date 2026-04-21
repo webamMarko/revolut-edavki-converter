@@ -64,6 +64,7 @@ function updateAll() {
   }
   updateSummary();
   updateGains();
+  updateAllocation();
   updatePositions();
   updateClosedPositions();
   updateDividends();

@@ -667,3 +667,43 @@ body {
 @media (max-width: 389px) {
   .card-grid, .card-grid.small { grid-template-columns: 1fr; }
 }
+
+/* ---- Allocation chart ---- */
+.allocation-wrap {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+.allocation-chart-col {
+  width: 260px;
+  min-width: 200px;
+  flex-shrink: 0;
+}
+.allocation-legend {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.2rem;
+  font-size: 0.78rem;
+  color: var(--text);
+}
+.alloc-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+.alloc-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.alloc-pct {
+  color: var(--muted);
+  margin-left: 0.15rem;
+}
+@media (max-width: 768px) {
+  .allocation-wrap { flex-direction: column; }
+  .allocation-chart-col { width: 220px; margin: 0 auto; }
+}
