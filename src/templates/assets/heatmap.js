@@ -214,3 +214,98 @@ function buildYearlyTable() {
 
   makeSortable(el);
 }
+
+// --- Rolling 1-Year Returns Chart ---
+let _rollingChart = null;
+
+function buildRollingReturns() {
+  if (_rollingChart) { _rollingChart.destroy(); _rollingChart = null; }
+
+  const section = document.getElementById('rollingReturnsSection');
+  const canvas = document.getElementById('rollingReturnsChart');
+  if (!canvas || !ds.dates || ds.dates.length < 252) { section.style.display = 'none'; return; }
+
+  const pi = (ds.perf_index && ds.perf_index.length === ds.dates.length) ? ds.perf_index : ds.value_eur;
+  const lookback = 252; // ~1 year of trading days
+  const data = [];
+  const labels = [];
+  for (var i = lookback; i < pi.length; i++) {
+    if (pi[i - lookback] > 0) {
+      const ret = (pi[i] / pi[i - lookback] - 1) * 100;
+      data.push(ret);
+      labels.push(ds.dates[i]);
+    }
+  }
+
+  if (data.length < 10) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  // Color the line based on positive/negative
+  const colors = data.map(d => d >= 0 ? '#34d399' : '#f87171');
+
+  _rollingChart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Rolling 1Y Return',
+        data: data,
+        borderColor: '#6366f1',
+        backgroundColor: function(ctx) {
+          const val = ctx.raw;
+          return val >= 0 ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)';
+        },
+        fill: true,
+        tension: 0.2,
+        pointRadius: 0,
+        borderWidth: 1.5,
+        segment: {
+          borderColor: function(ctx) {
+            return ctx.p1.parsed.y >= 0 ? '#34d399' : '#f87171';
+          },
+        },
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: 'month', tooltipFormat: 'yyyy-MM-dd' },
+          grid: { display: false },
+          ticks: { color: '#556075', font: { size: 10 }, maxTicksLimit: 8 },
+        },
+        y: {
+          grid: { color: 'rgba(30,42,58,0.8)' },
+          ticks: {
+            color: '#556075',
+            font: { size: 10 },
+            callback: function(v) { return (v >= 0 ? '+' : '') + v.toFixed(0) + '%'; },
+          },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(c) { return 'Rolling 1Y: ' + sign(c.parsed.y) + '%'; },
+          },
+        },
+        annotation: {
+          annotations: {
+            zeroLine: {
+              type: 'line',
+              yMin: 0, yMax: 0,
+              borderColor: 'rgba(255,255,255,0.2)',
+              borderWidth: 1,
+              borderDash: [4, 4],
+            },
+          },
+        },
+      },
+    },
+  });
+}
