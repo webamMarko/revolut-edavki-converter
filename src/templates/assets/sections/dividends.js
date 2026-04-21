@@ -127,4 +127,82 @@ function _buildDividendChart(monthly) {
       },
     },
   });
+
+  // Build annual growth chart and table
+  _buildDividendGrowth(monthly);
+}
+
+let _dividendGrowthChart = null;
+
+function _buildDividendGrowth(monthly) {
+  if (_dividendGrowthChart) { _dividendGrowthChart.destroy(); _dividendGrowthChart = null; }
+
+  const section = document.getElementById('dividendGrowthSection');
+  if (!monthly || monthly.length === 0) { section.style.display = 'none'; return; }
+
+  // Aggregate by year
+  const yearTotals = {};
+  monthly.forEach(m => {
+    const y = m.month.slice(0, 4);
+    yearTotals[y] = (yearTotals[y] || 0) + m.total_eur;
+  });
+  const years = Object.keys(yearTotals).sort();
+  if (years.length < 2) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  const totals = years.map(y => yearTotals[y]);
+
+  // Chart
+  const canvas = document.getElementById('dividendGrowthChart');
+  _dividendGrowthChart = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: years,
+      datasets: [{
+        label: 'Annual Dividend Income (EUR)',
+        data: totals,
+        backgroundColor: 'rgba(99,102,241,0.5)',
+        borderColor: '#6366f1',
+        borderWidth: 1,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#556075', font: { size: 11 } } },
+        y: {
+          position: 'right',
+          grid: { color: 'rgba(30,42,58,0.8)' },
+          ticks: { color: '#556075', font: { size: 10 }, callback: v => fmtEur(v) },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => fmtEur(c.parsed.y) } },
+      },
+    },
+  });
+
+  // Growth table
+  const gt = document.getElementById('dividendGrowthTable');
+  gt.innerHTML = '<thead><tr><th>Year</th><th>Income</th><th>YoY Growth</th><th>Growth %</th></tr></thead><tbody>'
+    + years.map((y, i) => {
+      const val = yearTotals[y];
+      const prev = i > 0 ? yearTotals[years[i - 1]] : null;
+      const growth = prev != null ? val - prev : null;
+      const growthPct = prev != null && prev > 0 ? (val / prev - 1) * 100 : null;
+      return '<tr>'
+        + '<td><strong>' + y + '</strong></td>'
+        + '<td>' + fmtEur(val) + '</td>'
+        + '<td class="' + (growth != null ? cls(growth) : '') + '">'
+          + (growth != null ? sign(growth) + ' EUR' : '—') + '</td>'
+        + '<td class="' + (growthPct != null ? cls(growthPct) : '') + '">'
+          + (growthPct != null ? sign(growthPct) + '%' : '—') + '</td>'
+        + '</tr>';
+    }).join('')
+    + '</tbody>';
+  makeSortable(gt);
 }
