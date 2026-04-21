@@ -109,6 +109,19 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "pos.lots.pl": "P&L",
         "pos.export": "Export CSV",
 
+        # --- Simulator ---
+        "sim.title": "What-If Simulator",
+        "sim.desc": "Enter amounts to add (+) or remove (-) per position to see the impact on your allocation",
+        "sim.alloc_title": "Resulting Allocation",
+        "sim.current_value": "Current Value",
+        "sim.simulated_value": "Simulated Value",
+        "sim.change": "Change",
+        "sim.adjust": "Adjust",
+        "sim.new_weight": "New Weight",
+        "sim.simulate": "Simulate",
+        "sim.reset": "Reset",
+        "sim.close": "Close",
+
         # --- Closed positions ---
         "closed.title": "Closed Positions",
         "closed.proceeds": "Proceeds",
@@ -407,6 +420,19 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "pos.lots.cost": "Strošek",
         "pos.lots.pl": "D/I",
         "pos.export": "Izvozi CSV",
+
+        # --- Simulator ---
+        "sim.title": "Kaj-če simulator",
+        "sim.desc": "Vnesite zneske za dodajanje (+) ali odvzemanje (-) po poziciji za ogled vpliva na razporeditev",
+        "sim.alloc_title": "Rezultat razporeditve",
+        "sim.current_value": "Trenutna vrednost",
+        "sim.simulated_value": "Simulirana vrednost",
+        "sim.change": "Sprememba",
+        "sim.adjust": "Prilagodi",
+        "sim.new_weight": "Nov delež",
+        "sim.simulate": "Simuliraj",
+        "sim.reset": "Ponastavi",
+        "sim.close": "Zapri",
 
         # --- Closed positions ---
         "closed.title": "Zaprte pozicije",

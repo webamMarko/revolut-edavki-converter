@@ -58,7 +58,10 @@
 <section class="card" id="positionsSection" style="display:none">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem">
     <h2 style="margin:0">Current Positions</h2>
-    <button id="exportPositionsBtn" class="tax-export-btn" style="font-size:0.72rem;padding:0.3rem 0.7rem">Export CSV</button>
+    <div style="display:flex;gap:0.4rem">
+      <button id="simulateBtn" class="tax-export-btn" style="font-size:0.72rem;padding:0.3rem 0.7rem">Simulate</button>
+      <button id="exportPositionsBtn" class="tax-export-btn" style="font-size:0.72rem;padding:0.3rem 0.7rem">Export CSV</button>
+    </div>
   </div>
   <div class="table-scroll">
     <table id="positionsTable" class="data-table sortable"></table>
@@ -69,5 +72,33 @@
   <h2>Closed Positions</h2>
   <div class="table-scroll">
     <table id="closedPositionsTable" class="data-table sortable"></table>
+  </div>
+</section>
+
+<section class="card" id="simulatorSection" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem">
+    <h2 style="margin:0" id="simTitle">What-If Simulator</h2>
+    <div style="display:flex;gap:0.4rem">
+      <button id="simResetBtn" class="tax-export-btn" style="font-size:0.72rem;padding:0.3rem 0.7rem">Reset</button>
+      <button id="simCloseBtn" class="tax-export-btn" style="font-size:0.72rem;padding:0.3rem 0.7rem">Close</button>
+    </div>
+  </div>
+  <p id="simDesc" style="color:var(--muted);font-size:0.8rem;margin:0 0 1rem"></p>
+  <div class="two-col">
+    <div>
+      <div id="simCards" class="card-grid small" style="margin-bottom:0.75rem"></div>
+      <div class="table-scroll">
+        <table id="simTable" class="data-table"></table>
+      </div>
+    </div>
+    <div>
+      <h3 id="simAllocTitle" style="margin:0 0 0.5rem">Resulting Allocation</h3>
+      <div class="allocation-wrap">
+        <div class="allocation-chart-col">
+          <canvas id="simChart"></canvas>
+        </div>
+        <div class="allocation-legend" id="simLegend"></div>
+      </div>
+    </div>
   </div>
 </section>

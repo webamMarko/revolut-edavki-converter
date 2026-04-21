@@ -562,6 +562,132 @@ function updateClosedPositions() {
     URL.revokeObjectURL(a.href);
   });
 
+  // --- What-if simulator ---
+  let _simChart = null;
+  const _simAdjustments = {};
+
+  document.getElementById('simulateBtn').textContent = t('sim.simulate');
+  document.getElementById('simResetBtn').textContent = t('sim.reset');
+  document.getElementById('simCloseBtn').textContent = t('sim.close');
+  document.getElementById('simulateBtn').addEventListener('click', function() {
+    var section = document.getElementById('simulatorSection');
+    section.style.display = section.style.display === 'none' ? '' : 'none';
+    if (section.style.display !== 'none') _renderSimulator();
+  });
+  document.getElementById('simCloseBtn').addEventListener('click', function() {
+    document.getElementById('simulatorSection').style.display = 'none';
+  });
+  document.getElementById('simResetBtn').addEventListener('click', function() {
+    for (var k in _simAdjustments) delete _simAdjustments[k];
+    _renderSimulator();
+  });
+
+  function _renderSimulator() {
+    var positions = getActivePositions();
+    if (positions.length === 0) return;
+
+    document.getElementById('simTitle').textContent = t('sim.title');
+    document.getElementById('simDesc').textContent = t('sim.desc');
+    document.getElementById('simAllocTitle').textContent = t('sim.alloc_title');
+
+    var sorted = positions.slice().sort(function(a, b) { return b.market_value_eur - a.market_value_eur; });
+    var totalCurrent = sorted.reduce(function(s, p) { return s + p.market_value_eur; }, 0);
+    var totalAdj = sorted.reduce(function(s, p) { return s + p.market_value_eur + (_simAdjustments[p.ticker] || 0); }, 0);
+    var totalChange = totalAdj - totalCurrent;
+
+    document.getElementById('simCards').innerHTML = [
+      [t('sim.current_value'), fmtCcy(totalCurrent), ''],
+      [t('sim.simulated_value'), fmtCcy(totalAdj), ''],
+      [t('sim.change'), sign(totalChange) + ' ' + _currency, cls(totalChange)],
+    ].map(function(row) {
+      return '<div class="metric-card"><div class="label">' + row[0] + '</div><div class="value ' + row[2] + '">' + row[1] + '</div></div>';
+    }).join('');
+
+    // Table with input fields
+    var html = '<thead><tr><th>' + t('pos.ticker') + '</th><th>' + t('pos.market_value') + '</th><th>' + t('sim.adjust') + ' (' + _currency + ')</th><th>' + t('sim.new_weight') + '</th></tr></thead><tbody>';
+    for (var i = 0; i < sorted.length; i++) {
+      var p = sorted[i];
+      var adj = _simAdjustments[p.ticker] || 0;
+      var newVal = p.market_value_eur + adj;
+      var newWeight = totalAdj > 0 ? (newVal / totalAdj * 100) : 0;
+      html += '<tr>'
+        + '<td><strong>' + p.ticker + '</strong></td>'
+        + '<td>' + fmtCcy(p.market_value_eur) + '</td>'
+        + '<td><input type="number" class="sim-input" data-ticker="' + p.ticker + '" value="' + adj + '" step="100" style="width:80px;padding:0.2rem 0.3rem;border:1px solid var(--border);border-radius:4px;background:var(--card-bg);color:var(--text);font-size:0.75rem;text-align:right"></td>'
+        + '<td>' + fmt(newWeight, 1) + '%</td>'
+        + '</tr>';
+    }
+    html += '</tbody>';
+    document.getElementById('simTable').innerHTML = html;
+
+    // Attach input handlers
+    document.querySelectorAll('.sim-input').forEach(function(input) {
+      input.addEventListener('input', function() {
+        var ticker = this.getAttribute('data-ticker');
+        var val = parseFloat(this.value) || 0;
+        _simAdjustments[ticker] = val;
+        _updateSimChart(sorted);
+        _renderSimulator();
+      });
+    });
+
+    _updateSimChart(sorted);
+  }
+
+  function _updateSimChart(sorted) {
+    if (_simChart) { _simChart.destroy(); _simChart = null; }
+
+    var items = [];
+    var otherVal = 0;
+    var totalAdj = sorted.reduce(function(s, p) { return s + p.market_value_eur + (_simAdjustments[p.ticker] || 0); }, 0) || 1;
+
+    for (var i = 0; i < sorted.length; i++) {
+      var p = sorted[i];
+      var val = p.market_value_eur + (_simAdjustments[p.ticker] || 0);
+      if (val <= 0) continue;
+      var pctVal = val / totalAdj * 100;
+      if (pctVal >= 2 || items.length < 10) {
+        items.push({ticker: p.ticker, value: val, pct: pctVal});
+      } else {
+        otherVal += val;
+      }
+    }
+    if (otherVal > 0) items.push({ticker: t('alloc.other'), value: otherVal, pct: otherVal / totalAdj * 100});
+
+    var canvas = document.getElementById('simChart');
+    _simChart = new Chart(canvas.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: items.map(function(i) { return i.ticker; }),
+        datasets: [{
+          data: items.map(function(i) { return i.value; }),
+          backgroundColor: items.map(function(_, i) { return _ALLOC_COLORS[i % _ALLOC_COLORS.length]; }),
+          borderWidth: 0,
+          hoverOffset: 6,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        cutout: '55%',
+        animation: false,
+        plugins: {
+          legend: {display: false},
+          tooltip: {callbacks: {label: function(c) { return c.label + ': ' + fmtCcy(c.parsed) + ' (' + fmt(items[c.dataIndex].pct, 1) + '%)'; }}},
+        },
+      },
+    });
+
+    var legend = document.getElementById('simLegend');
+    legend.innerHTML = items.map(function(item, i) {
+      return '<div class="alloc-item">'
+        + '<span class="alloc-dot" style="background:' + _ALLOC_COLORS[i % _ALLOC_COLORS.length] + '"></span>'
+        + '<span>' + item.ticker + '</span>'
+        + '<span class="alloc-pct">' + fmt(item.pct, 1) + '%</span>'
+        + '</div>';
+    }).join('');
+  }
+
   // --- Correlation matrix ---
   window.updateCorrelation = function() {
     const section = document.getElementById('correlationSection');
