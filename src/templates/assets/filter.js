@@ -100,7 +100,7 @@ function isDefaultSelection() {
 
 function getActiveSummary() {
   if (isDefaultSelection()) return D.summary;
-  if (activeClasses.size === 0) return {portfolio_value_eur:0, total_invested_eur:0, absolute_gain_eur:0, total_return_pct:0, cagr_pct:null, twr_pct:null, max_drawdown_pct:0, max_drawdown_peak_date:'', max_drawdown_trough_date:''};
+  if (activeClasses.size === 0) return {portfolio_value_eur:0, total_invested_eur:0, absolute_gain_eur:0, total_return_pct:0, cagr_pct:null, twr_pct:null, max_drawdown_pct:0, max_drawdown_peak_date:'', max_drawdown_trough_date:'', risk_metrics:{}};
   if (activeClasses.size === 1) return perClass[[...activeClasses][0]].summary;
   let pv = 0, ti = 0, ag = 0;
   activeClasses.forEach(ac => {
@@ -128,7 +128,86 @@ function getActiveSummary() {
     const dd = peak > 0 ? (v - peak) / peak * 100 : 0;
     if (dd < maxDD) { maxDD = dd; peakDate = curPeakDate; troughDate = cs.dates[i]; }
   }
-  return {portfolio_value_eur:pv, total_invested_eur:ti, absolute_gain_eur:ag, total_return_pct:ret, cagr_pct:cagr, twr_pct:null, max_drawdown_pct:maxDD, max_drawdown_peak_date:peakDate, max_drawdown_trough_date:troughDate};
+  const rm = computeClientRiskMetrics(cs);
+  return {portfolio_value_eur:pv, total_invested_eur:ti, absolute_gain_eur:ag, total_return_pct:ret, cagr_pct:cagr, twr_pct:null, max_drawdown_pct:maxDD, max_drawdown_peak_date:peakDate, max_drawdown_trough_date:troughDate, risk_metrics:rm};
+}
+
+function computeClientRiskMetrics(cs) {
+  const pi = cs.perf_index;
+  if (!pi || pi.length < 30) return {};
+  // Filter to positive values
+  let startIdx = 0;
+  while (startIdx < pi.length && pi[startIdx] <= 0) startIdx++;
+  if (pi.length - startIdx < 30) return {};
+
+  const vals = pi.slice(startIdx);
+  const dates = cs.dates.slice(startIdx);
+  const n = vals.length;
+
+  // Daily returns
+  const returns = [];
+  for (let i = 1; i < n; i++) {
+    if (vals[i-1] > 0) returns.push(vals[i] / vals[i-1] - 1);
+  }
+  if (returns.length < 20) return {};
+
+  const mean = returns.reduce((a,b) => a+b, 0) / returns.length;
+  const variance = returns.reduce((a,r) => a + (r-mean)*(r-mean), 0) / (returns.length - 1);
+  const volDaily = Math.sqrt(variance);
+  const volAnnual = volDaily * Math.sqrt(252) * 100;
+  const meanAnnual = mean * 252;
+  const rfAnnual = 0.03, rfDaily = rfAnnual / 252;
+
+  const sharpe = volDaily > 1e-10 ? Math.round((meanAnnual - rfAnnual) / (volDaily * Math.sqrt(252)) * 100) / 100 : null;
+
+  const downside = returns.filter(r => r < rfDaily);
+  let sortino = null;
+  if (downside.length > 5) {
+    const dsMean = downside.reduce((a,b) => a+b,0)/downside.length;
+    const dsVar = downside.reduce((a,r) => a+(r-dsMean)*(r-dsMean),0)/(downside.length-1);
+    const dsStd = Math.sqrt(dsVar);
+    if (dsStd > 1e-10) sortino = Math.round((meanAnnual - rfAnnual) / (dsStd * Math.sqrt(252)) * 100) / 100;
+  }
+
+  const bestDay = Math.max(...returns) * 100;
+  const worstDay = Math.min(...returns) * 100;
+
+  // Monthly returns
+  const monthlyReturns = [];
+  let monthStartVal = vals[0], curMonth = dates[0].slice(0,7);
+  for (let i = 1; i < n; i++) {
+    const m = dates[i].slice(0,7);
+    if (m !== curMonth) {
+      if (monthStartVal > 0) monthlyReturns.push((vals[i-1]/monthStartVal - 1) * 100);
+      monthStartVal = vals[i-1]; curMonth = m;
+    }
+  }
+  if (monthStartVal > 0 && n > 1) monthlyReturns.push((vals[n-1]/monthStartVal - 1) * 100);
+
+  const bestMonth = monthlyReturns.length > 0 ? Math.max(...monthlyReturns) : null;
+  const worstMonth = monthlyReturns.length > 0 ? Math.min(...monthlyReturns) : null;
+  const posDays = returns.filter(r => r > 0).length / returns.length * 100;
+
+  let calmar = null;
+  let ddPeak = vals[0], maxDDRatio = 0;
+  for (let i = 1; i < n; i++) {
+    if (vals[i] > ddPeak) ddPeak = vals[i];
+    const dd = (vals[i] - ddPeak) / ddPeak;
+    if (dd < maxDDRatio) maxDDRatio = dd;
+  }
+  if (Math.abs(maxDDRatio) > 1e-10) calmar = Math.round(meanAnnual / Math.abs(maxDDRatio) * 100) / 100;
+
+  return {
+    volatility_pct: Math.round(volAnnual * 100) / 100,
+    sharpe_ratio: sharpe,
+    sortino_ratio: sortino,
+    best_day_pct: Math.round(bestDay * 100) / 100,
+    worst_day_pct: Math.round(worstDay * 100) / 100,
+    best_month_pct: bestMonth != null ? Math.round(bestMonth * 100) / 100 : null,
+    worst_month_pct: worstMonth != null ? Math.round(worstMonth * 100) / 100 : null,
+    positive_days_pct: Math.round(posDays * 10) / 10,
+    calmar_ratio: calmar,
+  };
 }
 
 function getActiveGains() {

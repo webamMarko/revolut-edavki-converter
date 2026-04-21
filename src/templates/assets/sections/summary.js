@@ -104,6 +104,31 @@ function updateSummary() {
   }
 }
 
+function updateRiskMetrics() {
+  const section = document.getElementById('riskMetricsSection');
+  if (isZoomed) { section.style.display = 'none'; return; }
+  const s = getActiveSummary();
+  const rm = s.risk_metrics;
+  if (!rm || rm.volatility_pct == null) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  const el = document.getElementById('riskMetrics');
+  const cards = [
+    ['Volatility', pct(rm.volatility_pct), '', 'Annualized std dev'],
+    ['Sharpe Ratio', rm.sharpe_ratio != null ? fmt(rm.sharpe_ratio) : '—', rm.sharpe_ratio != null ? cls(rm.sharpe_ratio) : '', 'Risk-adj return (rf=3%)'],
+    ['Sortino Ratio', rm.sortino_ratio != null ? fmt(rm.sortino_ratio) : '—', rm.sortino_ratio != null ? cls(rm.sortino_ratio) : '', 'Downside risk-adj'],
+    ['Calmar Ratio', rm.calmar_ratio != null ? fmt(rm.calmar_ratio) : '—', rm.calmar_ratio != null ? cls(rm.calmar_ratio) : '', 'Return / max drawdown'],
+    ['Best Day', rm.best_day_pct != null ? sign(rm.best_day_pct) + '%' : '—', 'pos'],
+    ['Worst Day', rm.worst_day_pct != null ? sign(rm.worst_day_pct) + '%' : '—', 'neg'],
+    ['Best Month', rm.best_month_pct != null ? sign(rm.best_month_pct) + '%' : '—', 'pos'],
+    ['Worst Month', rm.worst_month_pct != null ? sign(rm.worst_month_pct) + '%' : '—', 'neg'],
+    ['Positive Days', rm.positive_days_pct != null ? fmt(rm.positive_days_pct, 1) + '%' : '—', ''],
+  ];
+  el.innerHTML = cards.map(([l, v, c, sub]) =>
+    `<div class="metric-card"><div class="label">${l}</div><div class="value ${c || ''}">${v}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`
+  ).join('');
+}
+
 function updateTopMovers() {
   const positions = getActivePositions();
   const section = document.getElementById('topMoversSection');
