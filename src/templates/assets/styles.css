@@ -861,4 +861,13 @@ body {
   h2 { font-size: 14px; margin-bottom: 0.3rem; }
   h3 { font-size: 12px; }
   .two-col { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .corr-table { font-size: 7px; }
+  .corr-cell { padding: 1px 2px; }
 }
+
+/* Correlation matrix */
+.corr-table { border-collapse: collapse; width: 100%; font-size: 0.7rem; }
+.corr-table th, .corr-table td { text-align: center; padding: 0.25rem 0.3rem; }
+.corr-th { transform: rotate(-45deg); white-space: nowrap; font-size: 0.65rem; color: var(--muted); font-weight: 500; }
+.corr-label { text-align: right !important; font-weight: 500; padding-right: 0.5rem !important; white-space: nowrap; font-size: 0.65rem; }
+.corr-cell { font-size: 0.65rem; border-radius: 2px; min-width: 2.5rem; }

@@ -129,6 +129,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "sector.col.value": "Value",
         "sector.col.pct": "Weight",
 
+        # --- Correlation ---
+        "correlation.title": "Position Correlations",
+        "correlation.desc": "Pairwise return correlations over {days} trading days — high values indicate positions that move together",
+
         # --- Concentration ---
         "concentration.title": "Diversification",
         "concentration.positions": "Positions",
@@ -413,6 +417,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "sector.col.industry": "Panoga",
         "sector.col.value": "Vrednost",
         "sector.col.pct": "Delež",
+
+        # --- Correlation ---
+        "correlation.title": "Korelacije pozicij",
+        "correlation.desc": "Parne korelacije donosov v {days} trgovalnih dneh — visoke vrednosti kažejo pozicije, ki se premikajo skupaj",
 
         # --- Concentration ---
         "concentration.title": "Razpršenost",

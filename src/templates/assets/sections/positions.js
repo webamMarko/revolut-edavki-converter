@@ -562,6 +562,52 @@ function updateClosedPositions() {
     URL.revokeObjectURL(a.href);
   });
 
+  // --- Correlation matrix ---
+  window.updateCorrelation = function() {
+    const section = document.getElementById('correlationSection');
+    const corr = D.correlation;
+    if (!corr || !corr.tickers || corr.tickers.length < 2) {
+      if (section) section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    document.getElementById('correlationTitle').textContent = t('correlation.title');
+    document.getElementById('correlationDesc').textContent =
+      t('correlation.desc', {days: corr.data_points});
+
+    const tickers = corr.tickers;
+    const matrix = corr.matrix;
+    const n = tickers.length;
+
+    // Color scale: -1 = red, 0 = neutral, 1 = blue
+    function corrColor(v) {
+      if (v >= 0.7) return 'rgba(37,99,235,' + (0.3 + v * 0.5) + ')';
+      if (v >= 0.3) return 'rgba(37,99,235,' + (0.1 + v * 0.3) + ')';
+      if (v >= -0.3) return 'transparent';
+      if (v >= -0.7) return 'rgba(239,68,68,' + (0.1 + Math.abs(v) * 0.3) + ')';
+      return 'rgba(239,68,68,' + (0.3 + Math.abs(v) * 0.5) + ')';
+    }
+
+    let html = '<table class="corr-table"><thead><tr><th></th>';
+    for (let j = 0; j < n; j++) {
+      html += '<th class="corr-th">' + tickers[j] + '</th>';
+    }
+    html += '</tr></thead><tbody>';
+    for (let i = 0; i < n; i++) {
+      html += '<tr><td class="corr-label">' + tickers[i] + '</td>';
+      for (let j = 0; j < n; j++) {
+        const v = matrix[i][j];
+        const bg = i === j ? 'var(--card-bg)' : corrColor(v);
+        const text = i === j ? '1' : (v >= 0 ? '+' : '') + v.toFixed(2);
+        const fontWeight = Math.abs(v) >= 0.7 && i !== j ? 'font-weight:600' : '';
+        html += '<td class="corr-cell" style="background:' + bg + ';' + fontWeight + '">' + text + '</td>';
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    document.getElementById('correlationGrid').innerHTML = html;
+  };
+
   // --- Sector allocation ---
   let _sectorChart = null;
   const _SECTOR_COLORS = [

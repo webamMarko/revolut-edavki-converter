@@ -122,6 +122,7 @@ function updateAll() {
   updateAllocation();
   updateCurrencyExposure();
   if (typeof updateSectorAllocation === 'function') updateSectorAllocation();
+  if (typeof updateCorrelation === 'function') updateCorrelation();
   updateConcentration();
   updateAttribution();
   updatePositions();

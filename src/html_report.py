@@ -390,6 +390,112 @@ def _query_sector_allocation(conn: sqlite3.Connection | None, positions: list) -
     return {"sectors": sectors, "industries": industries}
 
 
+def _compute_correlation_matrix(conn: sqlite3.Connection | None,
+                                positions: list) -> dict | None:
+    """Compute pairwise return correlation matrix for current holdings."""
+    if not conn or not positions:
+        return None
+
+    import numpy as np
+
+    # Get tickers with enough weight (top 15 by market value, skip tiny positions)
+    sorted_pos = sorted(positions,
+                        key=lambda p: p.market_value_eur if hasattr(p, 'market_value_eur') else p.get('market_value_eur', 0),
+                        reverse=True)
+    tickers = []
+    for p in sorted_pos[:15]:
+        ticker = p.ticker if hasattr(p, 'ticker') else p.get('ticker', '')
+        if ticker:
+            tickers.append(ticker)
+
+    if len(tickers) < 2:
+        return None
+
+    # Load daily prices (last 1 year) for each ticker
+    from datetime import date as _date, timedelta as _td
+    one_year_ago = (_date.today() - _td(days=365)).isoformat()
+
+    # Load FX rates for USD→EUR conversion
+    fx_rows = conn.execute(
+        "SELECT date, eur_usd FROM fx_rates WHERE date >= ? ORDER BY date",
+        (one_year_ago,)
+    ).fetchall()
+    fx_map = {r[0]: r[1] for r in fx_rows}
+
+    def eur_usd_for(dt: str) -> float:
+        for i in range(5):
+            d = (_date.fromisoformat(dt) - _td(days=i)).isoformat()
+            if d in fx_map:
+                return fx_map[d]
+        return 1.1
+
+    price_series = {}
+    for ticker in tickers:
+        db_ticker = ticker
+        for prefix in ("CFD:", "CRYPTO:", "SAVINGS:"):
+            if ticker.startswith(prefix):
+                db_ticker = ticker[len(prefix):]
+                break
+        rows = conn.execute(
+            "SELECT date, close, currency FROM daily_prices WHERE ticker = ? AND date >= ? ORDER BY date",
+            (db_ticker, one_year_ago)
+        ).fetchall()
+        if len(rows) < 30:  # need minimum data for meaningful correlation
+            continue
+        prices = {}
+        for r in rows:
+            price = r[1] / eur_usd_for(r[0]) if r[2] != "EUR" else r[1]
+            prices[r[0]] = price
+        price_series[ticker] = prices
+
+    valid_tickers = [t for t in tickers if t in price_series]
+    if len(valid_tickers) < 2:
+        return None
+
+    # Align dates: use intersection of all dates
+    all_dates = set(price_series[valid_tickers[0]].keys())
+    for tk in valid_tickers[1:]:
+        all_dates &= set(price_series[tk].keys())
+    sorted_dates = sorted(all_dates)
+
+    if len(sorted_dates) < 30:
+        return None
+
+    # Build returns matrix
+    n = len(valid_tickers)
+    returns_matrix = []
+    for tk in valid_tickers:
+        prices = [price_series[tk][d] for d in sorted_dates]
+        returns = []
+        for i in range(1, len(prices)):
+            if prices[i - 1] > 0:
+                returns.append((prices[i] - prices[i - 1]) / prices[i - 1])
+            else:
+                returns.append(0)
+        returns_matrix.append(returns)
+
+    # Compute correlation matrix
+    arr = np.array(returns_matrix)
+    corr = np.corrcoef(arr)
+
+    # Convert to serializable format
+    matrix = []
+    for i in range(n):
+        row = []
+        for j in range(n):
+            val = float(corr[i][j])
+            if np.isnan(val):
+                val = 0.0
+            row.append(round(val, 2))
+        matrix.append(row)
+
+    return {
+        "tickers": valid_tickers,
+        "matrix": matrix,
+        "data_points": len(sorted_dates),
+    }
+
+
 def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                            per_class: dict | None = None,
                            real_estate: dict | None = None,
@@ -669,6 +775,9 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
 
     # Sector/industry allocation
     data["sector_allocation"] = _query_sector_allocation(conn, analytics.positions)
+
+    # Correlation matrix
+    data["correlation"] = _compute_correlation_matrix(conn, analytics.positions)
 
     return data
 
