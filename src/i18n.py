@@ -184,6 +184,16 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "div.growth.income": "Income",
         "div.growth.yoy": "YoY Growth",
         "div.growth.pct": "Growth %",
+        # Dividend projection
+        "div.projection.title": "Income Projection",
+        "div.projection.desc": "Based on {years}-year CAGR of {cagr}% applied to trailing 12-month income",
+        "div.projection.ttm": "TTM Income",
+        "div.projection.growth_rate": "Growth Rate",
+        "div.projection.cagr": "CAGR",
+        "div.projection.year5": "Year 5 Est.",
+        "div.projection.historical": "Historical",
+        "div.projection.projected": "Projected",
+        "div.projection.range": "Range",
 
         # --- Tax ---
         "tax.title": "Tax",
@@ -473,6 +483,16 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "div.growth.income": "Prihodek",
         "div.growth.yoy": "Letna rast",
         "div.growth.pct": "Rast %",
+        # Dividend projection
+        "div.projection.title": "Projekcija prihodka",
+        "div.projection.desc": "Na podlagi {years}-letne CAGR {cagr}% aplicirana na zadnjih 12 mesecev",
+        "div.projection.ttm": "TTM prihodek",
+        "div.projection.growth_rate": "Stopnja rasti",
+        "div.projection.cagr": "CAGR",
+        "div.projection.year5": "5. leto oce.",
+        "div.projection.historical": "Zgodovinski",
+        "div.projection.projected": "Projicirano",
+        "div.projection.range": "Razpon",
 
         # --- Tax ---
         "tax.title": "Davek",
