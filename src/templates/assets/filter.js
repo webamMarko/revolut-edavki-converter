@@ -380,6 +380,7 @@ function onFilterChange() {
   updateAll();
   buildHeatmap();
   buildYearlyHeatmap();
+  buildYearlyTable();
   document.querySelectorAll('.range-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.days === '-1' && !b.dataset.ytd);
   });

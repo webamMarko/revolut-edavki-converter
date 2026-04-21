@@ -137,3 +137,80 @@ function buildYearlyHeatmap() {
   h += '</tbody></table>';
   el.innerHTML = h;
 }
+
+// --- Annual Summary Table ---
+function buildYearlyTable() {
+  const el = document.getElementById('yearlyTable');
+  if (!el || ds.dates.length === 0) return;
+  const section = document.getElementById('yearlyTableSection');
+
+  const dates = ds.dates;
+  const hasPerfIdx = ds.perf_index && ds.perf_index.length === dates.length;
+  const perfVals = hasPerfIdx ? ds.perf_index : ds.value_eur;
+
+  // Build year index map
+  const yearMap = {};
+  for (let i = 0; i < dates.length; i++) {
+    const y = dates[i].substring(0, 4);
+    if (!yearMap[y]) yearMap[y] = {si: i, ei: i};
+    else yearMap[y].ei = i;
+  }
+  const years = Object.keys(yearMap).sort();
+  if (years.length < 2) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  el.innerHTML = '<thead><tr>'
+    + '<th>Year</th>'
+    + '<th>Start Value</th>'
+    + '<th>End Value</th>'
+    + '<th>Return %</th>'
+    + '<th>Net Deposits</th>'
+    + '<th>Dividends</th>'
+    + '<th>Realized P&L</th>'
+    + '<th>Max Drawdown</th>'
+    + '</tr></thead><tbody>'
+    + years.map(function(year) {
+      const d = yearMap[year];
+      const startVal = ds.value_eur[d.si];
+      const endVal = ds.value_eur[d.ei];
+
+      // TWR-based return
+      var ret = null;
+      if (perfVals[d.si] > 0) ret = (perfVals[d.ei] / perfVals[d.si] - 1) * 100;
+
+      // Net deposits
+      const netDeposits = ds.invested_eur[d.ei] - ds.invested_eur[d.si];
+
+      // Dividends for the year
+      const divEnd = ds.dividends_eur[d.ei];
+      const divStart = d.si > 0 ? ds.dividends_eur[d.si - 1] : 0;
+      const yearDivs = divEnd - divStart;
+
+      // Realized gains for the year
+      const realEnd = ds.realized_gain_eur[d.ei];
+      const realStart = d.si > 0 ? ds.realized_gain_eur[d.si - 1] : 0;
+      const yearRealized = realEnd - realStart;
+
+      // Max drawdown within the year (using perf_index)
+      var peak = perfVals[d.si], maxDD = 0;
+      for (var i = d.si; i <= d.ei; i++) {
+        if (perfVals[i] > peak) peak = perfVals[i];
+        const dd = peak > 0 ? (perfVals[i] - peak) / peak * 100 : 0;
+        if (dd < maxDD) maxDD = dd;
+      }
+
+      return '<tr>'
+        + '<td><strong>' + year + '</strong></td>'
+        + '<td>' + fmtEur(startVal) + '</td>'
+        + '<td>' + fmtEur(endVal) + '</td>'
+        + '<td class="' + (ret != null ? cls(ret) : '') + '">' + (ret != null ? sign(ret) + '%' : '—') + '</td>'
+        + '<td class="' + cls(netDeposits) + '">' + sign(netDeposits) + ' EUR</td>'
+        + '<td>' + fmtEur(yearDivs) + '</td>'
+        + '<td class="' + cls(yearRealized) + '">' + sign(yearRealized) + ' EUR</td>'
+        + '<td class="neg">' + pct(maxDD) + '</td>'
+        + '</tr>';
+    }).join('')
+    + '</tbody>';
+
+  makeSortable(el);
+}
