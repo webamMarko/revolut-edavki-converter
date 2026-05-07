@@ -376,7 +376,7 @@ class UploadHandler(BaseHTTPRequestHandler):
             "username": session["username"] if session else None,
             "role": session["role"] if session else "guest",
         })
-        html = _UPLOAD_HTML.replace("__USER_JSON__", user_json)
+        html = _upload_html(user_json)
         self._html_response(html)
 
     # ------------------------------------------------------------------
@@ -404,6 +404,13 @@ class UploadHandler(BaseHTTPRequestHandler):
             data["asset_classes"] = {r[0]: r[1] for r in class_rows}
             data["import_count"] = conn.execute("SELECT COUNT(*) FROM import_log").fetchone()[0]
             data["price_count"] = conn.execute("SELECT COUNT(*) FROM daily_prices").fetchone()[0]
+            recent_imports = conn.execute(
+                "SELECT filename, rows_new, rows_skipped, imported_at FROM import_log ORDER BY imported_at DESC LIMIT 5"
+            ).fetchall()
+            data["recent_imports"] = [
+                {"filename": r[0], "rows_new": r[1], "rows_skipped": r[2], "imported_at": r[3]}
+                for r in recent_imports
+            ]
         finally:
             conn.close()
         self._json_response(data)
@@ -901,7 +908,7 @@ class UploadHandler(BaseHTTPRequestHandler):
         if not session or session["role"] not in ("premium", "admin"):
             self._redirect("/login")
             return
-        self._html_response(_import_wizard_html())
+        self._html_response(_import_wizard_html_with_user(session["username"], session["role"]))
 
     def _handle_import_preview(self):
         session = _get_session(self)
@@ -1094,53 +1101,311 @@ def start_server(host="0.0.0.0", port=8080, verbose=False):
 
 
 # ---------------------------------------------------------------------------
+# Shared design system for all non-report pages
+# ---------------------------------------------------------------------------
+
+# Prevent flash of unstyled content — runs before paint
+_FOUC_SCRIPT = (
+    "<script>(function(){var t=localStorage.getItem('theme');"
+    "if(!t&&window.matchMedia&&window.matchMedia('(prefers-color-scheme:light)').matches)t='light';"
+    "if(t)document.documentElement.setAttribute('data-theme',t);})()</script>"
+)
+
+# Theme toggle JS — same logic as report's nav.js
+_COMMON_JS = r"""
+<script>
+function toggleTheme(){
+  var c=document.documentElement.getAttribute('data-theme');
+  var n=c==='light'?'dark':'light';
+  if(n==='dark'){document.documentElement.removeAttribute('data-theme');localStorage.removeItem('theme');}
+  else{document.documentElement.setAttribute('data-theme',n);localStorage.setItem('theme',n);}
+  document.querySelectorAll('.theme-icon').forEach(function(el){el.textContent=n==='light'?'\u{1F319}':'\u2600\uFE0F';});
+}
+(function(){
+  var isDark=document.documentElement.getAttribute('data-theme')!=='light';
+  document.querySelectorAll('.theme-icon').forEach(function(el){el.textContent=isDark?'\u2600\uFE0F':'\u{1F319}';});
+})();
+</script>
+"""
+
+# Shared CSS with design tokens matching report's styles.css
+_COMMON_CSS = r"""
+/* ---- Design tokens (dark default) ---- */
+:root {
+  --bg:#0a0c10;--surface:#111520;--raised:#181e2e;--border:#1e2a3a;
+  --text:#dce4f0;--muted:#556075;--subtle:#2e3a4e;
+  --accent:#f59e0b;--accent-dim:rgba(245,158,11,0.12);
+  --green:#34d399;--red:#f87171;--blue:#60a5fa;
+  --radius:10px;--radius-sm:6px;
+}
+[data-theme="light"] {
+  --bg:#f0f2f5;--surface:#ffffff;--raised:#f5f7fa;--border:#dde1e9;
+  --text:#111827;--muted:#6b7280;--subtle:#c8cdd8;
+  --accent:#d97706;--accent-dim:rgba(217,119,6,0.10);
+  --green:#059669;--red:#dc2626;--blue:#2563eb;
+}
+
+/* ---- Reset & base ---- */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+     background:var(--bg);color:var(--text);line-height:1.5;min-height:100vh}
+
+/* ---- App header ---- */
+.app-header{
+  width:100%;background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0.75rem 2rem;display:flex;align-items:center;gap:1.5rem;
+}
+.brand{font-size:1.15rem;font-weight:700;letter-spacing:-0.03em;
+       text-decoration:none;color:var(--text);flex-shrink:0}
+.brand-accent{color:var(--accent)}
+.app-nav{display:flex;align-items:center;gap:0.25rem;margin-left:1rem}
+.nav-link{font-size:0.82rem;font-weight:500;color:var(--muted);text-decoration:none;
+          padding:0.35rem 0.7rem;border-radius:var(--radius-sm);transition:all 0.12s}
+.nav-link:hover{color:var(--text);background:var(--raised)}
+.nav-link.active{color:var(--accent);background:var(--accent-dim)}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:0.75rem;font-size:0.82rem}
+.header-user{color:var(--muted)}
+.header-link{color:var(--accent);text-decoration:none;font-weight:600}
+.header-link:hover{opacity:0.85}
+
+/* ---- Theme toggle ---- */
+.theme-toggle{background:none;border:1px solid var(--border);border-radius:20px;
+              padding:0.15rem 0.5rem;cursor:pointer;font-size:0.85rem;line-height:1;
+              transition:border-color 0.12s}
+.theme-toggle:hover{border-color:var(--accent)}
+
+/* ---- App main ---- */
+.app-main{max-width:720px;width:100%;margin:0 auto;padding:2rem 1rem;
+          display:flex;flex-direction:column;gap:1.5rem}
+
+/* ---- Cards ---- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem}
+.card h2{font-size:1rem;font-weight:600;margin-bottom:1rem}
+
+/* ---- Form elements ---- */
+label{display:block;font-size:0.72rem;font-weight:600;color:var(--muted);
+      text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.3rem}
+input[type=text],input[type=email],input[type=password],select,textarea{
+  width:100%;padding:0.55rem 0.75rem;border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--bg);color:var(--text);font-size:0.9rem;font-family:inherit;margin-bottom:1rem;
+}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+
+/* ---- Buttons ---- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:0.4rem;
+     padding:0.55rem 1.25rem;border-radius:var(--radius-sm);font-size:0.88rem;font-weight:600;
+     cursor:pointer;border:none;transition:all 0.12s;font-family:inherit;text-decoration:none}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{opacity:0.88}
+.btn-primary:disabled{opacity:0.35;cursor:default}
+.btn-secondary{background:transparent;color:var(--muted);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--raised);color:var(--text)}
+.btn-sm{padding:0.35rem 0.8rem;font-size:0.8rem}
+.btn-group{display:flex;gap:0.6rem;margin-top:1.25rem;flex-wrap:wrap}
+
+/* ---- Drop zone ---- */
+.drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:2.5rem 1.5rem;
+           text-align:center;cursor:pointer;transition:all 0.15s;position:relative}
+.drop-zone:hover,.drop-zone.dragover{border-color:var(--accent);background:var(--accent-dim)}
+.drop-zone .icon{font-size:2.2rem;margin-bottom:0.5rem}
+.drop-zone .lbl{font-size:0.9rem;color:var(--muted)}
+.drop-zone .lbl strong{color:var(--accent)}
+.drop-zone .hint{font-size:0.72rem;color:var(--muted);margin-top:0.3rem}
+.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+
+/* ---- Data table ---- */
+.data-table{width:100%;border-collapse:collapse;font-size:0.85rem}
+.data-table th,.data-table td{padding:0.5rem 0.75rem;text-align:left;border-bottom:1px solid var(--border)}
+.data-table th{font-size:0.67rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:600}
+.data-table select{background:var(--raised);color:var(--text);border:1px solid var(--border);
+                   border-radius:4px;padding:0.2rem 0.4rem;font-size:0.82rem;cursor:pointer;width:auto;margin-bottom:0}
+
+/* ---- Status bar ---- */
+.status-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+            padding:1rem 1.25rem;display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;font-size:0.85rem}
+.status-item{display:flex;align-items:center;gap:0.35rem}
+.status-item .num{font-weight:700}
+.status-item .lbl{color:var(--muted)}
+
+/* ---- Feedback states ---- */
+.error-msg{color:var(--red);font-size:0.82rem;margin-top:0.6rem}
+.success-box{background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.25);
+             border-radius:var(--radius-sm);padding:1rem;text-align:center}
+.success-box .big{font-size:1.1rem;font-weight:700;color:var(--green);margin-bottom:0.4rem}
+.success-box .sub{font-size:0.82rem;color:var(--muted)}
+
+/* ---- Badges ---- */
+.badge{font-size:0.68rem;font-weight:700;padding:0.15rem 0.45rem;border-radius:8px;display:inline-block}
+.badge-accent{background:var(--accent-dim);color:var(--accent)}
+.badge-green{background:rgba(52,211,153,0.12);color:var(--green)}
+.badge-red{background:rgba(248,113,113,0.15);color:var(--red)}
+.badge-muted{background:var(--raised);color:var(--muted)}
+
+/* ---- Spinner ---- */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:0.85em;height:0.85em;border:2px solid rgba(0,0,0,0.3);
+      border-top-color:#000;border-radius:50%;animation:spin 0.6s linear infinite}
+
+/* ---- File list ---- */
+.file-list{margin-top:0.75rem;display:flex;flex-direction:column;gap:0.35rem}
+.file-item{display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.75rem;
+           background:var(--raised);border-radius:var(--radius-sm);font-size:0.85rem}
+.file-item .name{flex:1;font-weight:500}
+.file-item .size{color:var(--muted);font-size:0.8rem}
+.file-item .remove{cursor:pointer;color:var(--red);font-weight:700;padding:0 0.25rem;
+                   border:none;background:none;font-size:1rem}
+
+/* ---- Progress ---- */
+.progress{display:none;margin-top:1rem}
+.progress.active{display:block}
+.progress-bar{height:4px;background:var(--border);border-radius:4px;overflow:hidden}
+.progress-bar .fill{height:100%;background:var(--accent);transition:width 0.3s ease;border-radius:4px}
+.progress-label{font-size:0.8rem;color:var(--muted);margin-top:0.35rem}
+
+/* ---- Results ---- */
+.results{margin-top:1rem;display:none}
+.results.active{display:block}
+.result-item{display:flex;align-items:center;gap:0.75rem;padding:0.75rem;
+             border-bottom:1px solid var(--border);font-size:0.85rem}
+.result-item:last-child{border-bottom:none}
+.result-item .status{font-size:1.2rem}
+.result-item .info{flex:1}
+.result-item .info .filename{font-weight:600}
+.result-item .info .detail{color:var(--muted);font-size:0.8rem}
+.result-item .info .error{color:var(--red);font-size:0.8rem}
+.actions{display:none}
+.actions.active{display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:1rem}
+
+/* ---- Guest banner ---- */
+.guest-banner{background:var(--accent-dim);border:1px solid var(--accent);
+              border-radius:var(--radius);padding:1rem 1.25rem;font-size:0.9rem}
+
+/* ---- Centered auth layout ---- */
+.auth-layout{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1rem}
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+           padding:2rem;width:100%;max-width:380px;position:relative}
+.auth-card .logo{text-align:center;margin-bottom:1.5rem;font-size:1.5rem;font-weight:700;letter-spacing:-0.03em}
+.auth-theme-toggle{position:absolute;top:1rem;right:1rem}
+.auth-error{color:var(--red);font-size:0.82rem;margin-bottom:1rem;text-align:center}
+.auth-sub{font-size:0.82rem;color:var(--muted);text-align:center;margin-bottom:1.5rem}
+
+/* ---- Import wizard extras ---- */
+.steps{display:flex;align-items:center;gap:0;margin-bottom:0.5rem}
+.step{display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;font-weight:600;
+      color:var(--muted);padding:0.4rem 0.75rem;border-radius:20px}
+.step.active{color:var(--accent)}
+.step.done{color:var(--green)}
+.step-num{width:20px;height:20px;border-radius:50%;border:2px solid currentColor;
+          display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0}
+.step-sep{flex:1;height:1px;background:var(--border);margin:0 0.25rem;max-width:40px}
+.ac-toggles{display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1.25rem}
+.ac-btn{padding:0.3rem 0.85rem;border-radius:12px;font-size:0.75rem;font-weight:700;
+        cursor:pointer;border:1px solid var(--border);background:transparent;
+        color:var(--muted);font-family:inherit;transition:all 0.12s}
+.ac-btn.active{background:var(--accent-dim);color:var(--accent);border-color:var(--accent)}
+.preview-wrap{overflow-x:auto;margin-bottom:1.25rem}
+.preview-table{border-collapse:collapse;font-size:0.75rem;width:100%}
+.preview-table th,.preview-table td{padding:0.3rem 0.55rem;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+.preview-table thead th{font-weight:600;color:var(--accent);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em}
+.map-table{width:100%;border-collapse:collapse;font-size:0.83rem}
+.map-table td{padding:0.45rem 0.5rem;border-bottom:1px solid var(--border);vertical-align:middle}
+.map-table td:first-child{width:38%;font-weight:500}
+.map-table td:nth-child(2){width:10%;text-align:center}
+.map-table select{background:var(--raised);border:1px solid var(--border);border-radius:var(--radius-sm);
+                  color:var(--text);font-family:inherit;font-size:0.8rem;padding:0.3rem 0.5rem;width:100%;margin-bottom:0}
+.map-table select:focus{outline:none;border-color:var(--accent)}
+.req-badge{font-size:0.62rem;font-weight:700;padding:0.1rem 0.4rem;border-radius:8px;
+           background:rgba(248,113,113,0.15);color:var(--red)}
+.opt-badge{font-size:0.62rem;font-weight:700;padding:0.1rem 0.4rem;border-radius:8px;
+           background:var(--raised);color:var(--muted)}
+.summary-list{display:flex;flex-direction:column;gap:0.4rem;font-size:0.83rem}
+.summary-row{display:flex;gap:0.75rem}
+.summary-lbl{color:var(--muted);width:140px;flex-shrink:0;font-size:0.75rem;font-weight:600;
+             text-transform:uppercase;letter-spacing:0.05em}
+.summary-val{color:var(--text)}
+.success-links{display:flex;gap:0.6rem;justify-content:center;margin-top:1rem;flex-wrap:wrap}
+.chosen-file{margin-top:0.75rem;font-size:0.83rem;font-weight:500;color:var(--text)}
+
+/* ---- Responsive ---- */
+@media (max-width:768px) {
+  .app-header{padding:0.75rem 1rem;gap:0.75rem;flex-wrap:wrap}
+  .app-nav{margin-left:0;gap:0.15rem}
+  .nav-link{padding:0.3rem 0.5rem;font-size:0.78rem}
+  .app-main{padding:1.25rem 0.75rem}
+  .card{padding:1.25rem}
+}
+"""
+
+
+def _head_html(title: str, extra_css: str = "") -> str:
+    """Shared <head> block for all non-report pages."""
+    return (
+        '<!DOCTYPE html>\n<html lang="en">\n<head>\n'
+        '<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        f'{_FOUC_SCRIPT}\n'
+        f'<title>{title}</title>\n'
+        '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">\n'
+        f'<style>{_COMMON_CSS}{extra_css}</style>\n'
+        '</head>\n'
+    )
+
+
+def _header_html(username: str = "", role: str = "guest", active_page: str = "") -> str:
+    """Shared navigation header."""
+    def _link(href: str, label: str, page: str) -> str:
+        cls = "nav-link active" if page == active_page else "nav-link"
+        return f'<a class="{cls}" href="{href}">{label}</a>'
+
+    nav = _link("/", "Home", "home")
+    nav += _link("/report", "Report", "report")
+    if role in ("premium", "admin"):
+        nav += _link("/import", "Import Wizard", "import")
+    if role == "admin":
+        nav += _link("/admin", "Admin", "admin")
+
+    right = '<button class="theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>'
+    if username:
+        right += f' <span class="header-user">{username}</span>'
+        right += ' <a class="header-link" href="/logout">Log out</a>'
+    else:
+        right += ' <a class="header-link" href="/login">Log in</a>'
+
+    return (
+        '<header class="app-header">\n'
+        f'  <a class="brand" href="/">Portfolio<span class="brand-accent">.</span></a>\n'
+        f'  <nav class="app-nav">{nav}</nav>\n'
+        f'  <div class="header-right">{right}</div>\n'
+        '</header>\n'
+    )
+
+
+# ---------------------------------------------------------------------------
 # Inline HTML: login page
 # ---------------------------------------------------------------------------
 
 def _login_html(error: str = "") -> str:
-    error_block = f'<p class="error">{error}</p>' if error else ""
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Login — Portfolio</title>
-<style>
-:root {{--bg:#0a0c10;--surface:#111520;--border:#1e2a3a;--text:#dce4f0;--muted:#556075;
-       --accent:#f59e0b;--red:#f87171;--radius:10px}}
-*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
-body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-      background:var(--bg);color:var(--text);min-height:100vh;
-      display:flex;align-items:center;justify-content:center;padding:1rem}}
-.card{{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-       padding:2rem;width:100%;max-width:380px}}
-label{{display:block;font-size:0.72rem;font-weight:600;color:var(--muted);
-       text-transform:uppercase;letter-spacing:.06em;margin-bottom:.3rem}}
-input{{width:100%;padding:.55rem .75rem;border:1px solid var(--border);border-radius:6px;
-       background:var(--bg);color:var(--text);font-size:.9rem;font-family:inherit;margin-bottom:1rem}}
-input:focus{{outline:none;border-color:var(--accent)}}
-button{{width:100%;padding:.65rem;background:var(--accent);color:#000;font-weight:700;
-        font-size:.9rem;font-family:inherit;border:none;border-radius:6px;cursor:pointer}}
-button:hover{{opacity:.9}}
-.error{{color:var(--red);font-size:.82rem;margin-bottom:1rem;text-align:center}}
-.logo{{text-align:center;margin-bottom:1.5rem;font-size:1.5rem;font-weight:700;letter-spacing:-0.03em}}
-.logo span{{color:var(--accent)}}
-</style>
-</head>
-<body>
-<div class="card">
-  <div class="logo"><a href="/" style="text-decoration:none;color:inherit">Portfolio<span>.</span></a></div>
+    error_block = f'<p class="auth-error">{error}</p>' if error else ""
+    return (
+        _head_html("Login — Portfolio", "body{display:flex;align-items:center;justify-content:center;padding:1rem}")
+        + f"""<body>
+<div class="auth-card">
+  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>
+  <div class="auth-card logo"><a href="/" style="text-decoration:none;color:inherit">Portfolio<span class="brand-accent">.</span></a></div>
   {error_block}
   <form method="POST" action="/login">
     <label>Username or email</label>
     <input type="text" name="username" required autofocus autocomplete="username">
     <label>Password</label>
     <input type="password" name="password" required autocomplete="current-password">
-    <button type="submit">Log in</button>
+    <button class="btn btn-primary" style="width:100%" type="submit">Log in</button>
   </form>
 </div>
+{_COMMON_JS}
 </body>
 </html>"""
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1148,50 +1413,29 @@ button:hover{{opacity:.9}}
 # ---------------------------------------------------------------------------
 
 def _invite_html(token: str, email: str, error: str = "") -> str:
-    error_block = f'<p class="error">{error}</p>' if error else ""
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Set Password — Portfolio</title>
-<style>
-:root {{--bg:#0a0c10;--surface:#111520;--border:#1e2a3a;--text:#dce4f0;--muted:#556075;
-       --accent:#f59e0b;--red:#f87171;--radius:10px}}
-*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
-body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-      background:var(--bg);color:var(--text);min-height:100vh;
-      display:flex;align-items:center;justify-content:center;padding:1rem}}
-.card{{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-       padding:2rem;width:100%;max-width:400px}}
-h1{{font-size:1.2rem;font-weight:700;margin-bottom:.5rem;text-align:center}}
-.sub{{font-size:.82rem;color:var(--muted);text-align:center;margin-bottom:1.5rem}}
-label{{display:block;font-size:.72rem;font-weight:600;color:var(--muted);
-       text-transform:uppercase;letter-spacing:.06em;margin-bottom:.3rem}}
-input{{width:100%;padding:.55rem .75rem;border:1px solid var(--border);border-radius:6px;
-       background:var(--bg);color:var(--text);font-size:.9rem;font-family:inherit;margin-bottom:1rem}}
-input:focus{{outline:none;border-color:var(--accent)}}
-button{{width:100%;padding:.65rem;background:var(--accent);color:#000;font-weight:700;
-        font-size:.9rem;font-family:inherit;border:none;border-radius:6px;cursor:pointer}}
-button:hover{{opacity:.9}}
-.error{{color:var(--red);font-size:.82rem;margin-bottom:1rem;text-align:center}}
-</style>
-</head>
-<body>
-<div class="card">
-  <h1>Set your password</h1>
-  <p class="sub">Account: <strong>{email}</strong></p>
+    error_block = f'<p class="auth-error">{error}</p>' if error else ""
+    return (
+        _head_html("Set Password — Portfolio",
+                    "body{display:flex;align-items:center;justify-content:center;padding:1rem}"
+                    ".auth-card{max-width:400px}")
+        + f"""<body>
+<div class="auth-card">
+  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>
+  <h1 style="font-size:1.2rem;font-weight:700;margin-bottom:0.5rem;text-align:center">Set your password</h1>
+  <p class="auth-sub">Account: <strong>{email}</strong></p>
   {error_block}
   <form method="POST" action="/invite/{token}">
     <label>Password</label>
     <input type="password" name="password" required minlength="8" autocomplete="new-password">
     <label>Confirm password</label>
     <input type="password" name="confirm" required minlength="8" autocomplete="new-password">
-    <button type="submit">Set password &amp; log in</button>
+    <button class="btn btn-primary" style="width:100%" type="submit">Set password &amp; log in</button>
   </form>
 </div>
+{_COMMON_JS}
 </body>
 </html>"""
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1199,15 +1443,20 @@ button:hover{{opacity:.9}}
 # ---------------------------------------------------------------------------
 
 def _error_html(message: str) -> str:
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Error</title>
-<style>body{{font-family:sans-serif;background:#0a0c10;color:#dce4f0;
-             display:flex;align-items:center;justify-content:center;min-height:100vh}}
-.box{{text-align:center;padding:2rem}}</style></head>
-<body><div class="box"><h2>&#9888; {message}</h2>
-<p style="margin-top:1rem"><a href="/" style="color:#f59e0b">Go home</a></p>
-</div></body></html>"""
+    return (
+        _head_html("Error — Portfolio",
+                    "body{display:flex;align-items:center;justify-content:center;padding:1rem}")
+        + f"""<body>
+<div class="auth-card" style="max-width:440px;text-align:center">
+  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>
+  <div style="font-size:2.5rem;margin-bottom:1rem">&#9888;</div>
+  <h2 style="font-size:1.1rem;font-weight:600;margin-bottom:1.25rem">{message}</h2>
+  <a class="btn btn-primary" href="/">Go home</a>
+</div>
+{_COMMON_JS}
+</body>
+</html>"""
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1217,7 +1466,7 @@ def _error_html(message: str) -> str:
 def _admin_html(users, current_username: str) -> str:
     rows = ""
     for u in users:
-        invite_badge = '<span style="color:#f59e0b;font-size:.75rem">invite pending</span>' if u.invite_token else ""
+        invite_badge = ' <span class="badge badge-accent">invite pending</span>' if u.invite_token else ""
         role_options = "".join(
             f'<option value="{r}" {"selected" if r == u.role else ""}>{r}</option>'
             for r in ("guest", "premium", "admin")
@@ -1232,67 +1481,46 @@ def _admin_html(users, current_username: str) -> str:
             </select>
             {invite_badge}
           </td>
-          <td style="color:#556075;font-size:.8rem">{(u.last_login or u.created_at)[:10]}</td>
+          <td style="color:var(--muted);font-size:.8rem">{(u.last_login or u.created_at)[:10]}</td>
         </tr>"""
 
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Admin — Portfolio</title>
-<style>
-:root{{--bg:#0a0c10;--surface:#111520;--raised:#181e2e;--border:#1e2a3a;--text:#dce4f0;
-      --muted:#556075;--accent:#f59e0b;--green:#34d399;--red:#f87171;--radius:10px}}
-*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
-body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-      background:var(--bg);color:var(--text);padding:2rem}}
-h1{{font-size:1.2rem;font-weight:700;margin-bottom:1.5rem}}
-.card{{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-       padding:1.5rem;margin-bottom:1.5rem}}
-.card h2{{font-size:.95rem;font-weight:600;margin-bottom:1rem}}
-table{{width:100%;border-collapse:collapse;font-size:.85rem}}
-th,td{{padding:.5rem .75rem;text-align:left;border-bottom:1px solid var(--border)}}
-th{{font-size:.67rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}}
-select{{background:var(--raised);color:var(--text);border:1px solid var(--border);
-        border-radius:4px;padding:.2rem .4rem;font-size:.82rem;cursor:pointer}}
-.form-row{{display:flex;gap:.75rem;margin-top:.5rem;flex-wrap:wrap}}
-input[type=email],select.new-role{{padding:.5rem .75rem;border:1px solid var(--border);
-  border-radius:6px;background:var(--raised);color:var(--text);font-size:.85rem;font-family:inherit}}
-input[type=email]{{flex:1;min-width:200px}}
-button{{padding:.5rem 1.2rem;background:var(--accent);color:#000;font-weight:700;
-        font-size:.85rem;font-family:inherit;border:none;border-radius:6px;cursor:pointer}}
-button:hover{{opacity:.9}}
-.msg{{font-size:.82rem;margin-top:.5rem}}
-.nav{{margin-bottom:1.5rem;font-size:.85rem}}
-.nav a{{color:var(--accent);text-decoration:none}}
-</style>
-</head>
-<body>
-<p class="nav"><a href="/">&#8592; Back to dashboard</a></p>
-<h1>Admin — User Management</h1>
+    extra_css = (
+        ".form-row{display:flex;gap:.75rem;margin-top:.5rem;flex-wrap:wrap}"
+        "#newEmail{flex:1;min-width:200px;margin-bottom:0}"
+        "#newRole{width:auto;margin-bottom:0;background:var(--raised)}"
+        ".msg{font-size:.82rem;margin-top:.5rem}"
+    )
 
-<div class="card">
-  <h2>Create user &amp; send invite</h2>
-  <div class="form-row">
-    <input type="email" id="newEmail" placeholder="user@example.com">
-    <select id="newRole" class="new-role">
-      <option value="premium">Premium</option>
-      <option value="admin">Admin</option>
-    </select>
-    <button id="createBtn">Create &amp; send invite</button>
+    return (
+        _head_html("Admin — Portfolio", extra_css)
+        + f"""<body>
+{_header_html(current_username, "admin", "admin")}
+<div class="app-main">
+  <h1 style="font-size:1.2rem;font-weight:700">User Management</h1>
+
+  <div class="card">
+    <h2>Create user &amp; send invite</h2>
+    <div class="form-row">
+      <input type="email" id="newEmail" placeholder="user@example.com">
+      <select id="newRole">
+        <option value="premium">Premium</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button class="btn btn-primary btn-sm" id="createBtn">Create &amp; send invite</button>
+    </div>
+    <p id="createMsg" class="msg"></p>
   </div>
-  <p id="createMsg" class="msg"></p>
+
+  <div class="card">
+    <h2>All users</h2>
+    <table class="data-table">
+      <thead><tr><th>#</th><th>Username</th><th>Email</th><th>Role</th><th>Last seen</th></tr></thead>
+      <tbody>{rows}</tbody>
+    </table>
+  </div>
 </div>
 
-<div class="card">
-  <h2>All users</h2>
-  <table>
-    <thead><tr><th>#</th><th>Username</th><th>Email</th><th>Role</th><th>Last seen</th></tr></thead>
-    <tbody>{rows}</tbody>
-  </table>
-</div>
-
+{_COMMON_JS}
 <script>
 document.getElementById('createBtn').addEventListener('click', async () => {{
   const email = document.getElementById('newEmail').value.trim();
@@ -1306,14 +1534,14 @@ document.getElementById('createBtn').addEventListener('click', async () => {{
   }});
   const data = await resp.json();
   if (data.ok) {{
-    msg.style.color = '#34d399';
+    msg.style.color = 'var(--green)';
     msg.textContent = data.email_sent
       ? 'Invite sent to ' + email + ' (username: ' + data.username + ')'
       : 'User created. Invite URL: ' + data.invite_url;
     document.getElementById('newEmail').value = '';
     setTimeout(() => location.reload(), 2000);
   }} else {{
-    msg.style.color = '#f87171';
+    msg.style.color = 'var(--red)';
     msg.textContent = data.error;
   }}
 }});
@@ -1334,139 +1562,46 @@ document.querySelectorAll('.role-select').forEach(sel => {{
 </script>
 </body>
 </html>"""
+    )
 
 
-# ---------------------------------------------------------------------------
-# Self-contained HTML upload page (main UI)
-# ---------------------------------------------------------------------------
+def _upload_html(user_json: str) -> str:
+    """Home / upload page. Replaces the old _UPLOAD_HTML constant."""
+    user = json.loads(user_json)
+    username = user.get("username") or ""
+    role = user.get("role") or "guest"
+    is_premium = role in ("premium", "admin")
 
-_UPLOAD_HTML = """\
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Revolut eDavki — Import</title>
-<style>
-:root {
-  --bg: #f5f6fa; --card: #fff; --text: #1a1a2e; --muted: #6b7280;
-  --border: #e5e7eb; --blue: #4285f4; --green: #16a34a; --red: #dc2626;
-  --hover: #f9fafb;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; --muted: #94a3b8;
-    --border: #334155; --hover: #293548;
-  }
-}
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-  background: var(--bg); color: var(--text); line-height: 1.5;
-  min-height: 100vh; display: flex; flex-direction: column; align-items: center;
-}
-header {
-  width: 100%; background: var(--card); border-bottom: 1px solid var(--border);
-  padding: 1.25rem 2rem; display: flex; align-items: center; justify-content: space-between;
-}
-header h1 { font-size: 1.3rem; font-weight: 700; }
-.header-right { display: flex; align-items: center; gap: 1rem; font-size: .85rem; color: var(--muted); }
-.header-right a { color: var(--blue); text-decoration: none; font-weight: 600; }
-main { max-width: 700px; width: 100%; padding: 2rem 1rem; display: flex; flex-direction: column; gap: 1.5rem; }
-.card {
-  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-  padding: 1.5rem;
-}
-.card h2 { font-size: 1.1rem; margin-bottom: 1rem; }
-.guest-banner {
-  background: #fef9ec; border: 1px solid #f59e0b; border-radius: 10px;
-  padding: 1rem 1.25rem; font-size: .9rem;
-}
-@media (prefers-color-scheme: dark) { .guest-banner { background: rgba(245,158,11,.08); } }
-.drop-zone {
-  border: 2px dashed var(--border); border-radius: 10px; padding: 2.5rem 1.5rem;
-  text-align: center; cursor: pointer; transition: all 0.15s ease;
-  position: relative;
-}
-.drop-zone:hover, .drop-zone.dragover { border-color: var(--blue); background: rgba(66,133,244,0.04); }
-.drop-zone .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
-.drop-zone .label { font-size: 0.95rem; color: var(--muted); }
-.drop-zone .label strong { color: var(--blue); }
-.drop-zone .hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.35rem; }
-.drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.file-list { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.35rem; }
-.file-item {
-  display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.75rem;
-  background: var(--bg); border-radius: 6px; font-size: 0.85rem;
-}
-.file-item .name { flex: 1; font-weight: 500; }
-.file-item .size { color: var(--muted); font-size: 0.8rem; }
-.file-item .remove { cursor: pointer; color: var(--red); font-weight: 700; padding: 0 0.25rem; border: none; background: none; font-size: 1rem; }
-.btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
-  padding: 0.6rem 1.5rem; border-radius: 8px; font-size: 0.9rem; font-weight: 600;
-  cursor: pointer; border: none; transition: all 0.15s ease; text-decoration: none;
-}
-.btn-primary { background: var(--blue); color: #fff; }
-.btn-primary:hover { opacity: 0.9; }
-.btn-primary:disabled { opacity: 0.4; cursor: default; }
-.btn-secondary { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
-.btn-secondary:hover { background: var(--hover); }
-.btn-group { display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap; }
-.progress { display: none; margin-top: 1rem; }
-.progress.active { display: block; }
-.progress-bar { height: 4px; background: var(--border); border-radius: 4px; overflow: hidden; }
-.progress-bar .fill { height: 100%; background: var(--blue); transition: width 0.3s ease; border-radius: 4px; }
-.progress-label { font-size: 0.8rem; color: var(--muted); margin-top: 0.35rem; }
-.results { margin-top: 1rem; display: none; }
-.results.active { display: block; }
-.result-item {
-  display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem;
-  border-bottom: 1px solid var(--border); font-size: 0.85rem;
-}
-.result-item:last-child { border-bottom: none; }
-.result-item .status { font-size: 1.2rem; }
-.result-item .info { flex: 1; }
-.result-item .info .filename { font-weight: 600; }
-.result-item .info .detail { color: var(--muted); font-size: 0.8rem; }
-.result-item .info .error { color: var(--red); font-size: 0.8rem; }
-.status-bar {
-  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-  padding: 1rem 1.25rem; display: flex; align-items: center; gap: 1.25rem;
-  flex-wrap: wrap; font-size: 0.85rem;
-}
-.status-item { display: flex; align-items: center; gap: 0.35rem; }
-.status-item .num { font-weight: 700; }
-.status-item .lbl { color: var(--muted); }
-.actions { display: none; }
-.actions.active { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; }
-</style>
-</head>
-<body>
+    guest_banner = "" if is_premium else (
+        '<div class="guest-banner">'
+        '&#128275; You\'re viewing the <strong>demo portfolio</strong>. '
+        '<a href="/login" style="color:var(--accent);font-weight:700">Log in</a> to view your own data.'
+        '</div>'
+    )
+    guest_card = "" if is_premium else (
+        '<div class="card" style="text-align:center;padding:2rem">'
+        '<div style="font-size:1.05rem;font-weight:600;margin-bottom:0.5rem">Demo Portfolio</div>'
+        '<div style="color:var(--muted);font-size:0.85rem;margin-bottom:1.25rem">Explore the portfolio dashboard with sample data.</div>'
+        '<a class="btn btn-primary" href="/report">View Demo Report</a>'
+        '</div>'
+    )
+    upload_display = '' if is_premium else ' style="display:none"'
 
-<header>
-  <h1 style="font-size:1.3rem;font-weight:700;letter-spacing:-0.03em">Portfolio<span style="color:var(--blue)">.</span></h1>
-  <div class="header-right" id="headerRight"></div>
-</header>
-
-<main>
+    return (
+        _head_html("Portfolio")
+        + f"""<body>
+{_header_html(username, role, "home")}
+<div class="app-main">
   <div id="statusBar" class="status-bar" style="display:none"></div>
-  <div id="guestBanner" style="display:none" class="guest-banner">
-    &#128275; You're viewing the <strong>demo portfolio</strong>.
-    <a href="/login" style="color:#f59e0b;font-weight:700">Log in</a> to view your own data.
-  </div>
-  <div id="guestReportCard" class="card" style="display:none;text-align:center;padding:2rem">
-    <div style="font-size:1.05rem;font-weight:600;margin-bottom:0.5rem">Demo Portfolio</div>
-    <div style="color:var(--muted);font-size:0.85rem;margin-bottom:1.25rem">Explore the portfolio dashboard with sample data.</div>
-    <a class="btn btn-primary" href="/report">View Demo Report</a>
-  </div>
+  {guest_banner}
+  {guest_card}
 
-  <div id="uploadCard" class="card">
+  <div id="uploadCard" class="card"{upload_display}>
     <h2>Upload CSV Files</h2>
 
     <div class="drop-zone" id="dropZone">
       <div class="icon">&#128196;</div>
-      <div class="label">Drop files here or <strong>browse</strong></div>
+      <div class="lbl">Drop files here or <strong>browse</strong></div>
       <div class="hint">CSV or Excel — stocks, CFD, crypto, or savings (auto-detected)</div>
       <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" multiple>
     </div>
@@ -1490,32 +1625,12 @@ main { max-width: 700px; width: 100%; padding: 2rem 1rem; display: flex; flex-di
       <button class="btn btn-secondary" id="resetBtn">Import More</button>
     </div>
   </div>
-</main>
+</div>
 
+{_COMMON_JS}
 <script>
-const _USER = __USER_JSON__;
-
-(function() {
-  // --- Header ---
-  const hr = document.getElementById('headerRight');
-  if (_USER.username) {
-    let links = '<span>' + _USER.username + ' (' + _USER.role + ')</span>';
-    links += ' <a href="/report">Report</a>';
-    links += ' | <a href="/import">Import Wizard</a>';
-    if (_USER.role === 'admin') links += ' | <a href="/admin">Admin</a>';
-    links += ' | <a href="/logout">Log out</a>';
-    hr.innerHTML = links;
-  } else {
-    hr.innerHTML = '<a href="/login">Log in</a>';
-    document.getElementById('guestBanner').style.display = '';
-  }
-
-  // --- Hide upload for guests, show report link instead ---
-  const isPremium = _USER.role === 'premium' || _USER.role === 'admin';
-  if (!isPremium) {
-    document.getElementById('uploadCard').style.display = 'none';
-    document.getElementById('guestReportCard').style.display = '';
-  }
+(function() {{
+  const isPremium = {'true' if is_premium else 'false'};
 
   const fileInput = document.getElementById('fileInput');
   const dropZone = document.getElementById('dropZone');
@@ -1532,60 +1647,61 @@ const _USER = __USER_JSON__;
 
   let selectedFiles = [];
 
-  fetch('/status').then(r=>r.json()).then(data => {
-    if (data.has_data) {
+  fetch('/status').then(r=>r.json()).then(data => {{
+    if (data.has_data) {{
       const items = [];
-      items.push(`<span class="num">${data.transaction_count}</span> <span class="lbl">transactions</span>`);
-      items.push(`<span class="num">${data.ticker_count}</span> <span class="lbl">tickers</span>`);
-      if (data.date_range) items.push(`<span class="lbl">${data.date_range[0]} to ${data.date_range[1]}</span>`);
-      if (data.asset_classes) {
-        const tags = Object.entries(data.asset_classes).map(([k,v]) => k + ': ' + v).join(', ');
-        items.push(`<span class="lbl">${tags}</span>`);
-      }
-      statusBar.innerHTML = items.map(i => `<div class="status-item">${i}</div>`).join('');
+      items.push('<span class="num">'+data.transaction_count+'</span> <span class="lbl">transactions</span>');
+      items.push('<span class="num">'+data.ticker_count+'</span> <span class="lbl">tickers</span>');
+      if (data.date_range) items.push('<span class="lbl">'+data.date_range[0]+' to '+data.date_range[1]+'</span>');
+      if (data.asset_classes) {{
+        const tags = Object.entries(data.asset_classes).map(function(e){{ return e[0]+': '+e[1]; }}).join(', ');
+        items.push('<span class="lbl">'+tags+'</span>');
+      }}
+      statusBar.innerHTML = items.map(function(i){{ return '<div class="status-item">'+i+'</div>'; }}).join('');
       statusBar.style.display = '';
-    }
-  }).catch(()=>{});
+    }}
+  }}).catch(function(){{}});
 
   if (!isPremium) return;
 
-  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-  dropZone.addEventListener('drop', e => {
+  dropZone.addEventListener('dragover', function(e) {{ e.preventDefault(); dropZone.classList.add('dragover'); }});
+  dropZone.addEventListener('dragleave', function() {{ dropZone.classList.remove('dragover'); }});
+  dropZone.addEventListener('drop', function(e) {{
     e.preventDefault(); dropZone.classList.remove('dragover'); addFiles(e.dataTransfer.files);
-  });
-  fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+  }});
+  fileInput.addEventListener('change', function() {{ addFiles(fileInput.files); fileInput.value = ''; }});
 
-  function addFiles(fl) {
-    for (const f of fl) {
-      const ext = f.name.split('.').pop().toLowerCase();
-      if (!['csv','xlsx','xls'].includes(ext)) continue;
-      if (selectedFiles.some(sf => sf.name === f.name && sf.size === f.size)) continue;
+  function addFiles(fl) {{
+    for (var i = 0; i < fl.length; i++) {{
+      var f = fl[i];
+      var ext = f.name.split('.').pop().toLowerCase();
+      if (['csv','xlsx','xls'].indexOf(ext) === -1) continue;
+      if (selectedFiles.some(function(sf) {{ return sf.name === f.name && sf.size === f.size; }})) continue;
       selectedFiles.push(f);
-    }
+    }}
     renderFileList();
-  }
+  }}
 
-  function renderFileList() {
+  function renderFileList() {{
     uploadBtn.disabled = selectedFiles.length === 0;
-    fileList.innerHTML = selectedFiles.map((f, i) => {
-      const size = f.size < 1024 ? f.size + ' B'
+    fileList.innerHTML = selectedFiles.map(function(f, i) {{
+      var size = f.size < 1024 ? f.size + ' B'
         : f.size < 1048576 ? (f.size/1024).toFixed(1) + ' KB'
         : (f.size/1048576).toFixed(1) + ' MB';
-      return `<div class="file-item">
-        <span class="name">${esc(f.name)}</span>
-        <span class="size">${size}</span>
-        <button class="remove" data-idx="${i}">&times;</button>
-      </div>`;
-    }).join('');
-    fileList.querySelectorAll('.remove').forEach(btn => {
-      btn.addEventListener('click', () => { selectedFiles.splice(+btn.dataset.idx, 1); renderFileList(); });
-    });
-  }
+      return '<div class="file-item">'
+        + '<span class="name">' + esc(f.name) + '</span>'
+        + '<span class="size">' + size + '</span>'
+        + '<button class="remove" data-idx="' + i + '">&times;</button>'
+        + '</div>';
+    }}).join('');
+    fileList.querySelectorAll('.remove').forEach(function(btn) {{
+      btn.addEventListener('click', function() {{ selectedFiles.splice(+btn.dataset.idx, 1); renderFileList(); }});
+    }});
+  }}
 
-  function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  function esc(s) {{ var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }}
 
-  uploadBtn.addEventListener('click', async () => {
+  uploadBtn.addEventListener('click', async function() {{
     if (!selectedFiles.length) return;
     uploadBtn.disabled = true;
     progress.classList.add('active');
@@ -1593,54 +1709,54 @@ const _USER = __USER_JSON__;
     actionsEl.classList.remove('active');
     progressFill.style.width = '30%';
     progressLabel.textContent = 'Uploading ' + selectedFiles.length + ' file(s)...';
-    const form = new FormData();
-    selectedFiles.forEach(f => form.append('files', f));
-    try {
+    var form = new FormData();
+    selectedFiles.forEach(function(f) {{ form.append('files', f); }});
+    try {{
       progressFill.style.width = '60%';
       progressLabel.textContent = 'Importing...';
-      const resp = await fetch('/upload', { method: 'POST', body: form });
-      const data = await resp.json();
+      var resp = await fetch('/upload', {{ method: 'POST', body: form }});
+      var data = await resp.json();
       progressFill.style.width = '100%';
-      if (data.error) { progressLabel.textContent = 'Error: ' + data.error; uploadBtn.disabled = false; return; }
+      if (data.error) {{ progressLabel.textContent = 'Error: ' + data.error; uploadBtn.disabled = false; return; }}
       progressLabel.textContent = 'Done!';
-      resultsEl.innerHTML = data.results.map(r => {
-        if (r.error) return `<div class="result-item"><span class="status">&#10060;</span>
-          <div class="info"><div class="filename">${esc(r.filename)}</div><div class="error">${esc(r.error)}</div></div></div>`;
-        const icon = r.new > 0 ? '&#9989;' : '&#9898;';
-        return `<div class="result-item"><span class="status">${icon}</span>
-          <div class="info"><div class="filename">${esc(r.filename)}</div>
-          <div class="detail">${r.new} new, ${r.skipped} skipped (of ${r.total} rows)</div></div></div>`;
-      }).join('');
+      resultsEl.innerHTML = data.results.map(function(r) {{
+        if (r.error) return '<div class="result-item"><span class="status">&#10060;</span>'
+          + '<div class="info"><div class="filename">' + esc(r.filename) + '</div><div class="error">' + esc(r.error) + '</div></div></div>';
+        var icon = r.new > 0 ? '&#9989;' : '&#9898;';
+        return '<div class="result-item"><span class="status">' + icon + '</span>'
+          + '<div class="info"><div class="filename">' + esc(r.filename) + '</div>'
+          + '<div class="detail">' + r.new + ' new, ' + r.skipped + ' skipped (of ' + r.total + ' rows)</div></div></div>';
+      }}).join('');
       resultsEl.classList.add('active');
       actionsEl.classList.add('active');
       selectedFiles = []; renderFileList();
-    } catch (e) {
+    }} catch (e) {{
       progressFill.style.width = '100%';
       progressLabel.textContent = 'Error: ' + e.message;
       uploadBtn.disabled = false;
-    }
-  });
+    }}
+  }});
 
-  syncBtn.addEventListener('click', async () => {
+  syncBtn.addEventListener('click', async function() {{
     syncBtn.disabled = true; syncBtn.textContent = 'Syncing...';
-    try {
-      const resp = await fetch('/sync', { method: 'POST' });
-      const data = await resp.json();
+    try {{
+      var resp = await fetch('/sync', {{ method: 'POST' }});
+      var data = await resp.json();
       syncBtn.textContent = data.ok ? 'Synced!' : 'Error: ' + data.error;
-    } catch(e) { syncBtn.textContent = 'Error'; }
-    setTimeout(() => { syncBtn.textContent = 'Sync Prices'; syncBtn.disabled = false; }, 3000);
-  });
+    }} catch(e) {{ syncBtn.textContent = 'Error'; }}
+    setTimeout(function() {{ syncBtn.textContent = 'Sync Prices'; syncBtn.disabled = false; }}, 3000);
+  }});
 
-  resetBtn.addEventListener('click', () => {
+  resetBtn.addEventListener('click', function() {{
     resultsEl.classList.remove('active'); actionsEl.classList.remove('active');
     progress.classList.remove('active'); progressFill.style.width = '0%';
     uploadBtn.disabled = true;
-  });
-})();
+  }});
+}})();
 </script>
 </body>
-</html>
-"""
+</html>"""
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1648,122 +1764,21 @@ const _USER = __USER_JSON__;
 # ---------------------------------------------------------------------------
 
 def _import_wizard_html() -> str:
-    return r"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Import Wizard — Portfolio</title>
-<style>
-:root {
-  --bg:#0a0c10;--surface:#111520;--raised:#181e2e;--border:#1e2a3a;
-  --text:#dce4f0;--muted:#556075;--subtle:#2e3a4e;
-  --accent:#f59e0b;--accent-dim:rgba(245,158,11,0.12);
-  --green:#34d399;--red:#f87171;--blue:#60a5fa;
-  --radius:10px;--radius-sm:6px;
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-     background:var(--bg);color:var(--text);min-height:100vh;
-     display:flex;flex-direction:column;align-items:center;}
-header{width:100%;background:var(--surface);border-bottom:1px solid var(--border);
-       padding:1rem 2rem;display:flex;align-items:center;gap:1rem;}
-.logo{font-size:1.1rem;font-weight:700;letter-spacing:-0.03em;text-decoration:none;color:var(--text);}
-.logo span{color:var(--accent);}
-.back{font-size:.82rem;color:var(--muted);text-decoration:none;margin-left:auto;}
-.back:hover{color:var(--text);}
-main{width:100%;max-width:780px;padding:2rem 1rem;display:flex;flex-direction:column;gap:1.5rem;}
+    # We need username/role for the header — get from session context
+    # The function is called from the request handler which has session info
+    # but the function signature doesn't accept it. We'll pass empty defaults
+    # and the handler will call the new version.
+    return _import_wizard_html_with_user("", "premium")
 
-/* Progress steps */
-.steps{display:flex;align-items:center;gap:0;margin-bottom:.5rem;}
-.step{display:flex;align-items:center;gap:.5rem;font-size:.78rem;font-weight:600;
-      color:var(--muted);padding:.4rem .75rem;border-radius:20px;}
-.step.active{color:var(--accent);}
-.step.done{color:var(--green);}
-.step-num{width:20px;height:20px;border-radius:50%;border:2px solid currentColor;
-          display:flex;align-items:center;justify-content:center;font-size:.7rem;flex-shrink:0;}
-.step-sep{flex:1;height:1px;background:var(--border);margin:0 .25rem;max-width:40px;}
 
-/* Cards */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;}
-.card h2{font-size:1rem;font-weight:600;margin-bottom:1rem;}
-
-/* Drop zone */
-.drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:2.5rem 1.5rem;
-           text-align:center;cursor:pointer;transition:all .15s;position:relative;}
-.drop-zone:hover,.drop-zone.dragover{border-color:var(--accent);background:var(--accent-dim);}
-.drop-zone .icon{font-size:2.2rem;margin-bottom:.5rem;}
-.drop-zone .lbl{font-size:.9rem;color:var(--muted);}
-.drop-zone .lbl strong{color:var(--accent);}
-.drop-zone .hint{font-size:.72rem;color:var(--muted);margin-top:.3rem;}
-.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
-.chosen-file{margin-top:.75rem;font-size:.83rem;font-weight:500;color:var(--text);}
-
-/* Buttons */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;
-     padding:.5rem 1.25rem;border-radius:var(--radius-sm);font-size:.85rem;font-weight:600;
-     cursor:pointer;border:none;transition:opacity .12s;font-family:inherit;}
-.btn-primary{background:var(--accent);color:#000;}
-.btn-primary:hover{opacity:.88;}
-.btn-primary:disabled{opacity:.35;cursor:default;}
-.btn-secondary{background:transparent;color:var(--muted);border:1px solid var(--border);}
-.btn-secondary:hover{background:var(--raised);color:var(--text);}
-.btn-group{display:flex;gap:.6rem;margin-top:1.25rem;flex-wrap:wrap;}
-
-/* Asset class toggles */
-.ac-toggles{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.25rem;}
-.ac-btn{padding:.3rem .85rem;border-radius:12px;font-size:.75rem;font-weight:700;
-        cursor:pointer;border:1px solid var(--border);background:transparent;
-        color:var(--muted);font-family:inherit;transition:all .12s;}
-.ac-btn.active{background:var(--accent-dim);color:var(--accent);border-color:var(--accent);}
-
-/* Preview table */
-.preview-wrap{overflow-x:auto;margin-bottom:1.25rem;}
-.preview-table{border-collapse:collapse;font-size:.75rem;width:100%;}
-.preview-table th,.preview-table td{padding:.3rem .55rem;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
-.preview-table thead th{font-weight:600;color:var(--accent);font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;}
-
-/* Mapping table */
-.map-table{width:100%;border-collapse:collapse;font-size:.83rem;}
-.map-table td{padding:.45rem .5rem;border-bottom:1px solid var(--border);vertical-align:middle;}
-.map-table td:first-child{width:38%;font-weight:500;}
-.map-table td:nth-child(2){width:10%;text-align:center;}
-.map-table select{background:var(--raised);border:1px solid var(--border);border-radius:var(--radius-sm);
-                  color:var(--text);font-family:inherit;font-size:.8rem;padding:.3rem .5rem;width:100%;}
-.map-table select:focus{outline:none;border-color:var(--accent);}
-.req-badge{font-size:.62rem;font-weight:700;padding:.1rem .4rem;border-radius:8px;
-           background:rgba(248,113,113,.15);color:var(--red);}
-.opt-badge{font-size:.62rem;font-weight:700;padding:.1rem .4rem;border-radius:8px;
-           background:var(--raised);color:var(--muted);}
-
-/* Step 3 summary */
-.summary-list{display:flex;flex-direction:column;gap:.4rem;font-size:.83rem;}
-.summary-row{display:flex;gap:.75rem;}
-.summary-lbl{color:var(--muted);width:140px;flex-shrink:0;font-size:.75rem;font-weight:600;
-             text-transform:uppercase;letter-spacing:.05em;}
-.summary-val{color:var(--text);}
-
-/* Error / success */
-.error-msg{color:var(--red);font-size:.82rem;margin-top:.6rem;}
-.success-box{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.25);
-             border-radius:var(--radius-sm);padding:1rem;text-align:center;}
-.success-box .big{font-size:1.1rem;font-weight:700;color:var(--green);margin-bottom:.4rem;}
-.success-box .sub{font-size:.82rem;color:var(--muted);}
-.success-links{display:flex;gap:.6rem;justify-content:center;margin-top:1rem;flex-wrap:wrap;}
-
-/* Spinner */
-@keyframes spin{to{transform:rotate(360deg)}}
-.spin{display:inline-block;width:.85em;height:.85em;border:2px solid rgba(0,0,0,.3);
-      border-top-color:#000;border-radius:50%;animation:spin .6s linear infinite;}
-</style>
-</head>
-<body>
-<header>
-  <a class="logo" href="/">Portfolio<span>.</span></a>
-  <a class="back" href="/">&#8592; Back</a>
-</header>
-
-<main>
+def _import_wizard_html_with_user(username: str = "", role: str = "premium") -> str:
+    extra_css = ".app-main{max-width:780px}"
+    return (
+        _head_html("Import Wizard — Portfolio", extra_css)
+        + _header_html(username, role, "import")
+        + _COMMON_JS
+        + r"""
+<div class="app-main">
   <!-- Progress bar -->
   <div class="steps" id="steps">
     <div class="step active" id="s1"><span class="step-num">1</span><span>Upload</span></div>
@@ -1771,6 +1786,12 @@ main{width:100%;max-width:780px;padding:2rem 1rem;display:flex;flex-direction:co
     <div class="step" id="s2"><span class="step-num">2</span><span>Map Columns</span></div>
     <div class="step-sep"></div>
     <div class="step" id="s3"><span class="step-num">3</span><span>Import</span></div>
+  </div>
+
+  <!-- Import History Card -->
+  <div class="card" id="historyCard" style="display:none;margin-bottom:1rem;padding:.75rem 1rem;background:var(--bg-alt,#f8f9fa);border:1px solid var(--border,#e0e0e0)">
+    <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem">Portfolio Summary</div>
+    <div id="historyContent"></div>
   </div>
 
   <!-- Step 1: Upload -->
@@ -1819,6 +1840,7 @@ main{width:100%;max-width:780px;padding:2rem 1rem;display:flex;flex-direction:co
   <!-- Step 3: Review & Import (hidden initially) -->
   <div class="card" id="step3" style="display:none">
     <h2>Review &amp; import</h2>
+    <div id="overlapWarning" style="display:none;padding:.6rem .8rem;margin-bottom:.75rem;border-radius:6px;background:#fff8e1;border:1px solid #ffe082;font-size:.82rem;color:#6d4c00"></div>
     <div class="summary-list" id="summaryList"></div>
     <div class="error-msg" id="step3Err"></div>
     <div id="successBox" style="display:none"></div>
@@ -1827,7 +1849,7 @@ main{width:100%;max-width:780px;padding:2rem 1rem;display:flex;flex-direction:co
       <button class="btn btn-primary" id="importBtn">Import</button>
     </div>
   </div>
-</main>
+</div>
 
 <script>
 const DB_FIELDS = {
@@ -1854,6 +1876,32 @@ const FIELD_ALIASES = {
 
 let _headers = [], _rows = [], _filename = '', _rowCount = 0;
 let _assetClass = null;
+let _statusData = null;
+
+(async function loadHistory() {
+  try {
+    const resp = await fetch('/status');
+    const data = await resp.json();
+    _statusData = data;
+    const card = document.getElementById('historyCard');
+    const content = document.getElementById('historyContent');
+    if (!data.has_data) {
+      card.style.display = '';
+      content.innerHTML = '<div style="font-size:.85rem;color:var(--muted)">No data imported yet. Upload your first CSV to get started.</div>';
+      return;
+    }
+    const classes = Object.keys(data.asset_classes || {}).join(', ') || 'none';
+    const range = data.date_range ? data.date_range[0] + ' to ' + data.date_range[1] : 'N/A';
+    let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.3rem .8rem;font-size:.84rem">';
+    html += '<div><strong>' + data.import_count + '</strong> imports</div>';
+    html += '<div><strong>' + data.transaction_count + '</strong> transactions</div>';
+    html += '<div>Date range: <strong>' + range + '</strong></div>';
+    html += '<div>Asset classes: <strong>' + classes + '</strong></div>';
+    html += '</div>';
+    card.style.display = '';
+    content.innerHTML = html;
+  } catch(e) {}
+})();
 
 function esc(s) { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
 
@@ -2026,6 +2074,15 @@ function showStep3() {
     <div class="summary-row" style="margin-top:.5rem"><span class="summary-lbl" style="color:var(--text)">Column mapping</span></div>
     ${mapLines}
   `;
+
+  const warn = document.getElementById('overlapWarning');
+  if (_statusData && _statusData.has_data && _statusData.date_range) {
+    warn.style.display = '';
+    warn.textContent = 'Your portfolio has data from ' + _statusData.date_range[0] + ' to ' + _statusData.date_range[1] + '. Duplicates will be automatically skipped.';
+  } else {
+    warn.style.display = 'none';
+  }
+
   document.getElementById('step3Err').textContent = '';
   document.getElementById('successBox').style.display = 'none';
   document.getElementById('step3Btns').style.display = '';
@@ -2084,3 +2141,4 @@ document.getElementById('importBtn').addEventListener('click', async () => {
 </script>
 </body>
 </html>"""
+    )
