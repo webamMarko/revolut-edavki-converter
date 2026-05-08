@@ -46,9 +46,8 @@ function _ensureClassData(classes) {
 function buildCombinedSeries() {
   const nonReActive = [...activeClasses].filter(k => k !== 'realestate');
   const missingFromAll = [...allSeriesKeys].filter(k => !activeClasses.has(k));
-  const allMissingAreDefault = missingFromAll.every(k => defaultInactive.has(k));
-  const noPerClassLoaded = nonReActive.every(k => !perClass[k]);
-  if (!hasFilter || (nonReActive.length === allSeriesKeys.size && !activeClasses.has('realestate')) || (allMissingAreDefault && noPerClassLoaded)) {
+  const allActive = missingFromAll.length === 0 && !activeClasses.has('realestate');
+  if (!hasFilter || allActive) {
     return {
       dates: D.daily_series.dates,
       value_eur: D.daily_series.value_eur.slice(),
@@ -64,7 +63,7 @@ function buildCombinedSeries() {
   if (activeClasses.size === 1) {
     const ac = [...activeClasses][0];
     const s = perClass[ac];
-    if (!s) return {dates: D.daily_series.dates, value_eur: D.daily_series.value_eur.slice(), invested_eur: D.daily_series.invested_eur.slice(), dividends_eur: D.daily_series.dividends_eur.slice(), realized_gain_eur: D.daily_series.realized_gain_eur.slice(), perf_index: (D.daily_series.perf_index || []).slice()};
+    if (!s) return {dates:[], value_eur:[], invested_eur:[], dividends_eur:[], realized_gain_eur:[], perf_index:[]};
     return {
       dates: s.dates.slice(),
       value_eur: s.value_eur.slice(),
@@ -130,18 +129,15 @@ function computePerfIndex(values, invested) {
 }
 
 function isDefaultSelection() {
-  const financialActive = [...activeClasses].filter(k => k !== 'realestate');
-  if (!hasFilter || (financialActive.length === allSeriesKeys.size && !activeClasses.has('realestate'))) return true;
+  if (!hasFilter) return true;
   const missingFromAll = [...allSeriesKeys].filter(k => !activeClasses.has(k));
-  const allMissingAreDefault = missingFromAll.every(k => defaultInactive.has(k));
-  const noPerClassLoaded = financialActive.every(k => !perClass[k]);
-  return allMissingAreDefault && noPerClassLoaded;
+  return missingFromAll.length === 0 && !activeClasses.has('realestate');
 }
 
 function getActiveSummary() {
   if (isDefaultSelection()) return D.summary;
   if (activeClasses.size === 0) return {portfolio_value_eur:0, total_invested_eur:0, absolute_gain_eur:0, total_return_pct:0, cagr_pct:null, twr_pct:null, max_drawdown_pct:0, max_drawdown_peak_date:'', max_drawdown_trough_date:'', risk_metrics:{}};
-  if (activeClasses.size === 1) { const pc = perClass[[...activeClasses][0]]; if (pc) return pc.summary; return D.summary; }
+  if (activeClasses.size === 1) { const pc = perClass[[...activeClasses][0]]; if (pc) return pc.summary; return {portfolio_value_eur:0, total_invested_eur:0, absolute_gain_eur:0, total_return_pct:0, cagr_pct:null, twr_pct:null, max_drawdown_pct:0, max_drawdown_peak_date:'', max_drawdown_trough_date:'', risk_metrics:{}}; }
   let pv = 0, ti = 0, ag = 0;
   activeClasses.forEach(ac => {
     if (!perClass[ac]) return;
@@ -254,16 +250,16 @@ function computeClientRiskMetrics(cs) {
 function getActiveGains() {
   if (isDefaultSelection()) return D.gains;
   if (activeClasses.size === 0) return {realized_eur:0, unrealized_eur:0, dividends_eur:0, fees_eur:0};
-  if (activeClasses.size === 1) return perClass[[...activeClasses][0]].gains;
+  if (activeClasses.size === 1) { const pc = perClass[[...activeClasses][0]]; return pc ? pc.gains : D.gains; }
   let r = 0, u = 0, d = 0, f = 0;
-  activeClasses.forEach(ac => { const g = perClass[ac].gains; r += g.realized_eur; u += g.unrealized_eur; d += g.dividends_eur; f += g.fees_eur; });
+  activeClasses.forEach(ac => { if (!perClass[ac]) return; const g = perClass[ac].gains; r += g.realized_eur; u += g.unrealized_eur; d += g.dividends_eur; f += g.fees_eur; });
   return {realized_eur:r, unrealized_eur:u, dividends_eur:d, fees_eur:f};
 }
 
 function getActivePositions() {
   if (isDefaultSelection()) return D.positions;
   let all = [];
-  activeClasses.forEach(ac => { all = all.concat(perClass[ac].positions); });
+  activeClasses.forEach(ac => { if (perClass[ac]) all = all.concat(perClass[ac].positions); });
   const totalMV = all.reduce((a, p) => a + p.market_value_eur, 0) || 1;
   return all.map(p => ({...p, weight_pct: p.market_value_eur / totalMV * 100})).sort((a, b) => b.market_value_eur - a.market_value_eur);
 }
@@ -271,12 +267,14 @@ function getActivePositions() {
 function getActiveClosedPositions() {
   if (isDefaultSelection()) return D.closed_positions || [];
   let all = [];
-  activeClasses.forEach(ac => { all = all.concat((perClass[ac].closed_positions || [])); });
+  activeClasses.forEach(ac => { if (perClass[ac]) all = all.concat((perClass[ac].closed_positions || [])); });
   return all.sort((a, b) => Math.abs(b.realized_gain_eur) - Math.abs(a.realized_gain_eur));
 }
 
 // --- Active series (initialised at load time) ---
-let ds = buildCombinedSeries();
+// Check if initial selection differs from the pre-computed "all" series
+const _needsEagerLoad = hasFilter && !isDefaultSelection();
+let ds = _needsEagerLoad ? {dates:[], value_eur:[], invested_eur:[], dividends_eur:[], realized_gain_eur:[], perf_index:[]} : buildCombinedSeries();
 let allDates = ds.dates;
 let N = allDates.length;
 
@@ -355,6 +353,17 @@ function onFilterChange() {
     return;
   }
   _ensureClassData([...activeClasses]).then(_applyFilterChange);
+}
+
+// --- Eager load per-class data when initial selection differs from pre-computed "all" ---
+let _eagerLoadPromise = null;
+if (_needsEagerLoad) {
+  _eagerLoadPromise = _ensureClassData([...activeClasses]).then(function() {
+    ds = buildCombinedSeries();
+    allDates = ds.dates;
+    N = allDates.length;
+    selStart = 0; selEnd = N - 1; isZoomed = false;
+  });
 }
 
 // --- Page-filters visibility: only show on pages that use filters ---

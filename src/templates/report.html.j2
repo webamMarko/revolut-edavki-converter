@@ -129,14 +129,21 @@
 
 // --- Initial render ---
 // Charts are on the overview page (active by default), so they size correctly without tricks
-portfolioChart = buildPortfolioChart();
-benchmarkChart = buildBenchmarkChart();
-updateAll();
-buildHeatmap();
-buildDrawdownChart();
-buildYearlyHeatmap();
-buildYearlyTable();
-buildRollingReturns();
+function _initialRender() {
+  portfolioChart = buildPortfolioChart();
+  benchmarkChart = buildBenchmarkChart();
+  updateAll();
+  buildHeatmap();
+  buildDrawdownChart();
+  buildYearlyHeatmap();
+  buildYearlyTable();
+  buildRollingReturns();
+}
+if (_eagerLoadPromise) {
+  _eagerLoadPromise.then(_initialRender);
+} else {
+  _initialRender();
+}
 </script>
 </body>
 </html>
