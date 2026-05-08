@@ -61,6 +61,20 @@ CREATE TABLE IF NOT EXISTS users (
     created_at         TEXT NOT NULL DEFAULT (datetime('now')),
     last_login         TEXT
 );
+
+CREATE TABLE IF NOT EXISTS portfolio_shares (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    share_token     TEXT NOT NULL UNIQUE,
+    label           TEXT,
+    scope           TEXT NOT NULL DEFAULT 'all',
+    percentage_only INTEGER NOT NULL DEFAULT 1,
+    include_holdings INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at      TEXT,
+    access_count    INTEGER NOT NULL DEFAULT 0,
+    last_accessed_at TEXT
+);
 """
 
 
@@ -392,6 +406,140 @@ def ensure_bootstrap_admin(
         conn.commit()
         row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
         return _row_to_user(row)
+    finally:
+        if close:
+            conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Portfolio sharing
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PortfolioShare:
+    id: int
+    user_id: int
+    share_token: str
+    label: str | None
+    scope: str
+    percentage_only: bool
+    include_holdings: bool
+    created_at: str
+    expires_at: str | None
+    access_count: int
+    last_accessed_at: str | None
+
+
+def _row_to_share(row: sqlite3.Row) -> PortfolioShare:
+    return PortfolioShare(
+        id=row["id"],
+        user_id=row["user_id"],
+        share_token=row["share_token"],
+        label=row["label"],
+        scope=row["scope"],
+        percentage_only=bool(row["percentage_only"]),
+        include_holdings=bool(row["include_holdings"]),
+        created_at=row["created_at"],
+        expires_at=row["expires_at"],
+        access_count=row["access_count"],
+        last_accessed_at=row["last_accessed_at"],
+    )
+
+
+def create_share(
+    user_id: int,
+    label: str | None = None,
+    scope: str = "all",
+    percentage_only: bool = True,
+    include_holdings: bool = False,
+    expires_hours: int | None = None,
+    conn: sqlite3.Connection | None = None,
+) -> PortfolioShare:
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        token = secrets.token_urlsafe(32)
+        expires_at = None
+        if expires_hours:
+            expires_at = (datetime.now(timezone.utc) + timedelta(hours=expires_hours)).isoformat()
+        conn.execute(
+            """INSERT INTO portfolio_shares
+               (user_id, share_token, label, scope, percentage_only, include_holdings, expires_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, token, label, scope, int(percentage_only), int(include_holdings), expires_at),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM portfolio_shares WHERE share_token = ?", (token,)).fetchone()
+        return _row_to_share(row)
+    finally:
+        if close:
+            conn.close()
+
+
+def get_share_by_token(
+    token: str,
+    conn: sqlite3.Connection | None = None,
+) -> PortfolioShare | None:
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        row = conn.execute("SELECT * FROM portfolio_shares WHERE share_token = ?", (token,)).fetchone()
+        if not row:
+            return None
+        share = _row_to_share(row)
+        if share.expires_at:
+            try:
+                expires = datetime.fromisoformat(share.expires_at)
+                if datetime.now(timezone.utc) > expires:
+                    return None
+            except ValueError:
+                return None
+        conn.execute(
+            "UPDATE portfolio_shares SET access_count = access_count + 1, last_accessed_at = datetime('now') WHERE id = ?",
+            (share.id,),
+        )
+        conn.commit()
+        return share
+    finally:
+        if close:
+            conn.close()
+
+
+def list_shares(
+    user_id: int,
+    conn: sqlite3.Connection | None = None,
+) -> list[PortfolioShare]:
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM portfolio_shares WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,),
+        ).fetchall()
+        return [_row_to_share(r) for r in rows]
+    finally:
+        if close:
+            conn.close()
+
+
+def delete_share(
+    share_id: int,
+    user_id: int,
+    conn: sqlite3.Connection | None = None,
+) -> bool:
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        cursor = conn.execute(
+            "DELETE FROM portfolio_shares WHERE id = ? AND user_id = ?",
+            (share_id, user_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
     finally:
         if close:
             conn.close()

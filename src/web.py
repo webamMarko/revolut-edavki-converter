@@ -266,6 +266,25 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._serve_robots_txt()
         elif path == "/sitemap.xml":
             self._serve_sitemap_xml()
+        elif path == "/api/shares":
+            self._api_list_shares()
+        elif path == "/api/goals":
+            self._api_list_goals()
+        elif path.startswith("/api/goals/") and path.endswith("/projection"):
+            goal_id = path[len("/api/goals/"):-len("/projection")]
+            if goal_id.isdigit():
+                self._api_goal_projection(int(goal_id))
+            else:
+                self.send_error(404)
+        elif path.startswith("/api/goals/"):
+            goal_id = path[len("/api/goals/"):]
+            if goal_id.isdigit():
+                self._api_get_goal(int(goal_id))
+            else:
+                self.send_error(404)
+        elif path.startswith("/s/"):
+            token = path[3:]
+            self._serve_shared_portfolio(token)
         else:
             self.send_error(404)
 
@@ -278,6 +297,7 @@ class UploadHandler(BaseHTTPRequestHandler):
             "Disallow: /settings\n"
             "Disallow: /import\n"
             "Disallow: /export/\n"
+            "Disallow: /s/\n"
             "\n"
             f"Sitemap: {APP_BASE_URL.rstrip('/')}/sitemap.xml\n"
         )
@@ -330,6 +350,19 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._handle_import_run()
         elif path == "/api/email-preferences":
             self._api_save_email_preferences()
+        elif path == "/api/shares":
+            self._api_create_share()
+        elif path.startswith("/api/shares/") and path.endswith("/delete"):
+            share_id = path[len("/api/shares/"):-len("/delete")]
+            self._api_delete_share(share_id)
+        elif path == "/api/goals":
+            self._api_create_goal()
+        elif path.startswith("/api/goals/") and path.endswith("/delete"):
+            goal_id = path[len("/api/goals/"):-len("/delete")]
+            if goal_id.isdigit():
+                self._api_delete_goal(int(goal_id))
+            else:
+                self.send_error(404)
         else:
             self.send_error(404)
 
@@ -339,6 +372,9 @@ class UploadHandler(BaseHTTPRequestHandler):
         # /api/notes/<id>
         if len(parts) == 4 and parts[1] == "api" and parts[2] == "notes" and parts[3].isdigit():
             self._api_update_note(int(parts[3]))
+        # /api/goals/<id>
+        elif len(parts) == 4 and parts[1] == "api" and parts[2] == "goals" and parts[3].isdigit():
+            self._api_update_goal(int(parts[3]))
         else:
             self.send_error(404)
 
@@ -348,6 +384,9 @@ class UploadHandler(BaseHTTPRequestHandler):
         # /api/notes/<id>
         if len(parts) == 4 and parts[1] == "api" and parts[2] == "notes" and parts[3].isdigit():
             self._api_delete_note(int(parts[3]))
+        # /api/goals/<id>
+        elif len(parts) == 4 and parts[1] == "api" and parts[2] == "goals" and parts[3].isdigit():
+            self._api_delete_goal(int(parts[3]))
         else:
             self.send_error(404)
 
@@ -1229,6 +1268,129 @@ class UploadHandler(BaseHTTPRequestHandler):
             conn.close()
 
     # ------------------------------------------------------------------
+    # Goals API
+    # ------------------------------------------------------------------
+
+    def _goals_conn_or_403(self):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return None, None
+        return session, _portfolio_conn(session)
+
+    def _api_list_goals(self):
+        session = _get_session(self)
+        conn = _portfolio_conn(session)
+        try:
+            from .goals import list_goals
+            goals = list_goals(conn)
+            self._json_response(goals)
+        finally:
+            conn.close()
+
+    def _api_get_goal(self, goal_id: int):
+        session = _get_session(self)
+        conn = _portfolio_conn(session)
+        try:
+            from .goals import get_goal
+            goal = get_goal(conn, goal_id)
+            if goal is None:
+                self._json_response({"error": "not found"}, 404)
+            else:
+                self._json_response(goal)
+        finally:
+            conn.close()
+
+    def _api_create_goal(self):
+        session, conn = self._goals_conn_or_403()
+        if conn is None:
+            return
+        try:
+            data = json.loads(self._read_body())
+            name = str(data.get("name", "")).strip()
+            target_amount = float(data.get("target_amount_eur", 0))
+            target_date = str(data.get("target_date", "")).strip()
+            if not name or target_amount <= 0 or not target_date:
+                self._json_response({"error": "name, target_amount_eur, and target_date are required"}, 400)
+                return
+            from .goals import create_goal, get_goal
+            goal_id = create_goal(
+                conn, name=name, target_amount_eur=target_amount,
+                target_date=target_date,
+                monthly_contribution=float(data.get("monthly_contribution", 0)),
+                scope=str(data.get("scope", "all")),
+                tickers=str(data.get("tickers", "")),
+            )
+            goal = get_goal(conn, goal_id)
+            self._json_response(goal, 201)
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            self._json_response({"error": str(e)}, 400)
+        finally:
+            conn.close()
+
+    def _api_update_goal(self, goal_id: int):
+        session, conn = self._goals_conn_or_403()
+        if conn is None:
+            return
+        try:
+            data = json.loads(self._read_body())
+            from .goals import update_goal, get_goal
+            update_goal(conn, goal_id, **data)
+            goal = get_goal(conn, goal_id)
+            if goal is None:
+                self._json_response({"error": "not found"}, 404)
+            else:
+                self._json_response(goal)
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            self._json_response({"error": str(e)}, 400)
+        finally:
+            conn.close()
+
+    def _api_delete_goal(self, goal_id: int):
+        session, conn = self._goals_conn_or_403()
+        if conn is None:
+            return
+        try:
+            from .goals import delete_goal
+            ok = delete_goal(conn, goal_id)
+            if ok:
+                self._json_response({"deleted": goal_id})
+            else:
+                self._json_response({"error": "not found"}, 404)
+        finally:
+            conn.close()
+
+    def _api_goal_projection(self, goal_id: int):
+        session = _get_session(self)
+        conn = _portfolio_conn(session)
+        from .prices_db import get_prices_conn_or_none
+        prices_conn = get_prices_conn_or_none()
+        try:
+            from .goals import compute_goal_projection
+            projection = compute_goal_projection(conn, goal_id, prices_conn=prices_conn)
+            if projection is None:
+                self._json_response({"error": "goal not found"}, 404)
+                return
+            self._json_response({
+                "goal_id": projection.goal_id,
+                "current_value_eur": projection.current_value_eur,
+                "target_amount_eur": projection.target_amount_eur,
+                "progress_pct": projection.progress_pct,
+                "months_remaining": projection.months_remaining,
+                "required_monthly_eur": projection.required_monthly_eur,
+                "probability_of_success": projection.probability_of_success,
+                "percentile_10": projection.percentile_10,
+                "percentile_50": projection.percentile_50,
+                "percentile_90": projection.percentile_90,
+            })
+        except Exception as e:
+            self._json_response({"error": f"Projection failed: {e}"}, 500)
+        finally:
+            if prices_conn:
+                prices_conn.close()
+            conn.close()
+
+    # ------------------------------------------------------------------
     # Import wizard
     # ------------------------------------------------------------------
 
@@ -1491,6 +1653,142 @@ class UploadHandler(BaseHTTPRequestHandler):
             country=data.get("country", "SI"),
         )
         self._json_response({"ok": True})
+
+    # ------------------------------------------------------------------
+    # Portfolio sharing
+    # ------------------------------------------------------------------
+
+    def _api_list_shares(self):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return
+        from .users import list_shares
+        shares = list_shares(session["user_id"])
+        self._json_response([{
+            "id": s.id,
+            "token": s.share_token,
+            "label": s.label,
+            "scope": s.scope,
+            "percentage_only": s.percentage_only,
+            "include_holdings": s.include_holdings,
+            "created_at": s.created_at,
+            "expires_at": s.expires_at,
+            "access_count": s.access_count,
+            "url": f"{APP_BASE_URL.rstrip('/')}/s/{s.share_token}",
+        } for s in shares])
+
+    def _api_create_share(self):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return
+        body = self._read_body()
+        try:
+            data = json.loads(body) if body else {}
+        except Exception:
+            data = {}
+        from .users import create_share
+        share = create_share(
+            user_id=session["user_id"],
+            label=data.get("label"),
+            scope=data.get("scope", "all"),
+            percentage_only=data.get("percentage_only", True),
+            include_holdings=data.get("include_holdings", False),
+            expires_hours=data.get("expires_hours"),
+        )
+        self._json_response({
+            "id": share.id,
+            "token": share.share_token,
+            "url": f"{APP_BASE_URL.rstrip('/')}/s/{share.share_token}",
+        })
+
+    def _api_delete_share(self, share_id_str: str):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return
+        try:
+            share_id = int(share_id_str)
+        except ValueError:
+            self._json_response({"error": "Invalid share ID."}, status=400)
+            return
+        from .users import delete_share
+        deleted = delete_share(share_id, session["user_id"])
+        self._json_response({"ok": deleted})
+
+    def _serve_shared_portfolio(self, token: str):
+        from .users import get_share_by_token, get_user_by_id
+        from .analytics import compute_analytics
+        from .analytics_cache import compute_data_hash, get_cached, put_cache
+        from .html_report import generate_html_report, query_transactions
+        from .prices_db import get_prices_conn_or_none
+
+        share = get_share_by_token(token)
+        if not share:
+            self._html_response(_shared_expired_html(), status=404)
+            return
+
+        user = get_user_by_id(share.user_id)
+        if not user:
+            self._html_response(_shared_expired_html(), status=404)
+            return
+
+        conn = None
+        prices_conn = None
+        try:
+            from .db import get_connection
+            conn = get_connection(db_path=_user_db_path(user.username))
+            prices_conn = get_prices_conn_or_none()
+
+            data_hash = compute_data_hash(conn, prices_conn)
+
+            cached = get_cached(conn, share.scope, data_hash)
+            if cached is not None:
+                analytics = cached
+            else:
+                analytics = compute_analytics(conn, scope=share.scope, prices_conn=prices_conn)
+                put_cache(conn, share.scope, data_hash, analytics)
+
+            transactions = query_transactions(conn) if share.include_holdings else []
+
+            html = generate_html_report(
+                analytics, {}, transactions, per_class=None,
+                available_classes=[],
+                real_estate=None, fire_config=None,
+                investment_notes=[], conn=conn,
+                country="SI", prices_conn=prices_conn,
+                shared_mode=True,
+                percentage_only=share.percentage_only,
+                include_holdings=share.include_holdings,
+            )
+
+            share_meta = json.dumps({
+                "shared": True,
+                "label": share.label,
+                "percentage_only": share.percentage_only,
+                "include_holdings": share.include_holdings,
+                "scope": share.scope,
+            })
+            d_script_end = html.find(";</script>", html.find("<script>const D="))
+            if d_script_end != -1:
+                html = html[:d_script_end] + f";D.share={share_meta};D.user=null" + html[d_script_end:]
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "public, max-age=300")
+            self.end_headers()
+            self.wfile.write(html.encode("utf-8"))
+        except Exception as e:
+            self.send_response(500)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(f"Error loading shared portfolio: {e}".encode("utf-8"))
+        finally:
+            if prices_conn:
+                prices_conn.close()
+            if conn:
+                conn.close()
 
     def _read_body(self, length: int | None = None) -> bytes:
         if length is None:
@@ -2495,6 +2793,24 @@ def _error_html(message: str) -> str:
     )
 
 
+def _shared_expired_html() -> str:
+    return (
+        _head_html("Link Expired — Portfolio",
+                    "body{display:flex;align-items:center;justify-content:center;padding:1rem}")
+        + f"""<body>
+<div class="auth-card" style="max-width:440px;text-align:center">
+  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>
+  <div style="font-size:2.5rem;margin-bottom:1rem">&#128279;</div>
+  <h2 style="font-size:1.1rem;font-weight:600;margin-bottom:0.5rem">Share link expired or invalid</h2>
+  <p style="color:var(--text-secondary);margin-bottom:1.25rem">This portfolio snapshot is no longer available.</p>
+  <a class="btn btn-primary" href="/">Go home</a>
+</div>
+{_COMMON_JS}
+</body>
+</html>"""
+    )
+
+
 # ---------------------------------------------------------------------------
 # Inline HTML: admin page
 # ---------------------------------------------------------------------------
@@ -2696,6 +3012,52 @@ def _settings_html(username: str, role: str) -> str:
     </div>
     <p id="saveMsg" class="settings-footer"></p>
   </div>
+
+  <div class="card" style="margin-top:1.5rem">
+    <h2>Portfolio sharing</h2>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem">
+      Create public links to share your portfolio performance. Shared links show percentage returns only — no absolute amounts.
+    </p>
+
+    <div id="sharesList" style="margin-bottom:1rem"></div>
+
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:end;margin-bottom:0.75rem">
+      <div>
+        <label>Label (optional)</label>
+        <input type="text" id="shareLabel" placeholder="e.g. My 2025 portfolio" style="width:200px">
+      </div>
+      <div>
+        <label>Scope</label>
+        <select id="shareScope" style="width:auto">
+          <option value="all">All assets</option>
+          <option value="stock">Stocks</option>
+          <option value="cfd">CFDs</option>
+          <option value="crypto">Crypto</option>
+          <option value="savings">Savings</option>
+        </select>
+      </div>
+      <div>
+        <label>Expires</label>
+        <select id="shareExpiry" style="width:auto">
+          <option value="">Never</option>
+          <option value="24">24 hours</option>
+          <option value="168">7 days</option>
+          <option value="720">30 days</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem">
+      <label class="toggle-switch" style="margin:0">
+        <input type="checkbox" id="shareHoldings">
+        <span class="toggle-slider"></span>
+      </label>
+      <span style="font-size:0.85rem">Include current holdings</span>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" id="createShareBtn">Create share link</button>
+    </div>
+    <p id="shareMsg" class="settings-footer"></p>
+  </div>
 </div>
 
 {_COMMON_JS}
@@ -2746,6 +3108,78 @@ document.getElementById('saveBtn').addEventListener('click', async () => {{
   btn.textContent = 'Save preferences';
   setTimeout(() => {{ msg.textContent = ''; }}, 4000);
 }});
+
+// --- Sharing ---
+async function loadShares() {{
+  const list = document.getElementById('sharesList');
+  try {{
+    const resp = await fetch('/api/shares');
+    const shares = await resp.json();
+    if (!shares.length) {{
+      list.innerHTML = '<p style="font-size:0.82rem;color:var(--muted)">No active share links.</p>';
+      return;
+    }}
+    list.innerHTML = shares.map(s => `
+      <div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:0.85rem;font-weight:500">${{s.label || 'Untitled'}}</div>
+          <div style="font-size:0.75rem;color:var(--muted)">${{s.scope}} &bull; ${{s.access_count}} views${{s.expires_at ? ' &bull; expires ' + new Date(s.expires_at).toLocaleDateString() : ''}}</div>
+        </div>
+        <button class="btn btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.6rem"
+          onclick="navigator.clipboard.writeText('${{s.url}}');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy link',1500)">Copy link</button>
+        <button class="btn" style="font-size:0.75rem;padding:0.3rem 0.6rem;color:var(--red)"
+          onclick="deleteShare(${{s.id}})">Revoke</button>
+      </div>
+    `).join('');
+  }} catch(e) {{
+    list.innerHTML = '<p style="color:var(--red);font-size:0.82rem">Failed to load shares.</p>';
+  }}
+}}
+loadShares();
+
+document.getElementById('createShareBtn').addEventListener('click', async () => {{
+  const btn = document.getElementById('createShareBtn');
+  const msg = document.getElementById('shareMsg');
+  btn.disabled = true;
+  btn.textContent = 'Creating...';
+  const payload = {{
+    label: document.getElementById('shareLabel').value || null,
+    scope: document.getElementById('shareScope').value,
+    percentage_only: true,
+    include_holdings: document.getElementById('shareHoldings').checked,
+    expires_hours: parseInt(document.getElementById('shareExpiry').value) || null,
+  }};
+  try {{
+    const resp = await fetch('/api/shares', {{
+      method: 'POST',
+      headers: {{'Content-Type': 'application/json'}},
+      body: JSON.stringify(payload),
+    }});
+    const data = await resp.json();
+    if (data.url) {{
+      navigator.clipboard.writeText(data.url);
+      msg.style.color = 'var(--green)';
+      msg.textContent = 'Share link created and copied to clipboard!';
+      document.getElementById('shareLabel').value = '';
+      loadShares();
+    }} else {{
+      msg.style.color = 'var(--red)';
+      msg.textContent = data.error || 'Failed to create share.';
+    }}
+  }} catch(e) {{
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Network error: ' + e.message;
+  }}
+  btn.disabled = false;
+  btn.textContent = 'Create share link';
+  setTimeout(() => {{ msg.textContent = ''; }}, 4000);
+}});
+
+async function deleteShare(id) {{
+  if (!confirm('Revoke this share link? Anyone with the link will lose access.')) return;
+  await fetch(`/api/shares/${{id}}/delete`, {{ method: 'POST' }});
+  loadShares();
+}}
 </script>
 {_global_drop_import_html()}
 </body>

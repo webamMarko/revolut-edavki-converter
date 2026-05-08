@@ -897,6 +897,37 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
     data["investment_notes"] = investment_notes or []
     data["dividends"] = _query_dividend_data(conn)
 
+    # Dividend calendar & income forecast
+    try:
+        from .dividend_forecast import build_dividend_forecast
+        forecast = build_dividend_forecast(conn, prices_conn=_pconn)
+        if forecast:
+            data["dividend_calendar"] = {
+                "upcoming": [
+                    {
+                        "ticker": e.ticker,
+                        "ex_date": e.ex_date,
+                        "amount_per_share": e.amount_per_share,
+                        "currency": e.currency,
+                        "shares_held": round(e.shares_held, 4),
+                        "projected_income_eur": e.projected_income_eur,
+                        "frequency": e.frequency,
+                        "is_projected": e.is_projected,
+                    }
+                    for e in forecast.upcoming_events
+                ],
+                "projected_annual_income_eur": forecast.projected_annual_income_eur,
+                "projected_monthly_income_eur": forecast.projected_monthly_income_eur,
+                "monthly_breakdown": forecast.monthly_breakdown,
+                "by_ticker": forecast.by_ticker,
+                "yield_on_cost": forecast.yield_on_cost,
+                "dividend_changes": forecast.dividend_changes,
+            }
+        else:
+            data["dividend_calendar"] = None
+    except Exception:
+        data["dividend_calendar"] = None
+
     # Dividend tax summary (Doh-Div) per year
     if conn is not None:
         try:
@@ -971,13 +1002,26 @@ def generate_html_report(analytics, tax_by_year, transactions: list[dict],
                          investment_notes: list[dict] | None = None,
                          conn: sqlite3.Connection | None = None,
                          country: str = "SI",
-                         prices_conn: sqlite3.Connection | None = None) -> str:
+                         prices_conn: sqlite3.Connection | None = None,
+                         shared_mode: bool = False,
+                         percentage_only: bool = False,
+                         include_holdings: bool = True) -> str:
     """Generate a self-contained HTML report."""
     data = _serialize_report_data(analytics, tax_by_year, transactions, per_class=per_class,
                                   available_classes=available_classes,
                                   real_estate=real_estate, fire_config=fire_config,
                                   investment_notes=investment_notes, conn=conn,
                                   country=country, prices_conn=prices_conn)
+
+    if shared_mode:
+        data["tax_by_year"] = {}
+        data["investment_notes"] = []
+        data["fire_config"] = None
+        if not include_holdings:
+            data["positions"] = []
+            data["transactions"] = []
+        if percentage_only:
+            _strip_absolute_amounts(data)
 
     template = _env.get_template("report.html.j2")
     return template.render(
@@ -987,5 +1031,34 @@ def generate_html_report(analytics, tax_by_year, transactions: list[dict],
         generated_at=html.escape(data["generated_at"]),
         data_json=json.dumps(data, separators=(",", ":")),
     )
+
+
+def _strip_absolute_amounts(data: dict):
+    """Remove absolute EUR values from report data, keeping only percentages."""
+    for key in ("portfolio_value", "total_invested", "total_dividends",
+                "total_fees", "unrealized_gain", "realized_gain"):
+        if key in data:
+            data[key] = None
+
+    if "daily_series" in data and data["daily_series"]:
+        series = data["daily_series"]
+        if series.get("values") and len(series["values"]) > 0:
+            base = series["values"][0] or 1
+            series["values"] = [
+                round((v / base - 1) * 100, 4) if v and base else 0
+                for v in series["values"]
+            ]
+            series["percentage_mode"] = True
+        if "invested" in series:
+            series["invested"] = None
+        if "dividends_cumulative" in series:
+            series["dividends_cumulative"] = None
+
+    if "positions" in data:
+        for pos in data.get("positions", []):
+            for key in ("market_value", "cost_basis", "total_invested",
+                        "unrealized_gain", "realized_gain", "dividends"):
+                if key in pos:
+                    pos[key] = None
 
 
