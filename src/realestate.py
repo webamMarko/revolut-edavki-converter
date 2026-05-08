@@ -351,12 +351,15 @@ def set_manual_valuation(conn: sqlite3.Connection, ticker: str, value_eur: float
 # ETN price sync (called from price_fetcher.sync_all)
 # ---------------------------------------------------------------------------
 
-def sync_etn_valuations(conn: sqlite3.Connection, verbose: bool = False):
+def sync_etn_valuations(conn: sqlite3.Connection, verbose: bool = False,
+                        prices_conn: sqlite3.Connection | None = None):
     """Estimate market value for all properties: backfill year-by-year + update today."""
     properties = conn.execute("SELECT * FROM real_estate_properties").fetchall()
     if not properties:
         print("Real estate: no properties in database.")
         return
+
+    target = prices_conn if prices_conn is not None else conn
 
     today = datetime.now().strftime("%Y-%m-%d")
     current_year = datetime.now().year
@@ -368,7 +371,7 @@ def sync_etn_valuations(conn: sqlite3.Connection, verbose: bool = False):
         purchase_year = int(prop["purchase_date"][:4])
 
         # Find which years already have a price stored
-        existing_dates = {r[0] for r in conn.execute(
+        existing_dates = {r[0] for r in target.execute(
             "SELECT date FROM daily_prices WHERE ticker = ? AND currency = 'EUR'", (ticker,)
         ).fetchall()}
         existing_years = {d[:4] for d in existing_dates}
@@ -395,7 +398,7 @@ def sync_etn_valuations(conn: sqlite3.Connection, verbose: bool = False):
             )
             if value is not None:
                 price_date = f"{year}-12-31"
-                conn.execute(
+                target.execute(
                     "INSERT OR REPLACE INTO daily_prices (ticker, date, close, currency) VALUES (?, ?, ?, 'EUR')",
                     (ticker, price_date, value),
                 )
@@ -413,7 +416,7 @@ def sync_etn_valuations(conn: sqlite3.Connection, verbose: bool = False):
             prop["municipality"], prop["property_type"], prop["area_m2"], verbose=verbose
         )
         if value is not None:
-            conn.execute(
+            target.execute(
                 "INSERT OR REPLACE INTO daily_prices (ticker, date, close, currency) VALUES (?, ?, ?, 'EUR')",
                 (ticker, today, value),
             )
@@ -430,7 +433,7 @@ def sync_etn_valuations(conn: sqlite3.Connection, verbose: bool = False):
         if prop_updated:
             updated += 1
 
-    conn.commit()
+    target.commit()
     print(f"Real estate: {updated} properties updated, {len(failed)} failed")
     if failed:
         print(f"  No current data: {', '.join(failed)}")

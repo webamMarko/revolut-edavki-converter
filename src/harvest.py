@@ -79,6 +79,7 @@ def compute_harvest_suggestions(
     year: int,
     scope: str = "all",
     country: str = DEFAULT_REGIME,
+    prices_conn: sqlite3.Connection | None = None,
 ) -> HarvestReport:
     """Compute ranked tax-loss harvesting suggestions.
 
@@ -88,10 +89,19 @@ def compute_harvest_suggestions(
     - Net benefit ranking considering how much loss offsets actual realized gains
     - Wash-sale risk detection (30-day buy window)
     """
+    # Resolve shared prices DB for price/FX lookups
+    _pconn_owned = False
+    if prices_conn is None:
+        from .prices_db import get_prices_conn_or_none
+        prices_conn = get_prices_conn_or_none()
+        _pconn_owned = prices_conn is not None
+    _pconn = prices_conn if prices_conn is not None else conn
+
     regime = get_regime(country)
 
     tax_report = compute_tax_report(
-        conn, year=year, include_unrealized=False, scope=scope, country=country
+        conn, year=year, include_unrealized=False, scope=scope, country=country,
+        prices_conn=prices_conn
     )
 
     total_realized_gain = tax_report.total_realized_gain_eur
@@ -192,7 +202,7 @@ def compute_harvest_suggestions(
                 ]
 
     # Get current prices for all held tickers
-    fx_row = conn.execute(
+    fx_row = _pconn.execute(
         "SELECT eur_usd FROM fx_rates ORDER BY date DESC LIMIT 1"
     ).fetchone()
     fx_rate = fx_row[0] if fx_row else 1.10
@@ -206,7 +216,7 @@ def compute_harvest_suggestions(
         if not lots:
             continue
 
-        row = conn.execute(
+        row = _pconn.execute(
             "SELECT close, currency FROM daily_prices WHERE ticker = ? ORDER BY date DESC LIMIT 1",
             (ticker,)
         ).fetchone()
@@ -325,7 +335,7 @@ def compute_harvest_suggestions(
     total_offsetable = sum(s.net_benefit_eur for s in suggestions)
     wash_count = sum(1 for s in suggestions if s.wash_sale_risk)
 
-    return HarvestReport(
+    result = HarvestReport(
         year=year,
         country=country,
         scope=scope,
@@ -337,3 +347,6 @@ def compute_harvest_suggestions(
         total_offsetable_eur=round(total_offsetable, 2),
         wash_sale_warning_count=wash_count,
     )
+    if _pconn_owned:
+        prices_conn.close()
+    return result

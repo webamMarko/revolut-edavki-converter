@@ -77,11 +77,13 @@ class AnalyticsResult:
     scope: str
 
 
-def _get_fx_rate(fx_cache: dict, date_str: str, conn: sqlite3.Connection) -> float:
+def _get_fx_rate(fx_cache: dict, date_str: str, conn: sqlite3.Connection,
+                 prices_conn: sqlite3.Connection | None = None) -> float:
     """Get EUR/USD rate for a date, with forward-fill from cache."""
     if date_str in fx_cache:
         return fx_cache[date_str]
-    row = conn.execute(
+    source = prices_conn if prices_conn is not None else conn
+    row = source.execute(
         "SELECT eur_usd FROM fx_rates WHERE date <= ? ORDER BY date DESC LIMIT 1",
         (date_str,)
     ).fetchone()
@@ -90,12 +92,14 @@ def _get_fx_rate(fx_cache: dict, date_str: str, conn: sqlite3.Connection) -> flo
     return rate
 
 
-def _get_price(price_cache: dict, ticker: str, date_str: str, conn: sqlite3.Connection) -> float | None:
+def _get_price(price_cache: dict, ticker: str, date_str: str, conn: sqlite3.Connection,
+               prices_conn: sqlite3.Connection | None = None) -> float | None:
     """Get closing price for a ticker on a date, with forward-fill."""
     key = (ticker, date_str)
     if key in price_cache:
         return price_cache[key]
-    row = conn.execute(
+    source = prices_conn if prices_conn is not None else conn
+    row = source.execute(
         "SELECT close, currency FROM daily_prices WHERE ticker = ? AND date <= ? ORDER BY date DESC LIMIT 1",
         (ticker, date_str)
     ).fetchone()
@@ -167,7 +171,8 @@ def _compute_price_adjustments(conn: sqlite3.Connection, transactions: list[dict
 def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                       start_date: datetime | None = None,
                       end_date: datetime | None = None,
-                      scope: str = "all") -> AnalyticsResult:
+                      scope: str = "all",
+                      prices_conn: sqlite3.Connection | None = None) -> AnalyticsResult:
     """Compute full portfolio analytics.
 
     Holdings are tracked in ORIGINAL CSV quantities (not split-adjusted).
@@ -175,8 +180,40 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     the last known CSV trade price to yfinance's price on that date, then apply
     that factor to all yfinance prices for that ticker until the next trade.
 
+    conn: user portfolio DB (transactions, metadata).
+    prices_conn: shared prices DB (daily_prices, fx_rates). Falls back to conn.
     scope: 'stock', 'cfd', or 'all'
     """
+    # Auto-open shared prices DB if not provided (backward-compatible fallback)
+    _prices_conn_owned = False
+    if prices_conn is None:
+        try:
+            from .prices_db import get_prices_connection
+            prices_conn = get_prices_connection()
+            _prices_conn_owned = True
+            # Verify it has data; if empty, fall back to user DB
+            has_prices = prices_conn.execute(
+                "SELECT COUNT(*) FROM daily_prices"
+            ).fetchone()[0]
+            if not has_prices:
+                prices_conn.close()
+                prices_conn = None
+                _prices_conn_owned = False
+        except Exception:
+            prices_conn = None
+            _prices_conn_owned = False
+
+    try:
+        return _compute_analytics_inner(conn, year, start_date, end_date, scope, prices_conn)
+    finally:
+        if _prices_conn_owned and prices_conn is not None:
+            prices_conn.close()
+
+
+def _compute_analytics_inner(conn: sqlite3.Connection, year: int | None,
+                             start_date: datetime | None, end_date: datetime | None,
+                             scope: str, prices_conn: sqlite3.Connection | None) -> AnalyticsResult:
+    """Inner implementation of compute_analytics (after prices_conn resolution)."""
     transactions = _build_holdings_timeline(conn, scope=scope)
     if not transactions:
         raise ValueError("No transactions in database. Run 'import' first.")
@@ -262,7 +299,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
 
             # If fx_rate is 1.0 but currency is not EUR, look up actual FX rate
             if fx == 1.0 and currency != "EUR" and amount > 0:
-                db_fx = _get_fx_rate(fx_cache, date_str, conn)
+                db_fx = _get_fx_rate(fx_cache, date_str, conn, prices_conn)
                 if db_fx > 0:
                     fx = db_fx
 
@@ -360,7 +397,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
 
                 # Update price correction factor
                 if pps > 0:
-                    yf_data = _get_price(price_cache, ticker, date_str, conn)
+                    yf_data = _get_price(price_cache, ticker, date_str, conn, prices_conn)
                     if yf_data and yf_data[0] > 0:
                         price_correction[ticker] = pps / yf_data[0]
 
@@ -503,7 +540,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
 
                 # Update price correction factor
                 if pps > 0:
-                    yf_data = _get_price(price_cache, ticker, date_str, conn)
+                    yf_data = _get_price(price_cache, ticker, date_str, conn, prices_conn)
                     if yf_data and yf_data[0] > 0:
                         price_correction[ticker] = pps / yf_data[0]
 
@@ -609,7 +646,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
 
         # Compute portfolio value for this date
         portfolio_value = 0.0
-        fx_rate = _get_fx_rate(fx_cache, date_str, conn)
+        fx_rate = _get_fx_rate(fx_cache, date_str, conn, prices_conn)
 
         # Include uninvested stock cash (from CASH TOP-UP not yet deployed)
         if stock_cash > 0:
@@ -651,7 +688,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
 
             if qty <= 1e-10:
                 continue
-            price_data = _get_price(price_cache, ticker, date_str, conn)
+            price_data = _get_price(price_cache, ticker, date_str, conn, prices_conn)
             if price_data:
                 yf_close, currency = price_data
                 correction = price_correction.get(ticker, 1.0)
@@ -773,7 +810,8 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             if qty < 0:
                 continue
             val_per_share = _get_current_value_eur(
-                ticker, period_end if period_end <= today else today, conn, fx_cache, price_cache
+                ticker, period_end if period_end <= today else today, conn, fx_cache, price_cache,
+                prices_conn=prices_conn
             )
             # Fallback for bonds/ISINs with no yfinance prices
             if val_per_share == 0 and ticker in last_known_price_eur:
@@ -808,7 +846,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                 continue
             val_per_share = _get_current_value_eur(
                 ticker, period_end if period_end <= today else today, conn, fx_cache, price_cache,
-                per_share=True
+                per_share=True, prices_conn=prices_conn
             )
             # Fallback for bonds/ISINs with no yfinance prices
             if val_per_share == 0 and ticker in last_known_price_eur:
@@ -853,7 +891,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
     if is_cfd or is_savings or is_realestate:
         benchmarks, benchmark_series = [], {}
     else:
-        benchmarks, benchmark_series = _compute_benchmarks(conn, daily_df, period_start, period_end, fx_cache, price_cache)
+        benchmarks, benchmark_series = _compute_benchmarks(conn, daily_df, period_start, period_end, fx_cache, price_cache, prices_conn)
 
     return AnalyticsResult(
         portfolio_value_eur=current_value,
@@ -884,13 +922,14 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
 
 def _get_current_value_eur(ticker: str, date_str: str, conn: sqlite3.Connection,
                            fx_cache: dict, price_cache: dict,
-                           per_share: bool = False) -> float:
+                           per_share: bool = False,
+                           prices_conn: sqlite3.Connection | None = None) -> float:
     """Get a ticker's current value in EUR (total or per-share)."""
-    price_data = _get_price(price_cache, ticker, date_str, conn)
+    price_data = _get_price(price_cache, ticker, date_str, conn, prices_conn)
     if not price_data:
         return 0.0
     close, currency = price_data
-    fx_rate = _get_fx_rate(fx_cache, date_str, conn)
+    fx_rate = _get_fx_rate(fx_cache, date_str, conn, prices_conn)
     if currency == "EUR":
         return close
     return close / fx_rate
@@ -1030,9 +1069,12 @@ def _compute_twr(daily_df: pd.DataFrame, cash_flows: list, period_start: str) ->
 
 def _compute_benchmarks(conn: sqlite3.Connection, daily_df: pd.DataFrame,
                         period_start: str, period_end: str,
-                        fx_cache: dict, price_cache: dict) -> tuple[list[BenchmarkComparison], dict]:
+                        fx_cache: dict, price_cache: dict,
+                        prices_conn: sqlite3.Connection | None = None) -> tuple[list[BenchmarkComparison], dict]:
     """Compare portfolio to benchmark indexes. Returns (comparisons, daily_series_dict)."""
     from .price_fetcher import BENCHMARKS
+
+    source = prices_conn if prices_conn is not None else conn
 
     portfolio_values = daily_df["value_eur"]
     if len(portfolio_values) < 2:
@@ -1051,7 +1093,7 @@ def _compute_benchmarks(conn: sqlite3.Connection, daily_df: pd.DataFrame,
 
     for ticker, name in BENCHMARKS.items():
         # Get full daily series for this benchmark
-        rows = conn.execute(
+        rows = source.execute(
             "SELECT date, close FROM daily_prices WHERE ticker = ? AND date >= ? AND date <= ? ORDER BY date",
             (ticker, period_start, period_end)
         ).fetchall()

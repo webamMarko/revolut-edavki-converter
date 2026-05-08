@@ -8,7 +8,7 @@ from pathlib import Path
 DB_DIR = Path.home() / ".revolut-edavki"
 DB_PATH = DB_DIR / "portfolio.db"
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS transactions (
@@ -199,6 +199,20 @@ def _init_schema(conn: sqlite3.Connection):
                 data_hash   TEXT NOT NULL,
                 result_json TEXT NOT NULL,
                 created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+        """)
+
+    if current_version < 7:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS cached_tax_reports (
+                year        INTEGER NOT NULL,
+                scope       TEXT NOT NULL,
+                country     TEXT NOT NULL DEFAULT 'SI',
+                data_hash   TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                is_immutable INTEGER NOT NULL DEFAULT 0,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (year, scope, country)
             );
         """)
 

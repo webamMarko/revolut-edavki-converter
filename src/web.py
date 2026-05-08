@@ -565,12 +565,16 @@ class UploadHandler(BaseHTTPRequestHandler):
         from .price_fetcher import sync_all
         from .prices_db import get_prices_connection
         from .analytics_cache import invalidate_cache
+        from .tax_cache import invalidate_current_year_tax
+        from .report_cache import invalidate_user_html
 
         conn = get_connection(db_path=_user_db_path(session["username"]))
         prices_conn = get_prices_connection()
         try:
             sync_all(conn, verbose=self.verbose, prices_conn=prices_conn)
             invalidate_cache(conn)
+            invalidate_current_year_tax(conn)
+            invalidate_user_html(session["username"])
             self._json_response({"ok": True})
         except Exception as e:
             self._json_response({"error": str(e)}, status=500)
@@ -586,7 +590,9 @@ class UploadHandler(BaseHTTPRequestHandler):
         session = _get_session(self)
         from .analytics import compute_analytics
         from .analytics_cache import compute_data_hash, get_cached, put_cache
+        from .report_cache import get_cached_html, put_cached_html
         from .tax import compute_tax_report
+        from .tax_cache import get_cached_tax, put_tax_cache
         from .html_report import (generate_html_report, query_transactions,
                                    query_real_estate, query_fire_config,
                                    query_investment_notes)
@@ -597,9 +603,27 @@ class UploadHandler(BaseHTTPRequestHandler):
         qs = parse_qs(urlparse(self.path).query)
         country = qs.get("country", ["SI"])[0].upper()
 
+        username = session["username"] if session else "_demo"
         conn = _portfolio_conn(session)
         try:
             data_hash = compute_data_hash(conn)
+            etag = f'"{data_hash}"'
+
+            if_none_match = self.headers.get("If-None-Match", "")
+            if if_none_match == etag:
+                self.send_response(304)
+                self.send_header("ETag", etag)
+                self.end_headers()
+                return
+
+            cached_html = get_cached_html(username, data_hash)
+            if cached_html is not None:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("ETag", etag)
+                self.end_headers()
+                self.wfile.write(cached_html.encode("utf-8"))
+                return
 
             def _cached_analytics(scope):
                 cached = get_cached(conn, scope, data_hash)
@@ -612,6 +636,7 @@ class UploadHandler(BaseHTTPRequestHandler):
             analytics = _cached_analytics("all")
             tax_by_year = {}
             try:
+                current_year = datetime.now().year
                 years_with_tx = [
                     int(r[0]) for r in conn.execute(
                         "SELECT DISTINCT strftime('%Y', date) FROM transactions "
@@ -620,8 +645,14 @@ class UploadHandler(BaseHTTPRequestHandler):
                 ]
                 for yr in years_with_tx:
                     try:
-                        tax_by_year[yr] = compute_tax_report(conn, year=yr, include_unrealized=False,
-                                                              scope="all", country=country)
+                        cached = get_cached_tax(conn, yr, "all", country, data_hash)
+                        if cached is not None:
+                            tax_by_year[yr] = cached
+                        else:
+                            report = compute_tax_report(conn, year=yr, include_unrealized=False,
+                                                       scope="all", country=country)
+                            put_tax_cache(conn, yr, "all", country, data_hash, report, current_year)
+                            tax_by_year[yr] = report
                     except Exception:
                         pass
             except Exception:
@@ -638,8 +669,6 @@ class UploadHandler(BaseHTTPRequestHandler):
                                         investment_notes=notes, conn=conn,
                                         country=country)
             # Inject current user into D so client JS can gate the edit UI.
-            # The report template emits:  <script>const D={...};</script>
-            # We append D.user right after the D assignment closes.
             user_payload = json.dumps({
                 "id": session["user_id"],
                 "username": session["username"],
@@ -654,8 +683,12 @@ class UploadHandler(BaseHTTPRequestHandler):
             d_script_end = html.find(";</script>", html.find("<script>const D="))
             if d_script_end != -1:
                 html = html[:d_script_end] + f";D.user={user_payload}" + html[d_script_end:]
+
+            put_cached_html(username, data_hash, html)
+
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("ETag", etag)
             self.end_headers()
             self.wfile.write(html.encode("utf-8"))
         except ValueError as e:
@@ -1368,6 +1401,8 @@ class UploadHandler(BaseHTTPRequestHandler):
 
         from .importer import import_csv_mapped
         from .analytics_cache import invalidate_cache
+        from .tax_cache import invalidate_current_year_tax
+        from .report_cache import invalidate_user_html
         conn = _portfolio_conn(session)
         try:
             result = import_csv_mapped(
@@ -1379,6 +1414,8 @@ class UploadHandler(BaseHTTPRequestHandler):
                 verbose=self.verbose,
             )
             invalidate_cache(conn)
+            invalidate_current_year_tax(conn)
+            invalidate_user_html(session["username"])
         except Exception as e:
             conn.close()
             self._json_response({"error": str(e)}, status=500)

@@ -182,3 +182,156 @@
 
   runSimulation();
 })();
+
+// --- FIRE section on Projections page ---
+var _fireChart = null;
+function updateFire() {
+  var fireSection = document.getElementById('fireSection');
+  if (!fireSection || D.fire == null) return;
+
+  var s = getActiveSummary();
+  if (!s || s.portfolio_value_eur == null) { fireSection.style.display = 'none'; return; }
+
+  fireSection.style.display = '';
+
+  var expensesInput = document.getElementById('projFireExpenses');
+  var incomeInput = document.getElementById('projFireIncome');
+  var withdrawalInput = document.getElementById('projFireWithdrawal');
+  var inflInput = document.getElementById('projFireInflation');
+  var contribInput = document.getElementById('projFireContrib');
+
+  var expenses = expensesInput ? parseFloat(expensesInput.value) || 0 : 0;
+  var income = incomeInput ? parseFloat(incomeInput.value) || 0 : 0;
+  var withdrawalRate = withdrawalInput ? parseFloat(withdrawalInput.value) || 4 : 4;
+  var infl = inflInput ? parseFloat(inflInput.value) || 0 : 3;
+  var monthlyContrib = contribInput ? parseFloat(contribInput.value) || 0 : 0;
+  var annualContrib = monthlyContrib * 12;
+
+  var gap = Math.max(expenses - income, 0);
+  var fireTarget = withdrawalRate > 0 ? Math.round(gap / (withdrawalRate / 100) * 100) / 100 : 0;
+  var portfolioVal = s.portfolio_value_eur;
+  var progress = fireTarget > 0 ? portfolioVal / fireTarget * 100 : 100;
+  var remaining = fireTarget - portfolioVal;
+
+  var yearsToFire = null;
+  var nominalCAGR = 0;
+  var realReturn = 0;
+  if (remaining > 0 && s.cagr_pct != null && s.cagr_pct > 0) {
+    nominalCAGR = s.cagr_pct / 100;
+    var inflation = infl / 100;
+    realReturn = (1 + nominalCAGR) / (1 + inflation) - 1;
+    if (realReturn > 0) {
+      yearsToFire = annualContrib > 0
+        ? yearsToFireWithContrib(portfolioVal, fireTarget, realReturn, annualContrib)
+        : Math.log(fireTarget / portfolioVal) / Math.log(1 + realReturn);
+    }
+  }
+
+  var fireYear = yearsToFire != null ? new Date().getFullYear() + Math.ceil(yearsToFire) : null;
+
+  var cards = [
+    [t('summary.fire_progress'), fmt(progress, 1) + '%', progress >= 100 ? 'pos' : ''],
+    ['Target', fmtCcy(fireTarget), ''],
+    ['Current Value', fmtCcy(portfolioVal), ''],
+    ['Remaining', remaining > 0 ? fmtCcy(remaining) : t('summary.fire_achieved'), remaining > 0 ? '' : 'pos'],
+  ];
+  if (yearsToFire != null) {
+    cards.push(['Est. Years', '~' + fmt(yearsToFire, 1), '']);
+    cards.push(['Est. Year', String(fireYear), '']);
+  }
+
+  document.getElementById('fireCards').innerHTML = cards.map(function(row) {
+    return '<div class="metric-card"><div class="label">' + row[0] + '</div><div class="value ' + (row[2] || '') + '">' + row[1] + '</div></div>';
+  }).join('');
+
+  // --- FIRE projection chart ---
+  if (_fireChart) { _fireChart.destroy(); _fireChart = null; }
+  var canvas = document.getElementById('fireChart');
+  if (!canvas) return;
+
+  var inflRate = infl / 100;
+  var horizon = Math.max(Math.ceil((yearsToFire || 10) * 1.2), 10);
+  horizon = Math.min(horizon, 50);
+  var currentYear = new Date().getFullYear();
+
+  var labels = [];
+  var projectedValues = [];
+  var targetLine = [];
+  var contribOnlyValues = [];
+  var val = portfolioVal;
+  var contribVal = portfolioVal;
+  var target = fireTarget;
+
+  for (var y = 0; y <= horizon; y++) {
+    labels.push(String(currentYear + y));
+    projectedValues.push(val);
+    targetLine.push(target);
+    contribOnlyValues.push(contribVal);
+
+    if (realReturn > 0) {
+      val = val * (1 + realReturn) + annualContrib;
+    } else {
+      val = val + annualContrib;
+    }
+    contribVal = contribVal + annualContrib;
+    target = target * (1 + inflRate);
+  }
+
+  _fireChart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { labels: labels, datasets: [
+      {
+        label: 'Projected (CAGR + contributions)',
+        data: projectedValues,
+        borderColor: '#6366f1',
+        backgroundColor: 'rgba(99,102,241,0.08)',
+        fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2.5,
+      },
+      {
+        label: 'Contributions only (no growth)',
+        data: contribOnlyValues,
+        borderColor: '#556075',
+        borderDash: [4, 4], borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0.3,
+      },
+      {
+        label: 'FIRE Target (inflation-adjusted)',
+        data: targetLine,
+        borderColor: '#f59e0b',
+        borderDash: [8, 4], borderWidth: 2, pointRadius: 0, fill: false,
+      },
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#556075', font: { size: 10 }, maxTicksLimit: 12 } },
+        y: {
+          title: { display: true, text: _currency },
+          ticks: { color: '#556075', font: { size: 10 }, callback: function(v) { return (v * _fx).toLocaleString(_locale); } },
+          grid: { color: 'rgba(30,42,58,0.5)' },
+        },
+      },
+      plugins: {
+        legend: { display: true, labels: { font: { size: 10 } } },
+        tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + fmtCcy(c.parsed.y); } } },
+      },
+    },
+  });
+}
+
+// Initialize FIRE section
+(function() {
+  if (!document.getElementById('fireSection') || D.fire == null) return;
+  var fire = D.fire;
+  var ids = ['projFireExpenses', 'projFireIncome', 'projFireWithdrawal', 'projFireInflation', 'projFireContrib'];
+  var defaults = [fire.annual_expenses || 0, fire.annual_income || 0, fire.withdrawal_rate || 4, fire.inflation_rate || 2.5, 0];
+  ids.forEach(function(id, i) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.value = defaults[i];
+      el.addEventListener('change', updateFire);
+      el.addEventListener('input', updateFire);
+    }
+  });
+  updateFire();
+})();

@@ -82,6 +82,7 @@ def cmd_import(args):
     from .db import get_connection
     from .importer import import_csv
     from .analytics_cache import invalidate_cache
+    from .tax_cache import invalidate_current_year_tax
 
     conn = get_connection()
     try:
@@ -91,6 +92,7 @@ def cmd_import(args):
             result = import_csv(conn, file_path, verbose=args.verbose)
             print(f"{file_path}: {result.new} new, {result.skipped} skipped (of {result.total} rows)")
         invalidate_cache(conn)
+        invalidate_current_year_tax(conn)
     finally:
         conn.close()
 
@@ -100,6 +102,7 @@ def cmd_sync(args):
     from .db import get_connection
     from .price_fetcher import sync_all
     from .analytics_cache import invalidate_cache
+    from .tax_cache import invalidate_current_year_tax
 
     if getattr(args, 'all_users', False):
         project_data = Path(__file__).resolve().parent.parent / "data"
@@ -120,6 +123,7 @@ def cmd_sync(args):
             try:
                 sync_all(conn, start_date=args.start_date, end_date=args.end_date, verbose=args.verbose)
                 invalidate_cache(conn)
+                invalidate_current_year_tax(conn)
                 synced += 1
             except Exception as e:
                 print(f"  Error syncing {user_dir.name}: {e}")
@@ -131,6 +135,7 @@ def cmd_sync(args):
         try:
             sync_all(conn, start_date=args.start_date, end_date=args.end_date, verbose=args.verbose)
             invalidate_cache(conn)
+            invalidate_current_year_tax(conn)
         finally:
             conn.close()
 

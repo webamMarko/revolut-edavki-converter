@@ -38,10 +38,6 @@ def query_real_estate(conn: sqlite3.Connection, prices_conn: sqlite3.Connection 
         p_dict["estimated_value_eur"] = val_row[0] if val_row else None
         p_dict["estimated_date"] = val_row[1] if val_row else None
         props.append(p_dict)
-    try:
-        pass  # props already fetched
-    except Exception:
-        return {}
 
     if not props:
         return {}
@@ -77,7 +73,7 @@ def query_real_estate(conn: sqlite3.Connection, prices_conn: sqlite3.Connection 
     tickers = [p["ticker"] for p in prop_list]
     history = {}
     for ticker in tickers:
-        rows = conn.execute(
+        rows = _pconn.execute(
             "SELECT date, close FROM daily_prices WHERE ticker = ? AND currency = 'EUR' ORDER BY date",
             (ticker,)
         ).fetchall()
@@ -227,14 +223,17 @@ def _query_dividend_data(conn: sqlite3.Connection | None) -> dict:
             "ttm_by_ticker": ttm_by_ticker}
 
 
-def _query_position_price_history(conn: sqlite3.Connection, tickers: list[str]) -> dict:
+def _query_position_price_history(conn: sqlite3.Connection, tickers: list[str],
+                                   prices_conn: sqlite3.Connection | None = None) -> dict:
     """Return daily EUR price history for each ticker (last 2 years)."""
     history = {}
     if not tickers or conn is None:
         return history
 
+    _pconn = prices_conn if prices_conn is not None else conn
+
     # Get EUR/USD rates for conversion
-    fx_rows = conn.execute(
+    fx_rows = _pconn.execute(
         "SELECT date, eur_usd FROM fx_rates ORDER BY date"
     ).fetchall()
     fx_map = {r[0]: r[1] for r in fx_rows}
@@ -257,7 +256,7 @@ def _query_position_price_history(conn: sqlite3.Connection, tickers: list[str]) 
                 db_ticker = ticker[len(prefix):]
                 break
 
-        rows = conn.execute(
+        rows = _pconn.execute(
             """SELECT date, close, currency FROM daily_prices
                WHERE ticker = ? ORDER BY date DESC LIMIT 730""",
             (db_ticker,)
@@ -300,10 +299,13 @@ def _query_company_names(conn: sqlite3.Connection | None, tickers: list[str]) ->
     return names
 
 
-def _query_currency_exposure(conn: sqlite3.Connection, positions: list) -> list[dict]:
+def _query_currency_exposure(conn: sqlite3.Connection, positions: list,
+                             prices_conn: sqlite3.Connection | None = None) -> list[dict]:
     """Determine native currency of each position and compute exposure breakdown."""
     if not conn or not positions:
         return []
+
+    _pconn = prices_conn if prices_conn is not None else conn
 
     # Get the most recent trade currency for each ticker
     ticker_currency = {}
@@ -324,7 +326,7 @@ def _query_currency_exposure(conn: sqlite3.Connection, positions: list) -> list[
             ticker_currency[ticker] = row[0]
         else:
             # Check daily_prices for currency
-            row = conn.execute(
+            row = _pconn.execute(
                 "SELECT currency FROM daily_prices WHERE ticker = ? LIMIT 1",
                 (db_ticker,)
             ).fetchone()
@@ -488,7 +490,8 @@ def _compute_concentration_risk(positions: list) -> dict:
 
 
 def _compute_correlation_matrix(conn: sqlite3.Connection | None,
-                                positions: list) -> dict | None:
+                                positions: list,
+                                prices_conn: sqlite3.Connection | None = None) -> dict | None:
     """Compute pairwise return correlation matrix for current holdings."""
     if not conn or not positions:
         return None
@@ -508,12 +511,14 @@ def _compute_correlation_matrix(conn: sqlite3.Connection | None,
     if len(tickers) < 2:
         return None
 
+    _pconn = prices_conn if prices_conn is not None else conn
+
     # Load daily prices (last 1 year) for each ticker
     from datetime import date as _date, timedelta as _td
     one_year_ago = (_date.today() - _td(days=365)).isoformat()
 
     # Load FX rates for USD→EUR conversion
-    fx_rows = conn.execute(
+    fx_rows = _pconn.execute(
         "SELECT date, eur_usd FROM fx_rates WHERE date >= ? ORDER BY date",
         (one_year_ago,)
     ).fetchall()
@@ -533,7 +538,7 @@ def _compute_correlation_matrix(conn: sqlite3.Connection | None,
             if ticker.startswith(prefix):
                 db_ticker = ticker[len(prefix):]
                 break
-        rows = conn.execute(
+        rows = _pconn.execute(
             "SELECT date, close, currency FROM daily_prices WHERE ticker = ? AND date >= ? ORDER BY date",
             (db_ticker, one_year_ago)
         ).fetchall()

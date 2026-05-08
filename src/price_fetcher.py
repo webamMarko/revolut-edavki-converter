@@ -77,7 +77,10 @@ def _fetch_with_fallback(revolut_ticker: str, start: str, end: str) -> tuple[str
 
 
 def mark_delisted(conn: sqlite3.Connection, ticker: str) -> None:
-    """Flag a ticker as delisted so sync will skip it."""
+    """Flag a ticker as delisted so sync will skip it.
+
+    Checks both the user DB (legacy) and prices DB.
+    """
     conn.execute(
         "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, 'true')",
         (f"delisted:{ticker}",),
@@ -91,17 +94,27 @@ def unmark_delisted(conn: sqlite3.Connection, ticker: str) -> None:
     conn.commit()
 
 
-def get_delisted(conn: sqlite3.Connection) -> list[str]:
-    """Return list of all tickers marked as delisted."""
+def get_delisted(conn: sqlite3.Connection, prices_conn: sqlite3.Connection | None = None) -> list[str]:
+    """Return list of all tickers marked as delisted (from user DB and shared prices DB)."""
     rows = conn.execute(
         "SELECT key FROM metadata WHERE key LIKE 'delisted:%'"
     ).fetchall()
-    return sorted(row[0][len("delisted:"):] for row in rows)
+    result = set(row[0][len("delisted:"):] for row in rows)
+    if prices_conn is not None:
+        try:
+            rows2 = prices_conn.execute(
+                "SELECT key FROM metadata WHERE key LIKE 'delisted:%'"
+            ).fetchall()
+            result.update(row[0][len("delisted:"):] for row in rows2)
+        except Exception:
+            pass
+    return sorted(result)
 
 
-def _last_price_date(conn: sqlite3.Connection, ticker: str) -> str | None:
-    """Get the last date we have a price for this ticker."""
-    row = conn.execute(
+def _last_price_date(conn: sqlite3.Connection, ticker: str, prices_conn: sqlite3.Connection | None = None) -> str | None:
+    """Get the last date we have a price for this ticker (prefers shared prices DB)."""
+    target = prices_conn if prices_conn is not None else conn
+    row = target.execute(
         "SELECT MAX(date) FROM daily_prices WHERE ticker = ?", (ticker,)
     ).fetchone()
     return row[0] if row and row[0] else None
@@ -132,8 +145,12 @@ def _store_fx_rates(conn: sqlite3.Connection, df: pd.DataFrame):
 
 
 def sync_stock_prices(conn: sqlite3.Connection, start_date: datetime | None = None,
-                      end_date: datetime | None = None, verbose: bool = False):
-    """Fetch prices for all tickers that appear in the transactions table."""
+                      end_date: datetime | None = None, verbose: bool = False,
+                      prices_conn: sqlite3.Connection | None = None):
+    """Fetch prices for all tickers that appear in the transactions table.
+
+    prices_conn: shared prices DB to write into (falls back to conn if None).
+    """
     tickers = [
         row[0] for row in
         conn.execute(
@@ -144,6 +161,8 @@ def sync_stock_prices(conn: sqlite3.Connection, start_date: datetime | None = No
     if not tickers:
         print("No tickers found in database. Import transactions first.")
         return
+
+    target = prices_conn if prices_conn is not None else conn
 
     if end_date is None:
         end_date = datetime.now()
@@ -156,7 +175,7 @@ def sync_stock_prices(conn: sqlite3.Connection, start_date: datetime | None = No
     fetched = 0
     failed = []
 
-    delisted = set(get_delisted(conn))
+    delisted = set(get_delisted(conn, prices_conn))
 
     for ticker in sorted(tickers):
         # Skip bond CUSIPs — yfinance can't look these up
@@ -171,7 +190,7 @@ def sync_stock_prices(conn: sqlite3.Connection, start_date: datetime | None = No
                 print(f"  Skipping delisted: {ticker}")
             continue
 
-        last = _last_price_date(conn, ticker)
+        last = _last_price_date(conn, ticker, prices_conn)
         fetch_start = last if last else start_date.strftime("%Y-%m-%d")
 
         if verbose:
@@ -194,7 +213,7 @@ def sync_stock_prices(conn: sqlite3.Connection, start_date: datetime | None = No
                 currency = "EUR"
             else:
                 currency = "USD"
-            _store_prices(conn, ticker, df, currency)
+            _store_prices(target, ticker, df, currency)
             fetched += 1
             if verbose:
                 print(f"    -> {len(df)} price records ({yf_ticker})")
@@ -203,15 +222,18 @@ def sync_stock_prices(conn: sqlite3.Connection, start_date: datetime | None = No
             if verbose:
                 print(f"    -> FAILED (tried {yf_ticker})")
 
-    conn.commit()
+    target.commit()
     print(f"Stock prices: {fetched} tickers updated, {len(failed)} failed")
     if failed:
         print(f"  Failed tickers: {', '.join(failed)}")
 
 
 def sync_benchmarks(conn: sqlite3.Connection, start_date: datetime | None = None,
-                    end_date: datetime | None = None, verbose: bool = False):
+                    end_date: datetime | None = None, verbose: bool = False,
+                    prices_conn: sqlite3.Connection | None = None):
     """Fetch benchmark index prices."""
+    target = prices_conn if prices_conn is not None else conn
+
     if end_date is None:
         end_date = datetime.now()
     end_str = (end_date + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -223,7 +245,7 @@ def sync_benchmarks(conn: sqlite3.Connection, start_date: datetime | None = None
     start_str = start_date.strftime("%Y-%m-%d")
 
     for ticker, name in BENCHMARKS.items():
-        last = _last_price_date(conn, ticker)
+        last = _last_price_date(conn, ticker, prices_conn)
         fetch_start = last if last else start_str
 
         if verbose:
@@ -232,20 +254,23 @@ def sync_benchmarks(conn: sqlite3.Connection, start_date: datetime | None = None
         df = _fetch_history(ticker, fetch_start, end_str)
         if df is not None and not df.empty:
             currency = "GBP" if ticker == "^FTSE" else "EUR" if ticker == "VWCE.DE" else "USD"
-            _store_prices(conn, ticker, df, currency)
+            _store_prices(target, ticker, df, currency)
             if verbose:
                 print(f"    -> {len(df)} records")
         else:
             if verbose:
                 print(f"    -> FAILED")
 
-    conn.commit()
+    target.commit()
     print("Benchmark indexes updated")
 
 
 def sync_fx_rates(conn: sqlite3.Connection, start_date: datetime | None = None,
-                  end_date: datetime | None = None, verbose: bool = False):
+                  end_date: datetime | None = None, verbose: bool = False,
+                  prices_conn: sqlite3.Connection | None = None):
     """Fetch EUR/USD exchange rates."""
+    target = prices_conn if prices_conn is not None else conn
+
     if end_date is None:
         end_date = datetime.now()
     end_str = (end_date + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -254,7 +279,7 @@ def sync_fx_rates(conn: sqlite3.Connection, start_date: datetime | None = None,
         row = conn.execute("SELECT MIN(date) FROM transactions").fetchone()
         start_date = datetime.fromisoformat(row[0][:10]) if row and row[0] else datetime(2019, 1, 1)
 
-    last = conn.execute("SELECT MAX(date) FROM fx_rates").fetchone()
+    last = target.execute("SELECT MAX(date) FROM fx_rates").fetchone()
     fetch_start = last[0] if last and last[0] else start_date.strftime("%Y-%m-%d")
 
     if verbose:
@@ -262,14 +287,14 @@ def sync_fx_rates(conn: sqlite3.Connection, start_date: datetime | None = None,
 
     df = _fetch_history(FX_TICKER, fetch_start, end_str)
     if df is not None and not df.empty:
-        _store_fx_rates(conn, df)
+        _store_fx_rates(target, df)
         if verbose:
             print(f"    -> {len(df)} records")
         print("FX rates updated")
     else:
         print("FX rates: no data fetched")
 
-    conn.commit()
+    target.commit()
 
 
 def sync_ticker_metadata(conn: sqlite3.Connection, verbose: bool = False):
@@ -341,16 +366,21 @@ def sync_ticker_metadata(conn: sqlite3.Connection, verbose: bool = False):
 
 
 def sync_all(conn: sqlite3.Connection, start_date: datetime | None = None,
-             end_date: datetime | None = None, verbose: bool = False):
-    """Run all syncs: stock prices, benchmarks, FX rates, real estate ETN valuations."""
+             end_date: datetime | None = None, verbose: bool = False,
+             prices_conn: sqlite3.Connection | None = None):
+    """Run all syncs: stock prices, benchmarks, FX rates, real estate ETN valuations.
+
+    conn: user portfolio DB (reads tickers from transactions).
+    prices_conn: shared system prices DB (writes prices/FX). Falls back to conn if None.
+    """
     print("Syncing stock prices...")
-    sync_stock_prices(conn, start_date, end_date, verbose)
+    sync_stock_prices(conn, start_date, end_date, verbose, prices_conn=prices_conn)
 
     print("\nSyncing benchmark indexes...")
-    sync_benchmarks(conn, start_date, end_date, verbose)
+    sync_benchmarks(conn, start_date, end_date, verbose, prices_conn=prices_conn)
 
     print("\nSyncing FX rates...")
-    sync_fx_rates(conn, start_date, end_date, verbose)
+    sync_fx_rates(conn, start_date, end_date, verbose, prices_conn=prices_conn)
 
     # Sync real estate valuations from ETN if any properties exist
     has_props = conn.execute(
@@ -359,14 +389,20 @@ def sync_all(conn: sqlite3.Connection, start_date: datetime | None = None,
     if has_props:
         from .realestate import sync_etn_valuations
         print("\nSyncing real estate ETN valuations...")
-        sync_etn_valuations(conn, verbose=verbose)
+        sync_etn_valuations(conn, verbose=verbose, prices_conn=prices_conn)
 
     # Fetch sector/industry metadata for stock tickers
     print("\nSyncing ticker metadata (sector/industry)...")
     sync_ticker_metadata(conn, verbose)
 
-    # Record sync time
-    conn.execute(
+    # Record sync time in both user DB and shared prices DB
+    target = prices_conn if prices_conn is not None else conn
+    target.execute(
         "INSERT OR REPLACE INTO metadata (key, value) VALUES ('last_price_sync', datetime('now'))"
     )
-    conn.commit()
+    target.commit()
+    if prices_conn is not None:
+        conn.execute(
+            "INSERT OR REPLACE INTO metadata (key, value) VALUES ('last_price_sync', datetime('now'))"
+        )
+        conn.commit()

@@ -127,12 +127,21 @@ class TaxReport:
 def compute_tax_report(conn: sqlite3.Connection, year: int,
                        include_unrealized: bool = False,
                        scope: str = "all",
-                       country: str = DEFAULT_REGIME) -> TaxReport:
+                       country: str = DEFAULT_REGIME,
+                       prices_conn: sqlite3.Connection | None = None) -> TaxReport:
     """Compute capital gains tax for a fiscal year using the specified country's regime.
 
     scope: 'stock', 'cfd', 'crypto', or 'all'
     country: ISO 3166-1 alpha-2 code (default: SI for Slovenia)
     """
+    # Resolve shared prices DB
+    _pconn_owned = False
+    if prices_conn is None:
+        from .prices_db import get_prices_conn_or_none
+        prices_conn = get_prices_conn_or_none()
+        _pconn_owned = prices_conn is not None
+    _pconn = prices_conn if prices_conn is not None else conn
+
     regime = get_regime(country)
     # Real estate (asset_class='realestate') is taxed under a separate Slovenian form
     # (Doh-Nepremičnine) and must not be included in this Doh-KDVP calculation.
@@ -528,7 +537,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                 continue
 
             # Get current price
-            row = conn.execute(
+            row = _pconn.execute(
                 "SELECT close, currency FROM daily_prices WHERE ticker = ? ORDER BY date DESC LIMIT 1",
                 (ticker,)
             ).fetchone()
@@ -538,7 +547,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
             close, currency = row[0], row[1]
 
             # Get FX rate
-            fx_row = conn.execute(
+            fx_row = _pconn.execute(
                 "SELECT eur_usd FROM fx_rates ORDER BY date DESC LIMIT 1"
             ).fetchone()
             fx_rate = fx_row[0] if fx_row else 1.10
@@ -585,7 +594,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
             continue
 
         # Get current price
-        row = conn.execute(
+        row = _pconn.execute(
             "SELECT close, currency FROM daily_prices WHERE ticker = ? ORDER BY date DESC LIMIT 1",
             (ticker,)
         ).fetchone()
@@ -593,7 +602,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
             continue
 
         close, currency = row[0], row[1]
-        fx_row = conn.execute(
+        fx_row = _pconn.execute(
             "SELECT eur_usd FROM fx_rates ORDER BY date DESC LIMIT 1"
         ).fetchone()
         fx_rate = fx_row[0] if fx_row else 1.10
@@ -663,7 +672,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
         if not (ac == "crypto" and crypto_exempt)
     )
 
-    return TaxReport(
+    result = TaxReport(
         year=year,
         realized_sales=realized_sales,
         total_realized_gain_eur=total_realized_gain,
@@ -679,3 +688,6 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
         country=country,
         harvest_candidates=harvest_candidates if harvest_candidates else None,
     )
+    if _pconn_owned:
+        prices_conn.close()
+    return result
