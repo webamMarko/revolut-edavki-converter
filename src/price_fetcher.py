@@ -137,6 +137,7 @@ def _store_fx_rates(conn: sqlite3.Connection, df: pd.DataFrame):
     rows = [
         (idx.strftime("%Y-%m-%d"), float(row["close"]))
         for idx, row in df.iterrows()
+        if 0.8 < float(row["close"]) < 2.0
     ]
     conn.executemany(
         "INSERT OR REPLACE INTO fx_rates (date, eur_usd) VALUES (?, ?)",
