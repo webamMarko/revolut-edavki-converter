@@ -1,0 +1,7 @@
+Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,C. Price,Proceeds,Comm/Fee,Basis,Realized P/L,MTM P/L,Code
+Trades,Data,Order,Stocks,USD,AAPL,2023-01-15 10:30:00,10,150.25,150.50,-1502.50,-1.00,1503.50,0,2.50,O
+Trades,Data,Order,Stocks,USD,AAPL,2023-06-20 14:15:00,-5,175.00,175.10,875.00,-1.00,-751.75,122.25,-0.50,C
+Trades,Data,Order,Stocks,USD,MSFT,2023-03-10 09:45:00,20,280.50,281.00,-5610.00,-1.50,5611.50,0,10.00,O
+Trades,Data,Order,Stocks,EUR,ASML,2023-04-05 11:00:00,3,620.00,621.50,-1860.00,-2.00,1862.00,0,4.50,O
+Trades,Data,Order,Stocks,EUR,ASML,2023-09-12 15:30:00,-3,680.00,679.50,2040.00,-2.00,-1862.00,176.00,-1.50,C
+Trades,Data,Order,Stocks,USD,NVDA,2023-07-01 10:00:00,15,420.75,421.00,-6311.25,-1.50,6312.75,0,3.75,O

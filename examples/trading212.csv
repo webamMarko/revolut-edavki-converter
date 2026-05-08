@@ -1,0 +1,8 @@
+Action,Time,ISIN,Ticker,Name,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result (EUR),Total (EUR),Charge amount (EUR),Notes,ID
+Market buy,2023-01-10 09:30:00,US0378331005,AAPL,Apple Inc,5,130.50,USD,0.92,,600.30,,,abc123
+Market buy,2023-02-15 10:45:00,US5949181045,MSFT,Microsoft Corp,10,265.00,USD,0.94,,2491.00,,,def456
+Market sell,2023-05-20 14:00:00,US0378331005,AAPL,Apple Inc,3,175.25,USD,0.91,45.67,478.93,,,ghi789
+Market buy,2023-03-01 11:00:00,NL0010273215,ASML,ASML Holding NV,2,615.00,EUR,1.00,,1230.00,,,jkl012
+Limit buy,2023-04-12 08:30:00,US67066G1040,NVDA,NVIDIA Corp,8,270.50,USD,0.93,,2012.52,,,mno345
+Market sell,2023-08-15 15:30:00,US5949181045,MSFT,Microsoft Corp,5,330.00,USD,0.92,307.50,1518.00,,,pqr678
+Dividend (Ordinary),2023-06-15 00:00:00,US0378331005,AAPL,Apple Inc,,,USD,0.91,,,4.56,,stu901

@@ -40,15 +40,28 @@ def _parse_amount(value) -> float | None:
 
 
 def _detect_asset_class(df: pd.DataFrame) -> str:
-    """Detect whether a file contains stock, CFD, crypto, savings, or Ilirika transactions.
+    """Detect whether a file contains stock, CFD, crypto, savings, Ilirika, IBKR,
+    Trading 212, or Degiro transactions from column headers.
 
-    Ilirika files have 'FinancialInstrument' and 'TransactionTypeName' columns.
-    CFD files have 'Symbol' and 'Margin' columns.
-    Crypto files have 'Symbol' and 'Value' columns but no 'Margin'.
-    Savings files have 'Description' column with fund class info (no 'Symbol'/'Ticker').
-    Stock files have a 'Ticker' column and 'Price per share'.
+    IBKR Activity Statement: first column is 'Trades' with 'Symbol' and 'DataDiscriminator'.
+    Trading 212: has 'Action', 'No. of shares', 'Price / share' columns.
+    Degiro: has 'Datum', 'Product', 'ISIN', 'Koers' columns.
+    Ilirika: has 'FinancialInstrument' and 'TransactionTypeName' columns.
+    CFD: has 'Symbol' and 'Margin' columns.
+    Crypto: has 'Symbol' and 'Value' columns but no 'Margin'.
+    Savings: has 'Description' column with fund class info (no 'Symbol'/'Ticker').
+    Stock: has a 'Ticker' column and 'Price per share'.
     """
     columns = set(df.columns)
+    # IBKR Activity Statement CSV has 'Trades' as first col and 'DataDiscriminator'
+    if "Trades" in columns and "DataDiscriminator" in columns:
+        return "ibkr"
+    # Trading 212 has 'Action' and 'No. of shares'
+    if "Action" in columns and "No. of shares" in columns and "Price / share" in columns:
+        return "trading212"
+    # Degiro has 'Datum', 'Product', 'ISIN', 'Koers'
+    if "Datum" in columns and "Product" in columns and "ISIN" in columns:
+        return "degiro"
     if "FinancialInstrument" in columns and "TransactionTypeName" in columns:
         return "ilirika"
     if "Symbol" in columns and "Margin" in columns:
@@ -483,6 +496,312 @@ def _parse_ilirika_row(row, split_deltas: dict | None = None) -> dict | None:
     }
 
 
+def _parse_ibkr_row(row) -> dict | None:
+    """Parse a row from Interactive Brokers Activity Statement CSV (Trades section).
+
+    IBKR exports a multi-section CSV where each row starts with a section name.
+    The Trades section has: Trades,Header/Data,DataDiscriminator,Asset Category,
+    Currency,Symbol,Date/Time,Quantity,T. Price,C. Price,Proceeds,Comm/Fee,Basis,...
+    """
+    # Only parse data rows (skip headers and totals)
+    discriminator = row.get("DataDiscriminator", "")
+    if pd.isna(discriminator) or str(discriminator) not in ("Order", "Trade"):
+        return None
+
+    # Only handle stocks/equity for now
+    asset_cat = row.get("Asset Category", "")
+    if pd.isna(asset_cat) or str(asset_cat) not in ("Stocks", "Equity"):
+        return None
+
+    date_str = row.get("Date/Time", "")
+    if pd.isna(date_str) or not date_str:
+        return None
+    # IBKR date format: "2023-01-15 10:30:00" or "2023-01-15, 10:30:00"
+    date = str(date_str).replace(",", "").strip()
+
+    symbol = row.get("Symbol", "")
+    if pd.isna(symbol) or not symbol:
+        return None
+    ticker = str(symbol).strip()
+
+    quantity_raw = row.get("Quantity")
+    if pd.isna(quantity_raw):
+        return None
+    quantity = float(quantity_raw)
+
+    # Positive quantity = buy, negative = sell
+    if quantity > 0:
+        tx_type = "BUY"
+    elif quantity < 0:
+        tx_type = "SELL"
+        quantity = abs(quantity)
+    else:
+        return None
+
+    price_raw = row.get("T. Price")
+    price = float(price_raw) if not pd.isna(price_raw) else None
+
+    total_amount = abs(float(row.get("Proceeds", 0))) if not pd.isna(row.get("Proceeds")) else None
+
+    currency = row.get("Currency", "USD")
+    if pd.isna(currency):
+        currency = "USD"
+
+    return {
+        "date": date,
+        "ticker": ticker,
+        "type": tx_type,
+        "quantity": quantity,
+        "price_per_share": price,
+        "total_amount": total_amount,
+        "currency": str(currency),
+        "fx_rate": 1.0,
+    }
+
+
+def _parse_trading212_row(row) -> dict | None:
+    """Parse a row from Trading 212 CSV export.
+
+    Columns: Action, Time, ISIN, Ticker, Name, No. of shares, Price / share,
+    Currency (Price / share), Exchange rate, Result (EUR), Total (EUR), ...
+    """
+    action = row.get("Action", "")
+    if pd.isna(action) or not action:
+        return None
+
+    action_str = str(action).strip()
+
+    # Map Trading 212 actions to standard types
+    action_lower = action_str.lower()
+    if "buy" in action_lower:
+        tx_type = "BUY"
+    elif "sell" in action_lower:
+        tx_type = "SELL"
+    elif "dividend" in action_lower:
+        tx_type = "DIVIDEND"
+    else:
+        return None
+
+    date_str = row.get("Time", "")
+    if pd.isna(date_str) or not date_str:
+        return None
+    date = str(date_str).strip()
+
+    ticker = row.get("Ticker", "")
+    if pd.isna(ticker) or not ticker:
+        return None
+    ticker = str(ticker).strip()
+
+    quantity = None
+    qty_raw = row.get("No. of shares")
+    if not pd.isna(qty_raw) and qty_raw != "":
+        quantity = float(qty_raw)
+
+    price = None
+    price_raw = row.get("Price / share")
+    if not pd.isna(price_raw) and price_raw != "":
+        price = float(price_raw)
+
+    currency = row.get("Currency (Price / share)", "USD")
+    if pd.isna(currency) or not currency:
+        currency = "USD"
+    currency = str(currency).strip()
+
+    # Trading 212 provides exchange rate (foreign to EUR)
+    fx_rate_raw = row.get("Exchange rate")
+    if not pd.isna(fx_rate_raw) and fx_rate_raw != "":
+        fx_rate = float(fx_rate_raw)
+    else:
+        fx_rate = 1.0
+
+    # Total in EUR is provided directly; for dividends use Charge amount
+    total_eur_raw = row.get("Total (EUR)")
+    charge_raw = row.get("Charge amount (EUR)")
+    if not pd.isna(total_eur_raw) and total_eur_raw != "":
+        total_amount = abs(float(total_eur_raw))
+    elif not pd.isna(charge_raw) and charge_raw != "":
+        total_amount = abs(float(charge_raw))
+    elif quantity and price:
+        total_amount = quantity * price
+    else:
+        total_amount = None
+
+    return {
+        "date": date,
+        "ticker": ticker,
+        "type": tx_type,
+        "quantity": quantity,
+        "price_per_share": price,
+        "total_amount": total_amount,
+        "currency": currency,
+        "fx_rate": fx_rate,
+    }
+
+
+_DEGIRO_EXCHANGE_SUFFIXES = {
+    "NASDAQ": "",
+    "NSY": "",
+    "NYSE": "",
+    "XNAS": "",
+    "XNYS": "",
+    "AEX": ".AS",
+    "XAMS": ".AS",
+    "XET": ".DE",
+    "XETR": ".DE",
+    "FRA": ".F",
+    "XFRA": ".F",
+    "MIL": ".MI",
+    "XMIL": ".MI",
+    "EPA": ".PA",
+    "XPAR": ".PA",
+    "LSE": ".L",
+    "XLSE": ".L",
+    "BME": ".MC",
+    "XMCE": ".MC",
+    "SWX": ".SW",
+    "XSWX": ".SW",
+}
+
+
+def _degiro_ticker(product: str, isin: str, exchange: str) -> str:
+    """Derive a yfinance-compatible ticker from Degiro product/ISIN/exchange.
+
+    Degiro CSVs have full product names but not ticker symbols. We use a
+    well-known ISIN->ticker map for common stocks, otherwise fall back to ISIN.
+    """
+    # Well-known ISIN -> ticker mappings (covers most popular retail holdings)
+    isin_map = {
+        "US0378331005": "AAPL",
+        "US5949181045": "MSFT",
+        "US0231351067": "AMZN",
+        "US02079K3059": "GOOGL",
+        "US30303M1027": "META",
+        "US67066G1040": "NVDA",
+        "US88160R1014": "TSLA",
+        "US4781601046": "JNJ",
+        "US92826C8394": "V",
+        "US7427181091": "PG",
+        "US46625H1005": "JPM",
+        "US0846707026": "BRK-B",
+        "US58933Y1055": "MRK",
+        "US00507V1098": "ABNB",
+        "US6541061031": "NKE",
+        "US2546871060": "DIS",
+        "US79466L3024": "CRM",
+        "US7170811035": "PFE",
+        "US4592001014": "IBM",
+        "US0970231058": "BA",
+        "US6516391066": "NFLX",
+        "US00724F1012": "ADBE",
+        "US7960508882": "SAP",
+        "NL0010273215": "ASML",
+        "IE00B4L5Y983": "IWDA.AS",
+        "IE00B3RBWM25": "VWRL.AS",
+        "IE00BK5BQT80": "VWCE.DE",
+        "DE0005933931": "EXW1.DE",
+    }
+
+    ticker = isin_map.get(isin)
+    if ticker:
+        return ticker
+
+    # For unknown ISINs, use ISIN as fallback (user can map manually via sync)
+    suffix = _DEGIRO_EXCHANGE_SUFFIXES.get(exchange, "")
+    return isin + suffix
+
+
+def _parse_degiro_row(row) -> dict | None:
+    """Parse a row from Degiro Account Statement CSV.
+
+    Columns: Datum, Tijd, Product, ISIN, Beurs, Uitvoeringsplaats, Aantal,
+    Koers, [currency], Lokale waarde, [currency], Waarde, [currency],
+    Wisselkoers, Transactiekosten en/of, [currency], Totaal, [currency], Order ID
+    """
+    date_str = row.get("Datum", "")
+    if pd.isna(date_str) or not date_str:
+        return None
+
+    # Degiro date format: DD-MM-YYYY
+    from datetime import datetime as dt
+    try:
+        date = dt.strptime(str(date_str).strip(), "%d-%m-%Y").strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+    time_str = row.get("Tijd", "")
+    if not pd.isna(time_str) and time_str:
+        date = f"{date} {str(time_str).strip()}:00"
+
+    product = row.get("Product", "")
+    if pd.isna(product) or not product:
+        return None
+
+    isin = row.get("ISIN", "")
+    if pd.isna(isin) or not isin:
+        return None
+
+    exchange = row.get("Beurs", "")
+    if pd.isna(exchange):
+        exchange = ""
+    exchange = str(exchange).strip()
+
+    ticker = _degiro_ticker(str(product), str(isin).strip(), exchange)
+
+    quantity_raw = row.get("Aantal")
+    if pd.isna(quantity_raw):
+        return None
+    quantity = float(quantity_raw)
+
+    # Positive quantity = buy, negative = sell
+    if quantity > 0:
+        tx_type = "BUY"
+    elif quantity < 0:
+        tx_type = "SELL"
+        quantity = abs(quantity)
+    else:
+        return None
+
+    price_raw = row.get("Koers")
+    price = float(price_raw) if not pd.isna(price_raw) else None
+
+    # Use 'Waarde' (EUR value) as total amount
+    waarde_raw = row.get("Waarde")
+    if not pd.isna(waarde_raw) and waarde_raw != "":
+        total_amount = abs(float(waarde_raw))
+    elif quantity and price:
+        total_amount = quantity * price
+    else:
+        total_amount = None
+
+    # Currency from exchange
+    eur_exchanges = {"AEX", "XET", "FRA", "MIL", "EPA", "BME", "XAMS", "XETR", "XFRA", "XMIL", "XPAR", "XMCE"}
+    if exchange in eur_exchanges:
+        currency = "EUR"
+    else:
+        currency = "USD"
+
+    # Wisselkoers is the FX rate applied
+    fx_raw = row.get("Wisselkoers")
+    if not pd.isna(fx_raw) and fx_raw != "" and fx_raw is not None:
+        try:
+            fx_rate = float(str(fx_raw).replace(",", "."))
+        except (ValueError, TypeError):
+            fx_rate = 1.0
+    else:
+        fx_rate = 1.0
+
+    return {
+        "date": date,
+        "ticker": ticker,
+        "type": tx_type,
+        "quantity": quantity,
+        "price_per_share": price,
+        "total_amount": total_amount,
+        "currency": currency,
+        "fx_rate": fx_rate,
+    }
+
+
 def _parse_stock_row(row) -> dict | None:
     """Parse a row from the stock CSV format into transaction fields."""
     date = row.get("Date") or row.get("Started Date", "")
@@ -712,8 +1031,8 @@ def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) 
         raise ValueError(f"Unsupported file format: {suffix}")
 
     asset_class = _detect_asset_class(df)
-    # Ilirika is stored as "stock" asset class
-    effective_asset_class = "stock" if asset_class == "ilirika" else asset_class
+    # External brokers and Ilirika are stored as "stock" asset class
+    effective_asset_class = "stock" if asset_class in ("ilirika", "ibkr", "trading212", "degiro") else asset_class
 
     if asset_class == "ilirika":
         split_deltas = _preprocess_ilirika_splits(df)
@@ -723,6 +1042,9 @@ def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) 
             "cfd": _parse_cfd_row,
             "crypto": _parse_crypto_row,
             "savings": _parse_savings_row,
+            "ibkr": _parse_ibkr_row,
+            "trading212": _parse_trading212_row,
+            "degiro": _parse_degiro_row,
         }.get(asset_class, _parse_stock_row)
 
     if verbose:
