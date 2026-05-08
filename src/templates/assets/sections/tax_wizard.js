@@ -274,6 +274,9 @@
   function renderDone() {
     var el = document.getElementById('wizDoneYear');
     if (el) el.textContent = selectedYear;
+    localStorage.setItem('tax_wizard_completed', new Date().toISOString().slice(0, 10));
+    if (typeof updateAchievements === 'function') updateAchievements();
+    if (typeof showAchievementToasts === 'function') showAchievementToasts();
     var btn = document.getElementById('wizDoneBtn');
     if (btn && !btn._wired) {
       btn._wired = true;

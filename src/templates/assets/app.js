@@ -140,4 +140,5 @@ function updateAll() {
   if (typeof updateHoldingCountdown === 'function') updateHoldingCountdown();
   if (typeof updateFire === 'function') updateFire();
   if (typeof updateWhatIf === 'function') updateWhatIf();
+  if (typeof updateAchievements === 'function') updateAchievements();
 }
