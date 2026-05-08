@@ -339,6 +339,7 @@ body {
 
 /* ---- Metric cards ---- */
 .metric-card {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1463,4 +1464,79 @@ body {
   border: 1px dashed var(--accent);
   border-radius: var(--radius);
   padding: 0.75rem;
+}
+
+/* ---- What-If Comparison ---- */
+.whatif-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.whatif-header h2 { margin: 0; }
+.whatif-select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  min-width: 160px;
+}
+.whatif-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.whatif-summary {
+  margin-bottom: 1.25rem;
+}
+.whatif-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+.whatif-metric {
+  background: var(--raised);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+}
+.whatif-metric-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.25rem;
+}
+.whatif-metric-value {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+.whatif-metric-sub {
+  font-size: 0.8rem;
+  margin-top: 0.15rem;
+}
+.whatif-verdict {
+  border-left: 3px solid var(--accent);
+}
+.whatif-icon {
+  font-size: 0.75em;
+}
+.whatif-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--muted);
+}
+.whatif-empty .muted {
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}
+.whatif-year-breakdown {
+  margin-top: 1.25rem;
+}
+.whatif-year-breakdown h3 {
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
 }

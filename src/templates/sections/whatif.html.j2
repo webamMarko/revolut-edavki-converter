@@ -1,0 +1,24 @@
+<section class="card chart-section" id="whatifSection" style="display:none">
+  <div class="whatif-header">
+    <h2>What If I Had Bought...</h2>
+    <div class="whatif-controls">
+      <select id="whatifBenchmark" class="whatif-select">
+        <option value="">Select a benchmark</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="whatifResult" style="display:none">
+    <div id="whatifSummaryCard" class="whatif-summary"></div>
+    <div class="chart-wrap" style="height:320px"><canvas id="whatifChart"></canvas></div>
+    <div id="whatifYearBreakdown" class="whatif-year-breakdown" style="display:none">
+      <h3>Yearly Breakdown</h3>
+      <table id="whatifYearTable" class="data-table"></table>
+    </div>
+  </div>
+
+  <div id="whatifEmpty" class="whatif-empty">
+    <p>Select a benchmark above to see how your portfolio would have performed if you had invested all your money into it instead.</p>
+    <p class="muted">Uses your actual deposit and withdrawal dates and amounts.</p>
+  </div>
+</section>

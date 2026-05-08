@@ -139,4 +139,5 @@ function updateAll() {
   if (typeof updateTaxPreview === 'function') updateTaxPreview();
   if (typeof updateHoldingCountdown === 'function') updateHoldingCountdown();
   if (typeof updateFire === 'function') updateFire();
+  if (typeof updateWhatIf === 'function') updateWhatIf();
 }
