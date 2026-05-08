@@ -17,6 +17,21 @@
   </div>
 </section>
 
+<section class="card" id="dividendTaxSection" style="display:none">
+  <div class="chart-header">
+    <h2>Dividend Tax (Doh-Div)</h2>
+    <div class="range-bar" id="divTaxYearBar"></div>
+  </div>
+  <div id="divTaxCards" class="card-grid small"></div>
+  <div id="divTaxExportBar" class="tax-export-bar" style="display:none">
+    <button id="divTaxExportBtn" class="tax-export-btn">Export Doh-Div XML</button>
+  </div>
+  <div id="divTaxCountryBreakdown" class="table-scroll">
+    <table id="divTaxTable" class="data-table"></table>
+  </div>
+  <div id="divTaxGuidance" class="tax-guidance" style="margin-top:1rem"></div>
+</section>
+
 <section class="card" id="harvestSection" style="display:none">
   <h2 id="harvestTitle">Tax-Loss Harvesting Opportunities</h2>
   <p id="harvestDesc" style="color:var(--muted);font-size:0.8rem;margin:-0.5rem 0 1rem"></p>

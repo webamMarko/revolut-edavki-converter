@@ -178,6 +178,64 @@ def cmd_tax(args):
         conn.close()
 
 
+def cmd_dividend(args):
+    """Generate Doh-Div XML for dividend income tax declaration."""
+    from .db import get_connection
+    from .doh_div_generator import (
+        DohDivGenerator, build_dividend_entries, compute_dividend_tax_summary
+    )
+
+    conn = get_connection()
+    try:
+        entries = build_dividend_entries(conn, args.year)
+        if not entries:
+            print(f"No dividend income found for {args.year}.")
+            return
+
+        summary = compute_dividend_tax_summary(entries, args.year)
+
+        if args.output:
+            generator = DohDivGenerator()
+            generator.generate_xml(entries, args.year)
+            generator.save_to_file(args.output)
+            print(f"Doh-Div XML written to {args.output} ({len(entries)} dividends)")
+
+        # Print summary
+        print(f"\n{'='*60}")
+        print(f" Dividend Tax Summary — {args.year}")
+        print(f"{'='*60}")
+        print(f" Total gross dividends:     {summary.total_gross_eur:>10.2f} EUR")
+        print(f" Foreign withholding tax:   {summary.total_withholding_eur:>10.2f} EUR")
+        print(f" Net received:              {summary.total_net_received_eur:>10.2f} EUR")
+        print(f" SI tax liability (25%):    {summary.si_tax_liability:>10.2f} EUR")
+        print(f" Treaty credit:            -{summary.total_credit_eur:>10.2f} EUR")
+        print(f" Net tax owed to FURS:      {summary.net_tax_owed_si:>10.2f} EUR")
+        if summary.total_reclaimable_eur > 0:
+            print(f" Reclaimable (excess WHT):  {summary.total_reclaimable_eur:>10.2f} EUR")
+        print(f"{'='*60}")
+
+        if args.verbose:
+            print(f"\n By Country:")
+            print(f" {'Country':<20} {'Gross':>10} {'WHT':>10} {'Credit':>10} {'Reclaim':>10}")
+            print(f" {'-'*20} {'-'*10} {'-'*10} {'-'*10} {'-'*10}")
+            for country, data in sorted(summary.by_country.items()):
+                print(f" {data['country_name']:<20} "
+                      f"{data['gross_eur']:>10.2f} "
+                      f"{data['withholding_eur']:>10.2f} "
+                      f"{data['credit_eur']:>10.2f} "
+                      f"{data['reclaimable_eur']:>10.2f}")
+
+            print(f"\n Reclaim Guidance:")
+            for country, data in sorted(summary.by_country.items()):
+                if data["reclaimable_eur"] > 0.01:
+                    print(f"  • {data['country_name']}: reclaim {data['reclaimable_eur']:.2f} EUR"
+                          f" (withheld above {data['treaty_rate']*100:.0f}% treaty rate)")
+            if summary.total_reclaimable_eur < 0.01:
+                print("  • No excess withholding to reclaim — all within treaty limits.")
+    finally:
+        conn.close()
+
+
 def cmd_harvest(args):
     """Show tax-loss harvesting suggestions."""
     from .db import get_connection
@@ -491,6 +549,16 @@ def cmd_delisted(args):
         conn.close()
 
 
+def cmd_send_reports(args):
+    """Send scheduled email reports to subscribed users."""
+    from .email_reports import send_reports
+
+    if args.verbose:
+        print(f"Running {args.type} report delivery...")
+    sent, failed = send_reports(report_type=args.type, verbose=args.verbose)
+    print(f"Done: {sent} sent, {failed} failed")
+
+
 def cmd_web(args):
     """Start web UI for CSV upload and import."""
     import os
@@ -614,6 +682,15 @@ Examples:
                        help="Export tax summary as PDF to the specified file")
     p_tax.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_tax.set_defaults(func=cmd_tax)
+
+    # --- dividend ---
+    p_div = subparsers.add_parser("dividend", help="Dividend income tax (Doh-Div) declaration")
+    p_div.add_argument("--year", type=int, required=True, help="Fiscal year")
+    p_div.add_argument("--output", "-o", type=str, metavar="FILE",
+                       help="Output Doh-Div XML file path")
+    p_div.add_argument("--verbose", "-v", action="store_true",
+                       help="Show per-country breakdown and reclaim guidance")
+    p_div.set_defaults(func=cmd_dividend)
 
     # --- harvest ---
     p_harvest = subparsers.add_parser("harvest", help="Tax-loss harvesting suggestions")
@@ -740,6 +817,13 @@ Examples:
     p_del_unmark.add_argument("tickers", nargs="+", metavar="TICKER")
 
     delisted_sub.add_parser("list", help="List all tickers marked as delisted")
+
+    # --- send-reports ---
+    p_send = subparsers.add_parser("send-reports", help="Send scheduled email reports to subscribed users")
+    p_send.add_argument("--type", choices=["weekly", "monthly"], required=True,
+                        help="Report type to send")
+    p_send.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    p_send.set_defaults(func=cmd_send_reports)
 
     # --- web ---
     p_web = subparsers.add_parser("web", help="Start web UI for CSV upload and import")

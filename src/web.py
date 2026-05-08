@@ -248,6 +248,14 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._handle_export_fifo_csv()
         elif path == "/export/tax-pdf":
             self._handle_export_tax_pdf()
+        elif path == "/export/doh-div":
+            self._handle_export_doh_div()
+        elif path == "/api/dividend-summary":
+            self._handle_dividend_summary()
+        elif path == "/api/email-preferences":
+            self._api_get_email_preferences()
+        elif path == "/settings":
+            self._serve_settings_page()
         else:
             self.send_error(404)
 
@@ -275,8 +283,12 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._api_create_note()
         elif path == "/import/preview":
             self._handle_import_preview()
+        elif path == "/import/validate":
+            self._handle_import_validate()
         elif path == "/import/run":
             self._handle_import_run()
+        elif path == "/api/email-preferences":
+            self._api_save_email_preferences()
         else:
             self.send_error(404)
 
@@ -731,6 +743,76 @@ class UploadHandler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+    def _handle_export_doh_div(self):
+        session, year = self._export_year()
+        if session is None:
+            return
+        from .doh_div_generator import DohDivGenerator, build_dividend_entries
+
+        conn = _portfolio_conn(session)
+        try:
+            entries = build_dividend_entries(conn, year)
+            if not entries:
+                self._json_response({"error": f"No dividends for {year}"}, status=404)
+                return
+
+            gen = DohDivGenerator()
+            gen.generate_xml(entries, year)
+            xml_bytes = gen.to_string(pretty_print=True).encode("utf-8")
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/xml; charset=utf-8")
+            self.send_header("Content-Disposition",
+                             f'attachment; filename="Doh_Div_{year}.xml"')
+            self.send_header("Content-Length", str(len(xml_bytes)))
+            self.end_headers()
+            self.wfile.write(xml_bytes)
+        except Exception as e:
+            self._json_response({"error": str(e)}, status=500)
+        finally:
+            conn.close()
+
+    def _handle_dividend_summary(self):
+        session = _get_session(self)
+        if not session:
+            self._json_response({"error": "Unauthorized"}, status=401)
+            return
+        from .doh_div_generator import build_dividend_entries, compute_dividend_tax_summary
+
+        qs = parse_qs(urlparse(self.path).query)
+        year = int(qs.get("year", [str(__import__("datetime").datetime.now().year)])[0])
+
+        conn = _portfolio_conn(session)
+        try:
+            entries = build_dividend_entries(conn, year)
+            summary = compute_dividend_tax_summary(entries, year)
+            self._json_response({
+                "year": year,
+                "total_gross_eur": summary.total_gross_eur,
+                "total_withholding_eur": summary.total_withholding_eur,
+                "total_net_received_eur": summary.total_net_received_eur,
+                "si_tax_liability": summary.si_tax_liability,
+                "total_credit_eur": summary.total_credit_eur,
+                "net_tax_owed_si": summary.net_tax_owed_si,
+                "total_reclaimable_eur": summary.total_reclaimable_eur,
+                "entry_count": len(entries),
+                "by_country": {
+                    k: {
+                        "country_name": v["country_name"],
+                        "gross_eur": round(v["gross_eur"], 2),
+                        "withholding_eur": round(v["withholding_eur"], 2),
+                        "credit_eur": round(v["credit_eur"], 2),
+                        "reclaimable_eur": round(v["reclaimable_eur"], 2),
+                        "treaty_rate": v["treaty_rate"],
+                        "count": v["count"],
+                    } for k, v in summary.by_country.items()
+                },
+            })
+        except Exception as e:
+            self._json_response({"error": str(e)}, status=500)
+        finally:
+            conn.close()
+
     # ------------------------------------------------------------------
     # Admin — user management
     # ------------------------------------------------------------------
@@ -1053,6 +1135,55 @@ class UploadHandler(BaseHTTPRequestHandler):
             "filename": filename,
         })
 
+    def _handle_import_validate(self):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return
+
+        body = self._read_body()
+        try:
+            data = json.loads(body)
+        except Exception:
+            self._json_response({"error": "Invalid JSON."}, status=400)
+            return
+
+        asset_class = data.get("asset_class", "")
+        column_map = data.get("mapping", {})
+
+        if asset_class not in ("stock", "cfd", "crypto", "savings"):
+            self._json_response({"error": "Invalid asset class."}, status=400)
+            return
+
+        token = _get_session_token(self)
+        staging = _IMPORT_STAGING.get(token)
+        if not staging or staging["expires"] < time.time():
+            if staging:
+                _cleanup_staging(token)
+            self._json_response({"error": "Upload session expired. Please re-upload the file."}, status=400)
+            return
+
+        import pandas as _pd
+        from .import_validator import validate_csv
+
+        file_path = staging["path"]
+        df = _pd.read_csv(file_path)
+        if len(df.columns) == 1 or (len(df.columns) < 3 and ";" in df.columns[0]):
+            df = _pd.read_csv(file_path, sep=";")
+
+        # Get existing tickers from the user's portfolio for context
+        existing_tickers = []
+        try:
+            conn = _portfolio_conn(session)
+            rows = conn.execute("SELECT DISTINCT ticker FROM transactions WHERE ticker IS NOT NULL").fetchall()
+            existing_tickers = [r[0] for r in rows]
+            conn.close()
+        except Exception:
+            pass
+
+        report = validate_csv(df, column_map, asset_class, existing_tickers)
+        self._json_response(report.to_dict())
+
     def _handle_import_run(self):
         session = _get_session(self)
         if not session or session["role"] not in ("premium", "admin"):
@@ -1106,6 +1237,51 @@ class UploadHandler(BaseHTTPRequestHandler):
             "new": result.new,
             "skipped": result.skipped,
         })
+
+    def _serve_settings_page(self):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._redirect("/login")
+            return
+        html = _settings_html(session["username"], session["role"])
+        self._html_response(html)
+
+    def _api_get_email_preferences(self):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return
+        from .email_reports import get_preferences
+        prefs = get_preferences(session["user_id"])
+        self._json_response({
+            "weekly_enabled": prefs.weekly_enabled,
+            "monthly_enabled": prefs.monthly_enabled,
+            "alert_enabled": prefs.alert_enabled,
+            "scope": prefs.scope,
+            "country": prefs.country,
+        })
+
+    def _api_save_email_preferences(self):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return
+        body = self._read_body()
+        try:
+            data = json.loads(body)
+        except Exception:
+            self._json_response({"error": "Invalid JSON."}, status=400)
+            return
+        from .email_reports import save_preferences
+        save_preferences(
+            user_id=session["user_id"],
+            weekly_enabled=bool(data.get("weekly_enabled", False)),
+            monthly_enabled=bool(data.get("monthly_enabled", True)),
+            alert_enabled=bool(data.get("alert_enabled", False)),
+            scope=data.get("scope", "all"),
+            country=data.get("country", "SI"),
+        )
+        self._json_response({"ok": True})
 
     def _read_body(self, length: int | None = None) -> bytes:
         if length is None:
@@ -1499,6 +1675,7 @@ def _header_html(username: str = "", role: str = "guest", active_page: str = "")
     nav += _link("/report", "Report", "report")
     if role in ("premium", "admin"):
         nav += _link("/import", "Import Wizard", "import")
+        nav += _link("/settings", "Settings", "settings")
     if role == "admin":
         nav += _link("/admin", "Admin", "admin")
 
@@ -1695,6 +1872,156 @@ document.querySelectorAll('.role-select').forEach(sel => {{
     const data = await resp.json();
     if (!data.ok) alert('Failed to update role.');
   }});
+}});
+</script>
+</body>
+</html>"""
+    )
+
+
+def _settings_html(username: str, role: str) -> str:
+    """Email report settings page."""
+    extra_css = (
+        ".toggle-row{display:flex;align-items:center;justify-content:space-between;padding:0.75rem 0;"
+        "border-bottom:1px solid var(--border)}"
+        ".toggle-row:last-child{border-bottom:none}"
+        ".toggle-label{font-size:0.9rem;font-weight:500}"
+        ".toggle-desc{font-size:0.78rem;color:var(--muted);margin-top:0.15rem}"
+        ".toggle-switch{position:relative;width:44px;height:24px;flex-shrink:0}"
+        ".toggle-switch input{opacity:0;width:0;height:0}"
+        ".toggle-slider{position:absolute;inset:0;background:var(--border);border-radius:12px;"
+        "cursor:pointer;transition:background 0.2s}"
+        ".toggle-slider::before{content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;"
+        "background:var(--text);border-radius:50%;transition:transform 0.2s}"
+        ".toggle-switch input:checked+.toggle-slider{background:var(--accent)}"
+        ".toggle-switch input:checked+.toggle-slider::before{transform:translateX(20px)}"
+        ".settings-section{margin-bottom:1.5rem}"
+        ".settings-footer{margin-top:1rem;font-size:0.78rem;color:var(--muted)}"
+    )
+
+    return (
+        _head_html("Settings — Portfolio", extra_css)
+        + f"""<body>
+{_header_html(username, role, "settings")}
+<div class="app-main">
+  <h1 style="font-size:1.2rem;font-weight:700">Email Report Settings</h1>
+
+  <div class="card">
+    <h2>Report delivery</h2>
+    <div class="settings-section">
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Weekly summary</div>
+          <div class="toggle-desc">Portfolio value, P&amp;L, top movers — every Monday</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="weeklyToggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Monthly report</div>
+          <div class="toggle-desc">Detailed performance with tax implications — 1st of each month</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="monthlyToggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Event alerts</div>
+          <div class="toggle-desc">Position crosses tax bracket, large daily moves, dividends received</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="alertToggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <h2 style="margin-top:1.5rem">Report scope</h2>
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem">
+      <div>
+        <label>Asset classes</label>
+        <select id="scopeSelect" style="width:auto">
+          <option value="all">All</option>
+          <option value="stock">Stocks only</option>
+          <option value="cfd">CFDs only</option>
+          <option value="crypto">Crypto only</option>
+          <option value="savings">Savings only</option>
+        </select>
+      </div>
+      <div>
+        <label>Tax country</label>
+        <select id="countrySelect" style="width:auto">
+          <option value="SI">Slovenia</option>
+          <option value="DE">Germany</option>
+          <option value="AT">Austria</option>
+          <option value="IT">Italy</option>
+          <option value="ES">Spain</option>
+          <option value="FR">France</option>
+          <option value="NL">Netherlands</option>
+          <option value="US">United States</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-primary" id="saveBtn">Save preferences</button>
+    </div>
+    <p id="saveMsg" class="settings-footer"></p>
+  </div>
+</div>
+
+{_COMMON_JS}
+<script>
+(async function() {{
+  const resp = await fetch('/api/email-preferences');
+  if (resp.ok) {{
+    const prefs = await resp.json();
+    document.getElementById('weeklyToggle').checked = prefs.weekly_enabled;
+    document.getElementById('monthlyToggle').checked = prefs.monthly_enabled;
+    document.getElementById('alertToggle').checked = prefs.alert_enabled;
+    document.getElementById('scopeSelect').value = prefs.scope || 'all';
+    document.getElementById('countrySelect').value = prefs.country || 'SI';
+  }}
+}})();
+
+document.getElementById('saveBtn').addEventListener('click', async () => {{
+  const btn = document.getElementById('saveBtn');
+  const msg = document.getElementById('saveMsg');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  const payload = {{
+    weekly_enabled: document.getElementById('weeklyToggle').checked,
+    monthly_enabled: document.getElementById('monthlyToggle').checked,
+    alert_enabled: document.getElementById('alertToggle').checked,
+    scope: document.getElementById('scopeSelect').value,
+    country: document.getElementById('countrySelect').value,
+  }};
+  try {{
+    const resp = await fetch('/api/email-preferences', {{
+      method: 'POST',
+      headers: {{'Content-Type': 'application/json'}},
+      body: JSON.stringify(payload),
+    }});
+    const data = await resp.json();
+    if (data.ok) {{
+      msg.style.color = 'var(--green)';
+      msg.textContent = 'Preferences saved successfully.';
+    }} else {{
+      msg.style.color = 'var(--red)';
+      msg.textContent = data.error || 'Failed to save.';
+    }}
+  }} catch(e) {{
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Network error: ' + e.message;
+  }}
+  btn.disabled = false;
+  btn.textContent = 'Save preferences';
+  setTimeout(() => {{ msg.textContent = ''; }}, 4000);
 }});
 </script>
 </body>
