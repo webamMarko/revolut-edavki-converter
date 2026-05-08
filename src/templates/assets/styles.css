@@ -707,8 +707,8 @@ body {
     padding: 0 3px;
   }
 
-  .content { order: 1; flex: 1; overflow: hidden; min-width: 0; }
-  .page { height: 100%; padding: 0.75rem; overflow-x: hidden; }
+  .content { order: 1; flex: 1; overflow: hidden; min-width: 0; display: flex; flex-direction: column; }
+  .page { flex: 1; min-height: 0; padding: 0.75rem; overflow-x: hidden; overflow-y: auto; }
 
   /* All grid/flex containers must not overflow */
   .page-stack { gap: 0.75rem; }
