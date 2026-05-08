@@ -166,7 +166,33 @@ def cmd_tax(args):
             scope=args.scope,
             country=getattr(args, "country", "SI"),
         )
-        format_tax(report, verbose=args.verbose)
+        if getattr(args, "pdf", None):
+            from .pdf_report import generate_tax_pdf
+            pdf_bytes = generate_tax_pdf(report, country=getattr(args, "country", "SI"))
+            with open(args.pdf, "wb") as f:
+                f.write(pdf_bytes)
+            print(f"Tax PDF written to {args.pdf}")
+        else:
+            format_tax(report, verbose=args.verbose)
+    finally:
+        conn.close()
+
+
+def cmd_harvest(args):
+    """Show tax-loss harvesting suggestions."""
+    from .db import get_connection
+    from .harvest import compute_harvest_suggestions
+    from .formatters import format_harvest
+
+    conn = get_connection()
+    try:
+        report = compute_harvest_suggestions(
+            conn,
+            year=args.year,
+            scope=args.scope,
+            country=getattr(args, "country", "SI"),
+        )
+        format_harvest(report, verbose=args.verbose)
     finally:
         conn.close()
 
@@ -584,8 +610,22 @@ Examples:
                        help="Asset class scope (default: all)")
     p_tax.add_argument("--country", default="SI",
                        help="Country tax regime: SI, DE, AT, US, IT, ES, FR, NL (default: SI)")
+    p_tax.add_argument("--pdf", type=str, metavar="FILE",
+                       help="Export tax summary as PDF to the specified file")
     p_tax.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_tax.set_defaults(func=cmd_tax)
+
+    # --- harvest ---
+    p_harvest = subparsers.add_parser("harvest", help="Tax-loss harvesting suggestions")
+    p_harvest.add_argument("--year", type=int, default=datetime.now().year,
+                           help="Fiscal year for realized gain context (default: current year)")
+    p_harvest.add_argument("--scope", choices=["stock", "cfd", "crypto", "savings", "all"], default="all",
+                           help="Asset class scope (default: all)")
+    p_harvest.add_argument("--country", default="SI",
+                           help="Country tax regime: SI, DE, AT, US, IT, ES, FR, NL (default: SI)")
+    p_harvest.add_argument("--verbose", "-v", action="store_true",
+                           help="Show per-lot breakdown and wash-sale details")
+    p_harvest.set_defaults(func=cmd_harvest)
 
     # --- report ---
     p_report = subparsers.add_parser("report", help="Generate HTML portfolio report")

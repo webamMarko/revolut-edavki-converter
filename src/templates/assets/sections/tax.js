@@ -131,6 +131,15 @@
       const format = exportSel.value;
       if (format === 'fifo-csv') {
         _exportFifoCsv(ty, currentYear);
+      } else if (format === 'tax-pdf') {
+        if (D.user && D.user.role && D.user.role !== 'guest') {
+          const a = document.createElement('a');
+          a.href = '/export/tax-pdf?year=' + currentYear + '&country=' + (D.regime ? D.regime.country_code : 'SI');
+          a.download = '';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
       } else {
         // Try server-side export first (web mode), fall back to client-side CSV
         if (D.user && D.user.role && D.user.role !== 'guest') {

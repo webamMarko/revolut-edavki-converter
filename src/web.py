@@ -45,6 +45,15 @@ _IMPORT_STAGING: dict[str, dict] = {}
 def _detect_asset_class_from_headers(headers: list) -> str | None:
     """Detect asset class from CSV header list."""
     cols = {h.strip() for h in headers}
+    # IBKR Activity Statement
+    if "Trades" in cols and "DataDiscriminator" in cols:
+        return "stock"
+    # Trading 212
+    if "Action" in cols and "No. of shares" in cols and "Price / share" in cols:
+        return "stock"
+    # Degiro
+    if "Datum" in cols and "Product" in cols and "ISIN" in cols:
+        return "stock"
     if "FinancialInstrument" in cols and "TransactionTypeName" in cols:
         return "stock"
     if "Symbol" in cols and "Margin" in cols:
@@ -237,6 +246,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._handle_export_edavki()
         elif path == "/export/fifo-csv":
             self._handle_export_fifo_csv()
+        elif path == "/export/tax-pdf":
+            self._handle_export_tax_pdf()
         else:
             self.send_error(404)
 
@@ -687,6 +698,34 @@ class UploadHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(csv_bytes)))
             self.end_headers()
             self.wfile.write(csv_bytes)
+        except Exception as e:
+            self._json_response({"error": str(e)}, status=500)
+        finally:
+            conn.close()
+
+    def _handle_export_tax_pdf(self):
+        session, year = self._export_year()
+        if session is None:
+            return
+        from .tax import compute_tax_report
+        from .pdf_report import generate_tax_pdf
+
+        qs = parse_qs(urlparse(self.path).query)
+        country = qs.get("country", ["SI"])[0].upper()
+
+        conn = _portfolio_conn(session)
+        try:
+            report = compute_tax_report(conn, year=year, include_unrealized=False,
+                                        scope="all", country=country)
+            pdf_bytes = generate_tax_pdf(report, country=country)
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Disposition",
+                             f'attachment; filename="tax_summary_{country}_{year}.pdf"')
+            self.send_header("Content-Length", str(len(pdf_bytes)))
+            self.end_headers()
+            self.wfile.write(pdf_bytes)
         except Exception as e:
             self._json_response({"error": str(e)}, status=500)
         finally:
