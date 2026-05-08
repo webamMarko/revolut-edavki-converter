@@ -765,10 +765,50 @@ body {
 }
 
 /* ---- Milestones ---- */
+.milestones-strip-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 1rem;
+}
+.milestones-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.15rem;
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+.ms-badge {
+  white-space: nowrap;
+  color: var(--text);
+}
+.ms-badge .ms-date {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.ms-sep {
+  color: var(--subtle);
+  margin: 0 0.2rem;
+}
+.ms-expand {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 0 0.25rem;
+  white-space: nowrap;
+}
+.ms-expand:hover { opacity: 0.8; }
+
 .milestones-list {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  margin-top: 0.75rem;
 }
 .milestone-item {
   display: flex;
@@ -844,7 +884,7 @@ body {
   canvas { max-height: 200px !important; }
   .range-bar, .chart-hint, .selection-banner { display: none !important; }
   .theme-toggle { display: none !important; }
-  #assetFilter, #fireFilter { display: none !important; }
+  #assetFilter { display: none !important; }
   #mobileFilters { display: none !important; }
   .toolbar button, .tax-export-btn, #exportPositionsBtn { display: none !important; }
   .pos-chevron, .pos-chevron-placeholder { display: none !important; }
@@ -871,3 +911,22 @@ body {
 .corr-th { transform: rotate(-45deg); white-space: nowrap; font-size: 0.65rem; color: var(--muted); font-weight: 500; }
 .corr-label { text-align: right !important; font-weight: 500; padding-right: 0.5rem !important; white-space: nowrap; font-size: 0.65rem; }
 .corr-cell { font-size: 0.65rem; border-radius: 2px; min-width: 2.5rem; }
+
+/* ---- Risk warnings ---- */
+.risk-warning-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(248,113,113,0.08);
+  border: 1px solid rgba(248,113,113,0.25);
+  border-radius: var(--radius);
+  margin-bottom: 0.5rem;
+}
+.risk-warning-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+  color: #f87171;
+}
+.risk-warning-body { flex: 1; font-size: 0.85rem; }

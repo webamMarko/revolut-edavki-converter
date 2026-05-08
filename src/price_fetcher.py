@@ -310,6 +310,7 @@ def sync_ticker_metadata(conn: sqlite3.Connection, verbose: bool = False):
 
         sector = info.get("sector", "")
         industry = info.get("industry", "")
+        country = info.get("country", "")
         name = info.get("longName") or info.get("shortName") or ""
 
         if sector:
@@ -322,13 +323,18 @@ def sync_ticker_metadata(conn: sqlite3.Connection, verbose: bool = False):
                 (f"industry:{ticker}", industry),
             )
             fetched += 1
+        if country:
+            conn.execute(
+                "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
+                (f"country:{ticker}", country),
+            )
         if name:
             conn.execute(
                 "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
                 (f"company_name:{ticker}", name),
             )
         if verbose:
-            print(f"  {ticker}: {sector or '—'} / {industry or '—'}")
+            print(f"  {ticker}: {sector or '—'} / {industry or '—'} / {country or '—'}")
 
     conn.commit()
     print(f"Ticker metadata: {fetched}/{len(to_fetch)} tickers updated")

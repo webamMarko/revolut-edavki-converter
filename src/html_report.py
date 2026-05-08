@@ -390,6 +390,94 @@ def _query_sector_allocation(conn: sqlite3.Connection | None, positions: list) -
     return {"sectors": sectors, "industries": industries}
 
 
+def _query_geographic_allocation(conn: sqlite3.Connection | None, positions: list) -> dict:
+    """Build geographic (country) allocation from position weights + metadata."""
+    if not conn or not positions:
+        return {"countries": []}
+
+    country_map = {}
+    rows = conn.execute("SELECT key, value FROM metadata WHERE key LIKE 'country:%'").fetchall()
+    for k, v in rows:
+        country_map[k[len("country:"):]] = v
+
+    country_totals = {}
+    total_mv = 0
+    for pos in positions:
+        ticker = pos.ticker if hasattr(pos, 'ticker') else pos.get('ticker', '')
+        mv = pos.market_value_eur if hasattr(pos, 'market_value_eur') else pos.get('market_value_eur', 0)
+        if mv <= 0:
+            continue
+        db_ticker = ticker
+        for prefix in ("CFD:", "CRYPTO:", "SAVINGS:"):
+            if ticker.startswith(prefix):
+                db_ticker = ticker[len(prefix):]
+                break
+        country = country_map.get(db_ticker, "Other")
+        country_totals[country] = country_totals.get(country, 0) + mv
+        total_mv += mv
+
+    if total_mv == 0:
+        return {"countries": []}
+
+    countries = sorted(
+        [{"name": c, "value_eur": round(v, 2), "pct": round(v / total_mv * 100, 1)}
+         for c, v in country_totals.items()],
+        key=lambda x: x["value_eur"], reverse=True,
+    )
+    return {"countries": countries}
+
+
+def _compute_concentration_risk(positions: list) -> dict:
+    """Compute concentration risk metrics and flag over-concentrated positions."""
+    if not positions:
+        return {"warnings": [], "metrics": {}}
+
+    total_mv = sum(
+        (p.market_value_eur if hasattr(p, 'market_value_eur') else p.get('market_value_eur', 0))
+        for p in positions
+    )
+    if total_mv <= 0:
+        return {"warnings": [], "metrics": {}}
+
+    weights = []
+    for p in positions:
+        ticker = p.ticker if hasattr(p, 'ticker') else p.get('ticker', '')
+        mv = p.market_value_eur if hasattr(p, 'market_value_eur') else p.get('market_value_eur', 0)
+        weights.append({"ticker": ticker, "weight_pct": round(mv / total_mv * 100, 2), "value_eur": round(mv, 2)})
+
+    weights.sort(key=lambda x: x["weight_pct"], reverse=True)
+
+    # Herfindahl-Hirschman Index
+    hhi = sum((w["weight_pct"] / 100) ** 2 for w in weights) * 10000
+
+    # Effective number of positions
+    sum_sq = sum((w["weight_pct"] / 100) ** 2 for w in weights)
+    effective_n = round(1 / sum_sq) if sum_sq > 0 else len(weights)
+
+    # Top-N concentration
+    top5_pct = sum(w["weight_pct"] for w in weights[:5])
+    top10_pct = sum(w["weight_pct"] for w in weights[:10])
+
+    # Warnings: positions exceeding 20% portfolio weight
+    warnings = [
+        {"ticker": w["ticker"], "weight_pct": w["weight_pct"], "value_eur": w["value_eur"]}
+        for w in weights if w["weight_pct"] > 20
+    ]
+
+    return {
+        "warnings": warnings,
+        "metrics": {
+            "hhi": round(hhi),
+            "effective_n": effective_n,
+            "top5_pct": round(top5_pct, 1),
+            "top10_pct": round(top10_pct, 1),
+            "total_positions": len(weights),
+            "largest_ticker": weights[0]["ticker"] if weights else "",
+            "largest_pct": weights[0]["weight_pct"] if weights else 0,
+        },
+    }
+
+
 def _compute_correlation_matrix(conn: sqlite3.Connection | None,
                                 positions: list) -> dict | None:
     """Compute pairwise return correlation matrix for current holdings."""
@@ -791,6 +879,49 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
     data["investment_notes"] = investment_notes or []
     data["dividends"] = _query_dividend_data(conn)
 
+    # Dividend tax summary (Doh-Div) per year
+    if conn is not None:
+        try:
+            from .doh_div_generator import build_dividend_entries, compute_dividend_tax_summary
+            div_tax_by_year = {}
+            div_years = [
+                int(r[0]) for r in conn.execute(
+                    "SELECT DISTINCT strftime('%Y', date) FROM transactions "
+                    "WHERE type LIKE 'DIVIDEND%' AND asset_class = 'stock' ORDER BY 1"
+                ).fetchall()
+            ]
+            for yr in div_years:
+                try:
+                    entries = build_dividend_entries(conn, yr)
+                    if entries:
+                        s = compute_dividend_tax_summary(entries, yr)
+                        div_tax_by_year[str(yr)] = {
+                            "total_gross_eur": s.total_gross_eur,
+                            "total_withholding_eur": s.total_withholding_eur,
+                            "total_net_received_eur": s.total_net_received_eur,
+                            "si_tax_liability": s.si_tax_liability,
+                            "total_credit_eur": s.total_credit_eur,
+                            "net_tax_owed_si": s.net_tax_owed_si,
+                            "total_reclaimable_eur": s.total_reclaimable_eur,
+                            "entry_count": len(entries),
+                            "by_country": {
+                                k: {
+                                    "country_name": v["country_name"],
+                                    "gross_eur": round(v["gross_eur"], 2),
+                                    "withholding_eur": round(v["withholding_eur"], 2),
+                                    "credit_eur": round(v["credit_eur"], 2),
+                                    "reclaimable_eur": round(v["reclaimable_eur"], 2),
+                                    "treaty_rate": v["treaty_rate"],
+                                    "count": v["count"],
+                                } for k, v in s.by_country.items()
+                            },
+                        }
+                except Exception:
+                    pass
+            data["dividend_tax"] = div_tax_by_year
+        except Exception:
+            data["dividend_tax"] = {}
+
     # Price history and company names for expandable position rows
     pos_tickers = [p["ticker"] for p in data["positions"]]
     data["position_price_history"] = _query_position_price_history(conn, pos_tickers)
@@ -801,6 +932,12 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
 
     # Sector/industry allocation
     data["sector_allocation"] = _query_sector_allocation(conn, analytics.positions)
+
+    # Geographic allocation
+    data["geographic_allocation"] = _query_geographic_allocation(conn, analytics.positions)
+
+    # Concentration risk
+    data["concentration_risk"] = _compute_concentration_risk(analytics.positions)
 
     # Correlation matrix
     data["correlation"] = _compute_correlation_matrix(conn, analytics.positions)
