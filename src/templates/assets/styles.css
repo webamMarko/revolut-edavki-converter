@@ -172,6 +172,78 @@ body {
 .nav-item svg { width: 15px; height: 15px; flex-shrink: 0; opacity: 0.75; }
 .nav-item.active svg { opacity: 1; }
 
+/* Notification badges */
+.nav-item { position: relative; }
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--neg, #ef4444);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.nav-badge-enter {
+  animation: badge-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes badge-pop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Toast notification */
+.notify-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 9999;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+}
+.notify-toast-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.notify-toast-exit {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.notify-toast-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  font-size: 0.8rem;
+  color: var(--text);
+}
+.notify-toast-icon { font-size: 1rem; }
+.notify-toast-text { white-space: nowrap; }
+.notify-toast-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0 0.2rem;
+  line-height: 1;
+}
+.notify-toast-close:hover { color: var(--text); }
+
 .nav-divider { height: 1px; background: var(--border); margin: 0.4rem 1.25rem; }
 
 .sidebar-footer {
@@ -623,6 +695,16 @@ body {
   }
   .nav-item svg { width: 18px; height: 18px; }
   .nav-item.active { border-left-color: transparent; border-top-color: var(--accent); background: var(--accent-glow); }
+  .nav-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    margin-left: 0;
+    min-width: 14px;
+    height: 14px;
+    font-size: 0.5rem;
+    padding: 0 3px;
+  }
 
   .content { order: 1; flex: 1; overflow: hidden; min-width: 0; }
   .page { height: 100%; padding: 0.75rem; overflow-x: hidden; }
@@ -825,6 +907,182 @@ body {
 .milestone-text { font-size: 0.85rem; font-weight: 600; }
 .milestone-detail { font-size: 0.75rem; color: var(--muted); }
 
+/* ---- Onboarding tour ---- */
+.tour-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 9000;
+  transition: opacity 0.2s;
+}
+.tour-spotlight {
+  position: absolute;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+  z-index: 9001;
+  pointer-events: none;
+  transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease;
+}
+.tour-tooltip {
+  position: absolute;
+  z-index: 9002;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  max-width: 320px;
+  min-width: 240px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  animation: tourFadeIn 0.2s ease;
+}
+@keyframes tourFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.tour-tooltip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+.tour-tooltip-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.tour-tooltip-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 0 0.2rem;
+  line-height: 1;
+}
+.tour-tooltip-close:hover { color: var(--text); }
+.tour-tooltip-text {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin: 0 0 0.75rem;
+}
+.tour-tooltip-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.tour-tooltip-progress {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.tour-tooltip-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+.tour-btn {
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.tour-btn-next {
+  background: var(--accent);
+  color: #000;
+}
+.tour-btn-next:hover { opacity: 0.85; }
+.tour-btn-back {
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.tour-btn-back:hover { background: var(--border); }
+
+/* Checklist widget */
+.tour-checklist {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 8000;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.8rem 1rem;
+  width: 220px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  transition: opacity 0.3s;
+}
+.tour-checklist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+.tour-checklist-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.tour-checklist-close:hover { color: var(--text); }
+.tour-checklist-items {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.6rem;
+}
+.tour-checklist-items li {
+  font-size: 0.78rem;
+  color: var(--muted);
+  padding: 0.3rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.tour-check-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  display: inline-block;
+  flex-shrink: 0;
+  position: relative;
+}
+.tour-checklist-items li.checked .tour-check-icon {
+  background: var(--green);
+  border-color: var(--green);
+}
+.tour-checklist-items li.checked .tour-check-icon::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 1px;
+  width: 4px;
+  height: 7px;
+  border: solid #fff;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+.tour-checklist-items li.checked {
+  color: var(--text);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+.tour-checklist-replay {
+  width: 100%;
+  text-align: center;
+  font-size: 0.72rem;
+  padding: 0.3rem;
+}
+
+@media (max-width: 768px) {
+  .tour-tooltip { max-width: calc(100vw - 2rem); min-width: 0; }
+  .tour-checklist { bottom: 0.5rem; right: 0.5rem; left: 0.5rem; width: auto; }
+}
+
 /* ---- Keyboard shortcut modal ---- */
 .shortcut-modal-overlay {
   position: fixed; inset: 0; z-index: 9999;
@@ -911,6 +1169,69 @@ body {
 .corr-th { transform: rotate(-45deg); white-space: nowrap; font-size: 0.65rem; color: var(--muted); font-weight: 500; }
 .corr-label { text-align: right !important; font-weight: 500; padding-right: 0.5rem !important; white-space: nowrap; font-size: 0.65rem; }
 .corr-cell { font-size: 0.65rem; border-radius: 2px; min-width: 2.5rem; }
+
+/* ---- Metric tooltips ---- */
+.tt-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: 0.72rem;
+  line-height: 1;
+  color: var(--muted);
+  cursor: help;
+  vertical-align: middle;
+  margin-left: 0.2rem;
+  border-radius: 50%;
+  transition: color 0.12s;
+  outline: none;
+}
+.tt-icon:hover, .tt-icon:focus { color: var(--accent); }
+
+.metric-tooltip {
+  position: absolute;
+  z-index: 10000;
+  max-width: 280px;
+  padding: 0.65rem 0.85rem;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text);
+  pointer-events: auto;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s, visibility 0.12s;
+}
+.metric-tooltip.visible { opacity: 1; visibility: visible; }
+
+.tt-def { margin-bottom: 0.35rem; }
+.tt-range {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  margin-bottom: 0.3rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tt-range-green { background: rgba(52,211,153,0.15); color: var(--green); }
+.tt-range-yellow { background: rgba(245,158,11,0.15); color: var(--accent); }
+.tt-range-red { background: rgba(248,113,113,0.15); color: var(--red); }
+.tt-personal {
+  font-size: 0.73rem;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 768px) {
+  .metric-tooltip { max-width: 240px; font-size: 0.75rem; }
+}
 
 /* ---- Risk warnings ---- */
 .risk-warning-item {

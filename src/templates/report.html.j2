@@ -48,6 +48,7 @@
       {% include "sections/risk.html.j2" %}
     </div>
     <div class="page" id="page-tax">
+      {% include "sections/tax_timeline.html.j2" %}
       {% include "sections/tax_preview.html.j2" %}
       {% include "sections/holding_countdown.html.j2" %}
       {% include "sections/tax.html.j2" %}
@@ -73,6 +74,7 @@
 {% include "assets/sections/benchmark_table.js" %}
 {% include "assets/sections/tax.js" %}
 {% include "assets/sections/dividend_tax.js" %}
+{% include "assets/sections/tax_timeline.js" %}
 {% include "assets/sections/tax_preview.js" %}
 {% include "assets/sections/holding_countdown.js" %}
 {% include "assets/sections/transactions.js" %}
@@ -81,6 +83,8 @@
 {% include "assets/sections/risk.js" %}
 {% include "assets/sections/monte_carlo.js" %}
 {% include "assets/nav.js" %}
+{% include "assets/notifications.js" %}
+{% include "assets/onboarding.js" %}
 
 // --- Initial render ---
 // Charts are on the overview page (active by default), so they size correctly without tricks
