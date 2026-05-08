@@ -609,7 +609,7 @@ class UploadHandler(BaseHTTPRequestHandler):
         conn = _portfolio_conn(session)
         prices_conn = get_prices_conn_or_none()
         try:
-            data_hash = compute_data_hash(conn)
+            data_hash = compute_data_hash(conn, prices_conn)
             etag = f'"{data_hash}"'
 
             if_none_match = self.headers.get("If-None-Match", "")
@@ -718,15 +718,17 @@ class UploadHandler(BaseHTTPRequestHandler):
             return
         session = _get_session(self)
         conn = _portfolio_conn(session)
+        from .prices_db import get_prices_conn_or_none
+        prices_conn = get_prices_conn_or_none()
         try:
             from .analytics import compute_analytics
             from .analytics_cache import compute_data_hash, get_cached, put_cache
-            data_hash = compute_data_hash(conn)
+            data_hash = compute_data_hash(conn, prices_conn)
             cached = get_cached(conn, scope, data_hash)
             if cached is not None:
                 ac_analytics = cached
             else:
-                ac_analytics = compute_analytics(conn, scope=scope)
+                ac_analytics = compute_analytics(conn, scope=scope, prices_conn=prices_conn)
                 put_cache(conn, scope, data_hash, ac_analytics)
 
             ac_daily = ac_analytics.daily_series
@@ -801,6 +803,8 @@ class UploadHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self._json_response({"error": f"Analytics computation failed: {e}"}, status=500)
         finally:
+            if prices_conn:
+                prices_conn.close()
             conn.close()
 
     # ------------------------------------------------------------------

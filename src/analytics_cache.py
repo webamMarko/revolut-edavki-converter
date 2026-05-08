@@ -17,7 +17,8 @@ from .analytics import (
 )
 
 
-def compute_data_hash(conn: sqlite3.Connection) -> str:
+def compute_data_hash(conn: sqlite3.Connection,
+                      prices_conn: sqlite3.Connection | None = None) -> str:
     """SHA-256 of transaction count + last transaction date + last sync date."""
     row = conn.execute(
         "SELECT COUNT(*), MAX(date) FROM transactions WHERE asset_class != 'realestate'"
@@ -25,12 +26,18 @@ def compute_data_hash(conn: sqlite3.Connection) -> str:
     tx_count = row[0] or 0
     last_tx_date = row[1] or ""
 
-    sync_row = conn.execute(
+    source = prices_conn if prices_conn is not None else conn
+    sync_row = source.execute(
         "SELECT MAX(date) FROM daily_prices"
     ).fetchone()
     last_sync_date = sync_row[0] if sync_row else ""
 
-    payload = f"{tx_count}|{last_tx_date}|{last_sync_date}"
+    fx_row = source.execute(
+        "SELECT MAX(date) FROM fx_rates"
+    ).fetchone()
+    last_fx_date = fx_row[0] if fx_row else ""
+
+    payload = f"{tx_count}|{last_tx_date}|{last_sync_date}|{last_fx_date}"
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
