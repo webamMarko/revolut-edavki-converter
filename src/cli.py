@@ -99,7 +99,9 @@ def cmd_sync(args):
     from .price_fetcher import sync_all
 
     if getattr(args, 'all_users', False):
-        data_dir = Path(os.environ.get("REVOLUT_DATA_DIR", str(Path.home() / ".revolut-edavki")))
+        project_data = Path(__file__).resolve().parent.parent / "data"
+        default_dir = str(project_data) if project_data.is_dir() else str(Path.home() / ".revolut-edavki")
+        data_dir = Path(os.environ.get("REVOLUT_DATA_DIR", default_dir))
         if not data_dir.is_dir():
             print(f"Data directory not found: {data_dir}")
             return

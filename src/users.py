@@ -12,7 +12,13 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-_DATA_DIR = Path(os.environ.get("REVOLUT_DATA_DIR", str(Path.home() / ".revolut-edavki")))
+def _default_data_dir() -> str:
+    project_data = Path(__file__).resolve().parent.parent / "data"
+    if project_data.is_dir():
+        return str(project_data)
+    return str(Path.home() / ".revolut-edavki")
+
+_DATA_DIR = Path(os.environ.get("REVOLUT_DATA_DIR", _default_data_dir()))
 _USERS_DB_PATH = _DATA_DIR / "_system" / "users.db"
 
 INVITE_TTL_HOURS = 24

@@ -21,7 +21,13 @@ from urllib.parse import parse_qs, urlparse
 # Environment / constants
 # ---------------------------------------------------------------------------
 
-DATA_DIR = Path(os.environ.get("REVOLUT_DATA_DIR", str(Path.home() / ".revolut-edavki")))
+def _default_data_dir() -> str:
+    project_data = Path(__file__).resolve().parent.parent / "data"
+    if project_data.is_dir():
+        return str(project_data)
+    return str(Path.home() / ".revolut-edavki")
+
+DATA_DIR = Path(os.environ.get("REVOLUT_DATA_DIR", _default_data_dir()))
 DEMO_DB  = DATA_DIR / "_demo" / "portfolio.db"
 
 APP_BASE_URL           = os.environ.get("APP_BASE_URL", "http://localhost:8080")
