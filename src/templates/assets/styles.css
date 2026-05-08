@@ -1079,6 +1079,46 @@ body {
   padding: 0.3rem;
 }
 
+/* Tour help button */
+.tour-help-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--muted);
+  transition: color 0.15s, border-color 0.15s;
+}
+.tour-help-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Tour CTA step */
+.tour-cta-footer {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+.tour-cta-footer .tour-tooltip-actions {
+  justify-content: center;
+}
+.tour-btn-upload {
+  text-decoration: none;
+  text-align: center;
+  padding: 0.5rem 1.2rem;
+  font-size: 0.85rem;
+}
+.tour-btn-explore {
+  text-align: center;
+  padding: 0.5rem 1.2rem;
+  font-size: 0.85rem;
+}
+
 @media (max-width: 768px) {
   .tour-tooltip { max-width: calc(100vw - 2rem); min-width: 0; }
   .tour-checklist { bottom: 0.5rem; right: 0.5rem; left: 0.5rem; width: auto; }

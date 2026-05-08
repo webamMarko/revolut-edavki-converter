@@ -1,55 +1,37 @@
-// --- Guided onboarding tour for first-time users ---
+// --- Interactive guided tour for first-time demo visitors ---
 (function() {
-  var STORAGE_KEY = 'onboarding_completed';
-  var SESSION_KEY = 'onboarding_session_count';
-
-  if (localStorage.getItem(STORAGE_KEY) === 'true') return;
-
-  var sessionCount = parseInt(localStorage.getItem(SESSION_KEY) || '0', 10) + 1;
-  localStorage.setItem(SESSION_KEY, String(sessionCount));
-
+  var STORAGE_KEY = 'tour_completed';
   var steps = [
     {
-      target: '.sidebar-nav .nav-item[data-page="overview"]',
-      title: 'Welcome to your Portfolio',
-      text: 'This is your dashboard. Start here for a quick snapshot of your total value, gains, and key metrics.',
-      position: 'right'
+      target: '#summary',
+      title: 'Your portfolio at a glance',
+      text: 'Value, gains, CAGR, and more — all your key metrics in one place.',
+      position: 'bottom'
     },
     {
-      target: '#regimeFilter',
-      title: 'Tax Country',
-      text: 'Select your tax jurisdiction here. This adjusts all tax calculations and holding period rules.',
+      target: '.sidebar-nav .nav-item[data-page="tax"]',
+      title: 'Automatic tax calculation',
+      text: 'Ready for eDavki export — see estimated obligations, holding periods, and generate XML reports.',
       position: 'right'
     },
     {
       target: '.sidebar-nav .nav-item[data-page="charts"]',
-      title: 'Performance Charts',
-      text: 'Track your portfolio growth over time with interactive charts. Compare against benchmarks.',
+      title: 'Benchmark your returns',
+      text: 'Compare your portfolio performance against S&P 500 and 6 other indexes.',
       position: 'right'
     },
     {
-      target: '.sidebar-nav .nav-item[data-page="positions"]',
-      title: 'Positions',
-      text: 'View all your open and closed positions. See individual stock performance and allocation.',
+      target: '.sidebar-nav .nav-item[data-page="projections"]',
+      title: 'FIRE projections',
+      text: 'Plan your financial independence with Monte Carlo simulations and withdrawal scenarios.',
       position: 'right'
     },
     {
-      target: '.sidebar-nav .nav-item[data-page="tax"]',
-      title: 'Tax Reports',
-      text: 'Generate tax reports for eDavki filing. See estimated tax obligations and holding period countdowns.',
-      position: 'right'
-    },
-    {
-      target: '.sidebar-nav .nav-item[data-page="history"]',
-      title: 'Transaction History',
-      text: 'Browse all imported transactions. This is where your CSV data appears after import.',
-      position: 'right'
-    },
-    {
-      target: '.sidebar-footer',
-      title: 'Keyboard Navigation',
-      text: 'Use arrow keys or number keys (1-8) to switch between sections. Press ? for all shortcuts.',
-      position: 'right'
+      target: null,
+      title: 'Ready to see your own data?',
+      text: 'Upload your Revolut CSV to get personalized portfolio analytics and tax reports.',
+      position: 'center',
+      isCTA: true
     }
   ];
 
@@ -57,7 +39,6 @@
   var overlay = null;
   var tooltip = null;
   var spotlight = null;
-  var checklist = null;
 
   function createOverlay() {
     overlay = document.createElement('div');
@@ -77,8 +58,29 @@
   }
 
   function positionTooltip(step) {
+    var isMobile = window.innerWidth < 768;
+
+    if (step.isCTA) {
+      spotlight.style.display = 'none';
+      tooltip.style.display = 'block';
+      tooltip.style.left = '50%';
+      tooltip.style.top = '50%';
+      tooltip.style.transform = 'translate(-50%, -50%)';
+      tooltip.style.right = 'auto';
+      tooltip.style.position = 'fixed';
+      renderTooltip(step);
+      return;
+    }
+
+    tooltip.style.position = 'absolute';
     var el = document.querySelector(step.target);
     if (!el) { nextStep(); return; }
+
+    // Make hidden nav items visible for targeting
+    if (el.style.display === 'none') {
+      el.style.display = '';
+      el.setAttribute('data-tour-revealed', '1');
+    }
 
     var rect = el.getBoundingClientRect();
     var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
@@ -91,30 +93,7 @@
     spotlight.style.height = (rect.height + pad * 2) + 'px';
     spotlight.style.display = 'block';
 
-    var progress = (currentStep + 1) + ' / ' + steps.length;
-    tooltip.innerHTML =
-      '<div class="tour-tooltip-header">' +
-        '<span class="tour-tooltip-title">' + step.title + '</span>' +
-        '<button class="tour-tooltip-close" aria-label="Skip tour">&times;</button>' +
-      '</div>' +
-      '<p class="tour-tooltip-text">' + step.text + '</p>' +
-      '<div class="tour-tooltip-footer">' +
-        '<span class="tour-tooltip-progress">' + progress + '</span>' +
-        '<div class="tour-tooltip-actions">' +
-          (currentStep > 0 ? '<button class="tour-btn tour-btn-back">Back</button>' : '') +
-          '<button class="tour-btn tour-btn-next">' +
-            (currentStep === steps.length - 1 ? 'Done' : 'Next') +
-          '</button>' +
-        '</div>' +
-      '</div>';
-
-    tooltip.querySelector('.tour-tooltip-close').addEventListener('click', endTour);
-    tooltip.querySelector('.tour-btn-next').addEventListener('click', nextStep);
-    var backBtn = tooltip.querySelector('.tour-btn-back');
-    if (backBtn) backBtn.addEventListener('click', prevStep);
-
-    tooltip.style.display = 'block';
-    var isMobile = window.innerWidth < 768;
+    renderTooltip(step);
 
     if (isMobile) {
       tooltip.style.left = '50%';
@@ -144,14 +123,61 @@
     }
   }
 
+  function renderTooltip(step) {
+    var progress = (currentStep + 1) + ' / ' + steps.length;
+    var footerHTML;
+
+    if (step.isCTA) {
+      footerHTML =
+        '<div class="tour-tooltip-footer tour-cta-footer">' +
+          '<span class="tour-tooltip-progress">' + progress + '</span>' +
+          '<div class="tour-tooltip-actions">' +
+            '<a href="/" class="tour-btn tour-btn-next tour-btn-upload">Upload Now</a>' +
+            '<button class="tour-btn tour-btn-back tour-btn-explore">Explore Demo</button>' +
+          '</div>' +
+        '</div>';
+    } else {
+      footerHTML =
+        '<div class="tour-tooltip-footer">' +
+          '<span class="tour-tooltip-progress">' + progress + '</span>' +
+          '<div class="tour-tooltip-actions">' +
+            (currentStep > 0 ? '<button class="tour-btn tour-btn-back">Back</button>' : '') +
+            '<button class="tour-btn tour-btn-next">Next</button>' +
+          '</div>' +
+        '</div>';
+    }
+
+    tooltip.innerHTML =
+      '<div class="tour-tooltip-header">' +
+        '<span class="tour-tooltip-title">' + step.title + '</span>' +
+        '<button class="tour-tooltip-close" aria-label="Skip tour">&times;</button>' +
+      '</div>' +
+      '<p class="tour-tooltip-text">' + step.text + '</p>' +
+      footerHTML;
+
+    tooltip.querySelector('.tour-tooltip-close').addEventListener('click', endTour);
+
+    if (step.isCTA) {
+      tooltip.querySelector('.tour-btn-explore').addEventListener('click', endTour);
+    } else {
+      tooltip.querySelector('.tour-btn-next').addEventListener('click', nextStep);
+      var backBtn = tooltip.querySelector('.tour-btn-back');
+      if (backBtn) backBtn.addEventListener('click', prevStep);
+    }
+
+    tooltip.style.display = 'block';
+  }
+
   function showStep() {
     if (currentStep >= steps.length) { endTour(); return; }
     var step = steps[currentStep];
-    var el = document.querySelector(step.target);
-    if (!el || el.style.display === 'none') {
-      currentStep++;
-      showStep();
-      return;
+    if (!step.isCTA) {
+      var el = document.querySelector(step.target);
+      if (!el) {
+        currentStep++;
+        showStep();
+        return;
+      }
     }
     positionTooltip(step);
   }
@@ -166,55 +192,29 @@
     if (currentStep > 0) { currentStep--; showStep(); }
   }
 
-  function endTour() {
-    localStorage.setItem(STORAGE_KEY, 'true');
+  function cleanup() {
+    // Restore any nav items we revealed
+    var revealed = document.querySelectorAll('[data-tour-revealed]');
+    for (var i = 0; i < revealed.length; i++) {
+      revealed[i].style.display = 'none';
+      revealed[i].removeAttribute('data-tour-revealed');
+    }
     if (overlay) overlay.remove();
     if (spotlight) spotlight.remove();
     if (tooltip) tooltip.remove();
     overlay = null; spotlight = null; tooltip = null;
-    if (checklist) { checklist.style.opacity = '0'; setTimeout(function() { if (checklist) checklist.remove(); checklist = null; }, 300); }
+  }
+
+  function endTour() {
+    localStorage.setItem(STORAGE_KEY, 'true');
+    cleanup();
   }
 
   function startTour() {
+    if (overlay) cleanup();
     currentStep = 0;
     createOverlay();
     showStep();
-  }
-
-  function buildChecklist() {
-    if (sessionCount > 3) return;
-    checklist = document.createElement('div');
-    checklist.className = 'tour-checklist';
-    checklist.innerHTML =
-      '<div class="tour-checklist-header">' +
-        '<span>Getting Started</span>' +
-        '<button class="tour-checklist-close" aria-label="Dismiss">&times;</button>' +
-      '</div>' +
-      '<ul class="tour-checklist-items">' +
-        '<li data-check="import"><span class="tour-check-icon"></span> Import your CSV data</li>' +
-        '<li data-check="sync"><span class="tour-check-icon"></span> Sync market prices</li>' +
-        '<li data-check="overview"><span class="tour-check-icon"></span> Review portfolio summary</li>' +
-        '<li data-check="tax"><span class="tour-check-icon"></span> Check tax estimates</li>' +
-      '</ul>' +
-      '<button class="tour-btn tour-btn-next tour-checklist-replay">Replay Tour</button>';
-
-    var hasData = D && D.summary && D.summary.total_value_eur > 0;
-    var hasPrices = D && D.daily_series && D.daily_series.dates && D.daily_series.dates.length > 0;
-    if (hasData) checklist.querySelector('[data-check="import"]').classList.add('checked');
-    if (hasPrices) checklist.querySelector('[data-check="sync"]').classList.add('checked');
-    if (hasData) checklist.querySelector('[data-check="overview"]').classList.add('checked');
-
-    checklist.querySelector('.tour-checklist-close').addEventListener('click', function() {
-      checklist.style.opacity = '0';
-      setTimeout(function() { if (checklist) checklist.remove(); checklist = null; }, 300);
-    });
-    checklist.querySelector('.tour-checklist-replay').addEventListener('click', function() {
-      if (checklist) { checklist.remove(); checklist = null; }
-      localStorage.removeItem(STORAGE_KEY);
-      startTour();
-    });
-
-    document.body.appendChild(checklist);
   }
 
   function handleKeydown(e) {
@@ -230,8 +230,14 @@
     if (overlay && currentStep < steps.length) positionTooltip(steps[currentStep]);
   });
 
-  if (sessionCount === 1) {
+  // Auto-start on first visit
+  if (localStorage.getItem(STORAGE_KEY) !== 'true') {
     setTimeout(startTour, 600);
   }
-  buildChecklist();
+
+  // Expose globally for the help icon
+  window.replayTour = function() {
+    localStorage.removeItem(STORAGE_KEY);
+    startTour();
+  };
 })();

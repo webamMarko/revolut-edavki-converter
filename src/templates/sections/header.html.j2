@@ -15,9 +15,14 @@
   <div class="sidebar-brand">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem">
       <a class="brand-title" href="/" style="text-decoration:none;color:inherit">Portfolio<span class="brand-accent">.</span></a>
-      <button class="theme-toggle" id="themeToggleDesktop" onclick="toggleTheme()" aria-label="Toggle theme">
-        <span id="themeIconDesktop">☀️</span>
-      </button>
+      <div style="display:flex;align-items:center;gap:0.25rem">
+        <button class="tour-help-btn" onclick="replayTour()" aria-label="Replay guided tour" title="Guided tour">
+          <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5"/><path d="M6 6.5a2 2 0 1 1 2 2v1"/><circle cx="8" cy="12" r="0.5" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <button class="theme-toggle" id="themeToggleDesktop" onclick="toggleTheme()" aria-label="Toggle theme">
+          <span id="themeIconDesktop">☀️</span>
+        </button>
+      </div>
     </div>
     <div class="brand-dates">{{ start_date }} &ndash; {{ end_date }}</div>
   </div>
