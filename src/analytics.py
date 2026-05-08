@@ -38,6 +38,8 @@ class BenchmarkComparison:
     return_pct: float
     portfolio_return_pct: float
     alpha_pct: float
+    sharpe_ratio: float | None = None
+    max_drawdown_pct: float | None = None
 
 
 @dataclass
@@ -1064,12 +1066,34 @@ def _compute_benchmarks(conn: sqlite3.Connection, daily_df: pd.DataFrame,
 
         if start_price > 0:
             bench_return = (end_price / start_price - 1) * 100
+
+            # Compute per-benchmark Sharpe ratio and max drawdown
+            import numpy as np
+            closes_arr = np.array(closes, dtype=float)
+            daily_rets = np.diff(closes_arr) / closes_arr[:-1]
+            daily_rets = daily_rets[np.isfinite(daily_rets)]
+
+            bench_sharpe = None
+            if len(daily_rets) >= 20:
+                vol_daily = float(np.std(daily_rets, ddof=1))
+                if vol_daily > 1e-10:
+                    mean_annual = float(np.mean(daily_rets)) * 252
+                    bench_sharpe = round((mean_annual - 0.03) / (vol_daily * np.sqrt(252)), 2)
+
+            bench_max_dd = None
+            if len(closes_arr) >= 2:
+                peak = np.maximum.accumulate(closes_arr)
+                dd = (closes_arr - peak) / peak
+                bench_max_dd = round(float(np.min(dd)) * 100, 2)
+
             results.append(BenchmarkComparison(
                 name=name,
                 ticker=ticker,
                 return_pct=bench_return,
                 portfolio_return_pct=portfolio_return,
                 alpha_pct=portfolio_return - bench_return,
+                sharpe_ratio=bench_sharpe,
+                max_drawdown_pct=bench_max_dd,
             ))
             # Rebase to 100
             rebased = pd.Series(

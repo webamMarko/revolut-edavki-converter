@@ -25,60 +25,10 @@ function buildPortfolioChart() {
   let chartLabels = allDates.slice();
   let portfolioData = ds.value_eur.slice();
   let investedData  = ds.invested_eur.slice();
-  let fireData = null, projData = null;
-
-  if (D.fire != null && showFire) {
-    const fire = D.fire;
-    const fireTarget = fire.target;
-    const inflation = getFireInflation() / 100;
-    const activeSummary = getActiveSummary();
-    const nominalCAGR = (activeSummary.cagr_pct != null ? activeSummary.cagr_pct : 8) / 100;
-    const realReturn = (1 + nominalCAGR) / (1 + inflation) - 1;
-    const currentValue = ds.value_eur[ds.value_eur.length - 1];
-    const lastDate = new Date(allDates[allDates.length - 1]);
-    const monthlyContrib = getFireMonthlyContrib();
-    const annualContrib = monthlyContrib * 12;
-    let yearsToFire = null;
-    if (realReturn > 0 && currentValue < fireTarget) {
-      yearsToFire = annualContrib > 0
-        ? yearsToFireWithContrib(currentValue, fireTarget, realReturn, annualContrib)
-        : Math.log(fireTarget / currentValue) / Math.log(1 + realReturn);
-    }
-    const horizonMonths = yearsToFire != null && yearsToFire < 50
-      ? Math.ceil(yearsToFire * 12) + 24
-      : 36;
-    const futureDates = [];
-    const futureProj  = [currentValue];
-    const monthlyRate = Math.pow(1 + nominalCAGR, 1/12) - 1;
-    for (let m = 1; m <= horizonMonths; m++) {
-      const d = new Date(lastDate);
-      d.setMonth(d.getMonth() + m);
-      futureDates.push(d.toISOString().slice(0, 10));
-      // Compound previous value + monthly contribution
-      const prev = futureProj[m - 1];
-      futureProj.push(Math.round(prev * (1 + monthlyRate) + monthlyContrib));
-    }
-    chartLabels  = allDates.concat(futureDates);
-    const futurePad = new Array(futureDates.length).fill(null);
-    portfolioData = ds.value_eur.concat(futurePad);
-    investedData  = ds.invested_eur.concat(futurePad);
-    // FIRE target: flat for historical dates, inflating for future dates
-    const monthlyInflation = Math.pow(1 + inflation, 1/12) - 1;
-    fireData = new Array(allDates.length).fill(fireTarget);
-    for (let m = 1; m <= futureDates.length; m++) {
-      fireData.push(Math.round(fireTarget * Math.pow(1 + monthlyInflation, m)));
-    }
-    projData = new Array(allDates.length - 1).fill(null).concat(futureProj);
-  }
-
   const chartDatasets = [
     {label:'Portfolio Value', data:portfolioData, borderColor:'#4285f4', backgroundColor:'rgba(66,133,244,0.08)', fill:true,  tension:0.15, pointRadius:0, borderWidth:2},
     {label:'Cash Invested',   data:investedData,  borderColor:'#9e9e9e', borderDash:[5,5],   fill:false, tension:0.15, pointRadius:0, borderWidth:1.5},
   ];
-  if (fireData) {
-    chartDatasets.push({label:'FIRE Target',      data:fireData, borderColor:'#22c55e', borderDash:[6,4], fill:false, tension:0,    pointRadius:0, borderWidth:2});
-    chartDatasets.push({label:'Projected Growth', data:projData, borderColor:'#4285f4', borderDash:[3,3], fill:false, tension:0.1,  pointRadius:0, borderWidth:1.5, spanGaps:false});
-  }
 
   return new Chart(ctx1, {
     type: 'line',
@@ -113,7 +63,7 @@ function _benchmarkDatasets() {
     }
   }
 
-  const bColors = {'S&P 500':'#ea4335', 'NASDAQ':'#34a853', 'Dow Jones':'#fbbc04', 'FTSE 100':'#7c3aed', 'VWCE':'#f97316'};
+  const bColors = {'S&P 500':'#ea4335', 'NASDAQ':'#34a853', 'Dow Jones':'#fbbc04', 'FTSE 100':'#7c3aed', 'VWCE':'#f97316', 'MSCI World':'#0ea5e9', 'STOXX Europe 600':'#ec4899'};
   const bds = [{label:'Portfolio', data:portData, borderColor:'#4285f4', borderWidth:2, pointRadius:0, tension:0.15}];
 
   bKeys.forEach(tk => {

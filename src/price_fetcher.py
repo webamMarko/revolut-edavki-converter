@@ -28,6 +28,8 @@ BENCHMARKS = {
     "^DJI": "Dow Jones",
     "^FTSE": "FTSE 100",
     "VWCE.DE": "VWCE",
+    "URTH": "MSCI World",
+    "EXSA.DE": "STOXX Europe 600",
 }
 
 FX_TICKER = "EURUSD=X"

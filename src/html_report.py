@@ -588,6 +588,8 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                 "return_pct": round(b.return_pct, 2),
                 "portfolio_return_pct": round(b.portfolio_return_pct, 2),
                 "alpha_pct": round(b.alpha_pct, 2),
+                "sharpe_ratio": b.sharpe_ratio,
+                "max_drawdown_pct": b.max_drawdown_pct,
             }
             for b in analytics.benchmarks
         ],
