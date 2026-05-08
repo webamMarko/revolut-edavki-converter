@@ -2249,7 +2249,9 @@ def _import_wizard_html_with_user(username: str = "", role: str = "premium") -> 
     <div class="step-sep"></div>
     <div class="step" id="s2"><span class="step-num">2</span><span>Map Columns</span></div>
     <div class="step-sep"></div>
-    <div class="step" id="s3"><span class="step-num">3</span><span>Import</span></div>
+    <div class="step" id="s3"><span class="step-num">3</span><span>Validate</span></div>
+    <div class="step-sep"></div>
+    <div class="step" id="s4"><span class="step-num">4</span><span>Import</span></div>
   </div>
 
   <!-- Import History Card -->
@@ -2297,19 +2299,39 @@ def _import_wizard_html_with_user(username: str = "", role: str = "premium") -> 
     <div class="error-msg" id="step2Err"></div>
     <div class="btn-group">
       <button class="btn btn-secondary" id="backBtn1">&#8592; Back</button>
-      <button class="btn btn-primary" id="nextBtn2" disabled>Next: Review &amp; Import</button>
+      <button class="btn btn-primary" id="nextBtn2" disabled>Next: Validate</button>
     </div>
   </div>
 
-  <!-- Step 3: Review & Import (hidden initially) -->
+  <!-- Step 3: Validate (hidden initially) -->
   <div class="card" id="step3" style="display:none">
+    <h2>Validation results</h2>
+    <div id="validationLoading" style="text-align:center;padding:2rem 0">
+      <span class="spin" style="display:inline-block;width:20px;height:20px"></span>
+      <div style="margin-top:.5rem;font-size:.85rem;color:var(--muted)">Validating rows...</div>
+    </div>
+    <div id="validationResults" style="display:none">
+      <div id="validationSummary" style="padding:.6rem .8rem;margin-bottom:.75rem;border-radius:6px;font-size:.85rem"></div>
+      <div id="validationIssues"></div>
+      <div id="validationMissingBuys"></div>
+      <div id="validationDateGaps"></div>
+    </div>
+    <div class="error-msg" id="step3Err"></div>
+    <div class="btn-group" id="step3Btns" style="display:none">
+      <button class="btn btn-secondary" id="backBtn2">&#8592; Back to Mapping</button>
+      <button class="btn btn-primary" id="nextBtn3">Continue to Import</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Review & Import (hidden initially) -->
+  <div class="card" id="step4" style="display:none">
     <h2>Review &amp; import</h2>
     <div id="overlapWarning" style="display:none;padding:.6rem .8rem;margin-bottom:.75rem;border-radius:6px;background:#fff8e1;border:1px solid #ffe082;font-size:.82rem;color:#6d4c00"></div>
     <div class="summary-list" id="summaryList"></div>
-    <div class="error-msg" id="step3Err"></div>
+    <div class="error-msg" id="step4Err"></div>
     <div id="successBox" style="display:none"></div>
-    <div class="btn-group" id="step3Btns">
-      <button class="btn btn-secondary" id="backBtn2">&#8592; Back</button>
+    <div class="btn-group" id="step4Btns">
+      <button class="btn btn-secondary" id="backBtn3">&#8592; Back</button>
       <button class="btn btn-primary" id="importBtn">Import</button>
     </div>
   </div>
@@ -2371,7 +2393,7 @@ function esc(s) { const d = document.createElement('div'); d.textContent = Strin
 
 // --- Step indicators ---
 function setStep(n) {
-  [1,2,3].forEach(i => {
+  [1,2,3,4].forEach(i => {
     const el = document.getElementById('s'+i);
     el.classList.remove('active','done');
     if (i < n) el.classList.add('done');
