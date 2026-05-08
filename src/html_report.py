@@ -991,6 +991,13 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
     # Correlation matrix
     data["correlation"] = _compute_correlation_matrix(conn, analytics.positions, prices_conn=_pconn)
 
+    # DCA Strategy analysis
+    try:
+        from .dca_strategy import compute_dca_analysis
+        data["dca_strategy"] = compute_dca_analysis(conn, prices_conn=_pconn)
+    except Exception:
+        data["dca_strategy"] = None
+
     return data
 
 

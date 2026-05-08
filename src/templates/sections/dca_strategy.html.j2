@@ -1,0 +1,29 @@
+<section class="card" id="dcaSummary">
+  <h2>DCA Strategy</h2>
+  <p style="color:var(--muted);font-size:0.8rem;margin:-0.25rem 0 0.75rem">Auto-detected dollar-cost averaging patterns with lump-sum comparison</p>
+  <div class="card-grid" id="dcaCards"></div>
+</section>
+
+<section class="card" id="dcaChartSection" style="display:none">
+  <h3 id="dcaChartTitle">DCA vs Lump Sum</h3>
+  <div class="chart-wrap" style="height:280px">
+    <canvas id="dcaChart"></canvas>
+  </div>
+</section>
+
+<section class="card" id="dcaTableSection" style="display:none">
+  <h3>DCA Patterns Detected</h3>
+  <div class="table-scroll">
+    <table id="dcaTable" class="data-table sortable"></table>
+  </div>
+</section>
+
+<section class="card" id="dcaDetailSection" style="display:none">
+  <h3 id="dcaDetailTitle">Purchase History</h3>
+  <div class="chart-wrap" style="height:240px">
+    <canvas id="dcaDetailChart"></canvas>
+  </div>
+  <div class="table-scroll" style="margin-top:1rem">
+    <table id="dcaDetailTable" class="data-table"></table>
+  </div>
+</section>

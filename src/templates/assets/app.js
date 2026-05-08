@@ -142,4 +142,5 @@ function updateAll() {
   if (typeof updateFire === 'function') updateFire();
   if (typeof updateWhatIf === 'function') updateWhatIf();
   if (typeof updateAchievements === 'function') updateAchievements();
+  if (typeof updateDCAStrategy === 'function') updateDCAStrategy();
 }
