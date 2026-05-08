@@ -1,0 +1,37 @@
+<section class="card" id="taxPreviewSection" style="display:none">
+  <div class="chart-header">
+    <h2 id="taxPreviewTitle">Tax Liability Preview</h2>
+  </div>
+  <p id="taxPreviewDesc" style="color:var(--muted);font-size:0.8rem;margin:-0.5rem 0 1rem"></p>
+
+  <!-- YTD Summary cards -->
+  <div id="taxPreviewCards" class="card-grid small"></div>
+
+  <!-- Tax by bracket breakdown -->
+  <div class="table-scroll" style="margin-top:1rem">
+    <table id="taxBracketTable" class="data-table"></table>
+  </div>
+
+  <!-- What-If Simulator -->
+  <div id="taxWhatIf" style="margin-top:1.5rem;padding:1rem;border:1px solid var(--border);border-radius:8px">
+    <h3 style="margin:0 0 0.75rem;font-size:0.95rem" id="taxWhatIfTitle">What-If: Sell Position</h3>
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:end">
+      <div style="flex:1;min-width:140px">
+        <label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem" id="taxWhatIfTickerLabel">Position</label>
+        <select id="taxWhatIfTicker" class="regime-select" style="width:100%"></select>
+      </div>
+      <div style="flex:0 0 120px">
+        <label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem" id="taxWhatIfQtyLabel">Quantity</label>
+        <input type="range" id="taxWhatIfSlider" min="0" max="100" value="100" style="width:100%">
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--muted)">
+          <span>0</span><span id="taxWhatIfQtyValue">100%</span>
+        </div>
+      </div>
+      <button id="taxWhatIfCalc" class="tax-export-btn" style="height:2rem;padding:0 0.75rem;font-size:0.8rem">Calculate</button>
+    </div>
+    <div id="taxWhatIfResult" style="margin-top:1rem;display:none">
+      <div id="taxWhatIfCards" class="card-grid small"></div>
+      <div id="taxWhatIfBracketNote" style="margin-top:0.5rem;font-size:0.75rem;color:var(--muted)"></div>
+    </div>
+  </div>
+</section>

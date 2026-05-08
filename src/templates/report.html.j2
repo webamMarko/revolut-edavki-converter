@@ -35,6 +35,9 @@
     <div class="page" id="page-dividends">
       {% include "sections/dividends.html.j2" %}
     </div>
+    <div class="page" id="page-projections">
+      {% include "sections/projections.html.j2" %}
+    </div>
     <div class="page" id="page-notes">
       {% include "sections/notes.html.j2" %}
     </div>
@@ -42,6 +45,7 @@
       {% include "sections/real_estate.html.j2" %}
     </div>
     <div class="page" id="page-tax">
+      {% include "sections/tax_preview.html.j2" %}
       {% include "sections/tax.html.j2" %}
     </div>
     <div class="page" id="page-history">
@@ -64,6 +68,7 @@
 {% include "assets/sections/dividends.js" %}
 {% include "assets/sections/benchmark_table.js" %}
 {% include "assets/sections/tax.js" %}
+{% include "assets/sections/tax_preview.js" %}
 {% include "assets/sections/transactions.js" %}
 {% include "assets/sections/real_estate.js" %}
 {% include "assets/sections/notes.js" %}

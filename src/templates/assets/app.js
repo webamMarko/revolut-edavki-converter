@@ -134,4 +134,6 @@ function updateAll() {
   updateBenchmarkTable();
   updateTransactions();
   if (typeof updateTaxTable === 'function') updateTaxTable();
+  if (typeof updateTaxPreview === 'function') updateTaxPreview();
+  if (typeof updateFire === 'function') updateFire();
 }
