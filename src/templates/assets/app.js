@@ -98,9 +98,9 @@ function computeYearlyAverages() {
   }
   sel.addEventListener('change', function() { onRegimeChange(sel.value); });
   if (mobileSel) mobileSel.addEventListener('change', function() { onRegimeChange(mobileSel.value); });
-  // Show mobile filters row if we have regimes (even without asset filter)
-  const mobileFiltersEl = document.getElementById('mobileFilters');
-  if (mobileFiltersEl && regimes.length > 1) mobileFiltersEl.style.display = '';
+  // Show page-filters if we have regimes (even without asset filter)
+  const pageFiltersEl = document.getElementById('pageFilters');
+  if (pageFiltersEl && regimes.length > 1) pageFiltersEl.style.display = '';
 })();
 
 // --- Update all sections ---

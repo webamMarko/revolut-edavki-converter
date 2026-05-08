@@ -289,9 +289,9 @@ if (hasFilter) {
   const filterEl = document.getElementById('assetFilter');
   filterEl.style.display = '';
   const togglesEl = document.getElementById('assetToggles');
-  const mobileFiltersEl = document.getElementById('mobileFilters');
+  const pageFiltersEl = document.getElementById('pageFilters');
   const mobileTogglesEl = document.getElementById('mobileAssetToggles');
-  if (mobileFiltersEl) mobileFiltersEl.style.display = '';
+  if (pageFiltersEl) pageFiltersEl.style.display = '';
 
   classKeys.forEach(ac => {
     const isActive = activeClasses.has(ac);
@@ -356,3 +356,32 @@ function onFilterChange() {
   }
   _ensureClassData([...activeClasses]).then(_applyFilterChange);
 }
+
+// --- Page-filters visibility: only show on pages that use filters ---
+(function() {
+  var FILTER_PAGES = ['overview', 'charts', 'positions'];
+  var el = document.getElementById('pageFilters');
+  if (!el) return;
+  var _filtersEnabled = el.style.display !== 'none';
+
+  function updatePageFiltersVisibility(pageId) {
+    if (!_filtersEnabled) return;
+    var show = FILTER_PAGES.indexOf(pageId) !== -1;
+    el.style.display = show ? '' : 'none';
+  }
+
+  // Hook into switchPage when it becomes available
+  var _waitNav = setInterval(function() {
+    if (window.switchPage) {
+      clearInterval(_waitNav);
+      var _orig = window.switchPage;
+      window.switchPage = function(id) {
+        _orig(id);
+        updatePageFiltersVisibility(id);
+      };
+      // Set initial visibility
+      var active = localStorage.getItem('activePage') || 'overview';
+      updatePageFiltersVisibility(active);
+    }
+  }, 10);
+})();

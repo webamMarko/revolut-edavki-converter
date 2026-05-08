@@ -643,6 +643,9 @@ body {
   }
 }
 
+/* ---- More button: hidden on desktop ---- */
+.nav-more-btn { display: none; }
+
 /* ---- Mobile: bottom tab bar ---- */
 @media (max-width: 768px) {
   body { overflow: hidden; }
@@ -755,9 +758,6 @@ body {
   .note-modal-backdrop { padding: 0; align-items: flex-end; }
   .note-modal { max-height: 92dvh; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 }
-
-/* ---- More button: hidden on desktop ---- */
-.nav-more-btn { display: none; }
 
 /* ---- More bottom sheet ---- */
 .more-sheet-backdrop {
@@ -1369,7 +1369,7 @@ body {
   .range-bar, .chart-hint, .selection-banner { display: none !important; }
   .theme-toggle { display: none !important; }
   #assetFilter { display: none !important; }
-  #mobileFilters { display: none !important; }
+  #pageFilters { display: none !important; }
   .toolbar button, .tax-export-btn, #exportPositionsBtn { display: none !important; }
   .pos-chevron, .pos-chevron-placeholder { display: none !important; }
   .pos-detail-row { display: none !important; }
