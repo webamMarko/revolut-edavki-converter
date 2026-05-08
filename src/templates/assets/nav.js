@@ -80,6 +80,9 @@
   // Wire nav items
   navItems.forEach(function(item) {
     item.addEventListener('click', function() { switchPage(item.dataset.page); });
+    item.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); item.click(); }
+    });
   });
 
   // Keyboard: ← → or ↑ ↓ to step through visible nav items, plus page shortcuts

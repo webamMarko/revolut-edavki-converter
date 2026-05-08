@@ -1953,7 +1953,7 @@ _COMMON_CSS = r"""
 /* ---- Design tokens (dark default) ---- */
 :root {
   --bg:#0a0c10;--surface:#111520;--raised:#181e2e;--border:#1e2a3a;
-  --text:#dce4f0;--muted:#556075;--subtle:#2e3a4e;
+  --text:#dce4f0;--muted:#8090a8;--subtle:#2e3a4e;
   --accent:#f59e0b;--accent-dim:rgba(245,158,11,0.12);
   --green:#34d399;--red:#f87171;--blue:#60a5fa;
   --radius:10px;--radius-sm:6px;
@@ -2725,14 +2725,14 @@ def _login_html(error: str = "") -> str:
                    robots="index, follow")
         + f"""<body>
 <div class="auth-card">
-  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>
+  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme"><span class="theme-icon"></span></button>
   <div class="auth-card logo"><a href="/" style="text-decoration:none;color:inherit">Portfolio<span class="brand-accent">.</span></a></div>
   {error_block}
   <form method="POST" action="/login">
-    <label>Username or email</label>
-    <input type="text" name="username" required autofocus autocomplete="username">
-    <label>Password</label>
-    <input type="password" name="password" required autocomplete="current-password">
+    <label for="login-username">Username or email</label>
+    <input id="login-username" type="text" name="username" required autofocus autocomplete="username">
+    <label for="login-password">Password</label>
+    <input id="login-password" type="password" name="password" required autocomplete="current-password">
     <button class="btn btn-primary" style="width:100%" type="submit">Log in</button>
   </form>
 </div>
@@ -2754,15 +2754,15 @@ def _invite_html(token: str, email: str, error: str = "") -> str:
                     ".auth-card{max-width:400px}")
         + f"""<body>
 <div class="auth-card">
-  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>
+  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme"><span class="theme-icon"></span></button>
   <h1 style="font-size:1.2rem;font-weight:700;margin-bottom:0.5rem;text-align:center">Set your password</h1>
   <p class="auth-sub">Account: <strong>{email}</strong></p>
   {error_block}
   <form method="POST" action="/invite/{token}">
-    <label>Password</label>
-    <input type="password" name="password" required minlength="8" autocomplete="new-password">
-    <label>Confirm password</label>
-    <input type="password" name="confirm" required minlength="8" autocomplete="new-password">
+    <label for="invite-password">Password</label>
+    <input id="invite-password" type="password" name="password" required minlength="8" autocomplete="new-password">
+    <label for="invite-confirm">Confirm password</label>
+    <input id="invite-confirm" type="password" name="confirm" required minlength="8" autocomplete="new-password">
     <button class="btn btn-primary" style="width:100%" type="submit">Set password &amp; log in</button>
   </form>
 </div>
@@ -3319,34 +3319,47 @@ def _pricing_html(username: str = "", role: str = "guest") -> str:
   <section class="faq-section">
     <h2>Frequently Asked Questions</h2>
     <div class="faq-item">
-      <div class="faq-question" onclick="this.parentElement.classList.toggle(&quot;open&quot;)">
+      <div class="faq-question" tabindex="0" role="button" aria-expanded="false">
         <span>Where is my data stored?</span>
         <span class="faq-chevron">&#9660;</span>
       </div>
       <div class="faq-answer">Your data is stored on your own self-hosted server in a local SQLite database. No third-party services have access to your portfolio or trading data.</div>
     </div>
     <div class="faq-item">
-      <div class="faq-question" onclick="this.parentElement.classList.toggle(&quot;open&quot;)">
+      <div class="faq-question" tabindex="0" role="button" aria-expanded="false">
         <span>Which brokers are supported?</span>
         <span class="faq-chevron">&#9660;</span>
       </div>
       <div class="faq-answer">Currently supported: Revolut, Trading 212, IBKR (Interactive Brokers), Degiro, and Ilirika. CSV exports from these brokers are auto-detected on import.</div>
     </div>
     <div class="faq-item">
-      <div class="faq-question" onclick="this.parentElement.classList.toggle(&quot;open&quot;)">
+      <div class="faq-question" tabindex="0" role="button" aria-expanded="false">
         <span>Can I cancel anytime?</span>
         <span class="faq-chevron">&#9660;</span>
       </div>
       <div class="faq-answer">Yes. You can cancel your subscription at any time. Your data remains accessible and you can export everything before your plan expires.</div>
     </div>
     <div class="faq-item">
-      <div class="faq-question" onclick="this.parentElement.classList.toggle(&quot;open&quot;)">
+      <div class="faq-question" tabindex="0" role="button" aria-expanded="false">
         <span>What tax regimes are supported?</span>
         <span class="faq-chevron">&#9660;</span>
       </div>
       <div class="faq-answer">Slovenia (eDavki), Germany, and Austria tax reporting are supported. The system handles holding-period-based rates, FIFO matching, and generates the correct XML formats for each regime.</div>
     </div>
   </section>
+<script>
+document.querySelectorAll('.faq-question').forEach(function(q) {{
+  function toggle() {{
+    var item = q.parentElement;
+    var isOpen = item.classList.toggle('open');
+    q.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  }}
+  q.addEventListener('click', toggle);
+  q.addEventListener('keydown', function(e) {{
+    if (e.key === 'Enter' || e.key === ' ') {{ e.preventDefault(); toggle(); }}
+  }});
+}});
+</script>
 </div>
 {_COMMON_JS}
 </body>

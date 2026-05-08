@@ -4,7 +4,7 @@
     <span id="themeIconMobile">☀️</span>
   </button>
 </div>
-<nav class="sidebar">
+<nav class="sidebar" aria-label="Main navigation">
   <div class="sidebar-brand">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem">
       <a class="brand-title" href="/" style="text-decoration:none;color:inherit">Portfolio<span class="brand-accent">.</span></a>
@@ -35,57 +35,57 @@
     <div id="assetToggles" class="toggles"></div>
   </div>
 
-  <nav class="sidebar-nav">
-    <div class="nav-item active" data-page="overview">
+  <div class="sidebar-nav">
+    <div class="nav-item active" data-page="overview" tabindex="0" role="button">
       <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 11h3v3H2v-3zm4-4h3v7H6V7zm4-4h3v11h-3V3z"/></svg>
       <span>Overview</span>
     </div>
-    <div class="nav-item" data-page="charts">
+    <div class="nav-item" data-page="charts" tabindex="0" role="button">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1.5,12 5,5 9,9 14.5,2"/><polyline points="10,2 14.5,2 14.5,6.5"/></svg>
       <span>Performance</span>
     </div>
-    <div class="nav-item" data-page="positions">
+    <div class="nav-item" data-page="positions" tabindex="0" role="button">
       <svg viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
       <span>Positions</span>
     </div>
-    <div class="nav-item" data-page="risk" id="navRisk">
+    <div class="nav-item" data-page="risk" id="navRisk" tabindex="0" role="button">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1L1 14h14L8 1z"/><line x1="8" y1="6" x2="8" y2="9"/><circle cx="8" cy="11.5" r="0.5" fill="currentColor" stroke="none"/></svg>
       <span>Risk</span>
     </div>
-    <div class="nav-item" data-page="dividends" id="navDividends" style="display:none">
+    <div class="nav-item" data-page="dividends" id="navDividends" style="display:none" tabindex="0" role="button">
       <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.75 3.5v1.12c1.21.25 2 1.05 2 2.13h-1.5c0-.55-.45-.9-1.1-.9-.7 0-1.15.35-1.15.85 0 .42.3.68 1.05.88l.65.17c1.35.35 2.05.95 2.05 2.05 0 1.1-.8 1.85-2 2.1V14h-1.5v-1.12c-1.25-.27-2.1-1.1-2.1-2.23h1.5c0 .6.5 1 1.2 1 .75 0 1.2-.35 1.2-.9 0-.45-.3-.72-1.05-.92l-.7-.18C5.95 9.28 5.25 8.68 5.25 7.6c0-1.05.8-1.8 2-2.02V4.5h1.5z"/></svg>
       <span>Dividends</span>
     </div>
-    <div class="nav-item" data-page="projections" id="navProjections" style="display:none">
+    <div class="nav-item" data-page="projections" id="navProjections" style="display:none" tabindex="0" role="button">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 14 L6 6 L10 10 L14 2"/><path d="M14 2 L14 6" stroke-dasharray="1.5 1.5"/><circle cx="14" cy="2" r="1" fill="currentColor" stroke="none"/></svg>
       <span>Projections</span>
     </div>
-    <div class="nav-item" data-page="dca" id="navDCA" style="display:none">
+    <div class="nav-item" data-page="dca" id="navDCA" style="display:none" tabindex="0" role="button">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13 L5 10 L8 11 L11 6 L14 3"/><circle cx="5" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="8" cy="11" r="1.2" fill="currentColor" stroke="none"/><circle cx="11" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="14" cy="3" r="1.2" fill="currentColor" stroke="none"/></svg>
       <span>DCA Strategy</span>
     </div>
-    <div class="nav-item" data-page="notes">
+    <div class="nav-item" data-page="notes" tabindex="0" role="button">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2h10v9l-3 3H3V2z"/><line x1="5" y1="6" x2="11" y2="6"/><line x1="5" y1="9" x2="9" y2="9"/></svg>
       <span>Notes</span>
     </div>
     <div class="nav-divider"></div>
-    <div class="nav-item" data-page="realestate" id="navRealestate" style="display:none">
+    <div class="nav-item" data-page="realestate" id="navRealestate" style="display:none" tabindex="0" role="button">
       <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5L1.5 6.5V14h4v-4.5h5V14h4V6.5L8 1.5z"/></svg>
       <span>Real Estate</span>
     </div>
-    <div class="nav-item" data-page="tax">
+    <div class="nav-item" data-page="tax" tabindex="0" role="button">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="5" cy="5" r="1.5"/><circle cx="11" cy="11" r="1.5"/><line x1="13.5" y1="2.5" x2="2.5" y2="13.5"/></svg>
       <span>Tax</span>
     </div>
-    <div class="nav-item" data-page="history">
+    <div class="nav-item" data-page="history" tabindex="0" role="button">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="3" y1="4" x2="13" y2="4"/><line x1="3" y1="8" x2="13" y2="8"/><line x1="3" y1="12" x2="9" y2="12"/></svg>
       <span>History</span>
     </div>
-    <div class="nav-item nav-more-btn" id="navMoreBtn">
+    <div class="nav-item nav-more-btn" id="navMoreBtn" tabindex="0" role="button">
       <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/></svg>
       <span>More</span>
     </div>
-  </nav>
+  </div>
 
   <div class="sidebar-footer">
     Generated {{ generated_at }}<br>
