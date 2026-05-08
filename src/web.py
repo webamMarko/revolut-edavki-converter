@@ -32,6 +32,7 @@ DEMO_DB  = DATA_DIR / "_demo" / "portfolio.db"
 
 APP_BASE_URL           = os.environ.get("APP_BASE_URL", "http://localhost:8080")
 STRIPE_WEBHOOK_SECRET  = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_CHECKOUT_URL    = os.environ.get("STRIPE_CHECKOUT_URL", "")
 
 SESSION_TTL = 86400 * 7  # 7 days
 
@@ -256,6 +257,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._api_get_email_preferences()
         elif path == "/settings":
             self._serve_settings_page()
+        elif path == "/pricing":
+            self._serve_pricing_page()
         else:
             self.send_error(404)
 
@@ -1249,6 +1252,13 @@ class UploadHandler(BaseHTTPRequestHandler):
         html = _settings_html(session["username"], session["role"])
         self._html_response(html)
 
+    def _serve_pricing_page(self):
+        session = _get_session(self)
+        username = session["username"] if session else ""
+        role = session["role"] if session else "guest"
+        html = _pricing_html(username, role)
+        self._html_response(html)
+
     def _api_get_email_preferences(self):
         session = _get_session(self)
         if not session or session["role"] not in ("premium", "admin"):
@@ -1745,6 +1755,8 @@ def _header_html(username: str = "", role: str = "guest", active_page: str = "")
 
     nav = _link("/", "Home", "home")
     nav += _link("/report", "Report", "report")
+    if role == "guest":
+        nav += _link("/pricing", "Pricing", "pricing")
     if role in ("premium", "admin"):
         nav += _link("/import", "Import Wizard", "import")
         nav += _link("/settings", "Settings", "settings")
@@ -2521,6 +2533,167 @@ document.getElementById('saveBtn').addEventListener('click', async () => {{
     )
 
 
+def _pricing_html(username: str = "", role: str = "guest") -> str:
+    """Pricing page with feature comparison and Stripe checkout link."""
+    stripe_url = STRIPE_CHECKOUT_URL
+    cta_btn = (
+        f'<a class="btn btn-primary btn-lg" href="{stripe_url}">Get Started</a>'
+        if stripe_url else ""
+    )
+
+    extra_css = r"""
+/* ---- Pricing page ---- */
+.pricing-page{max-width:860px;width:100%;margin:0 auto;padding:2.5rem 1rem;display:flex;flex-direction:column;gap:2.5rem}
+.pricing-hero{text-align:center}
+.pricing-hero h1{font-size:clamp(1.4rem,3.5vw,2rem);font-weight:700;letter-spacing:-0.03em;margin-bottom:0.5rem}
+.pricing-hero p{font-size:0.95rem;color:var(--muted);max-width:500px;margin:0 auto}
+
+/* Pricing cards */
+.pricing-cards{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+.pricing-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.75rem;display:flex;flex-direction:column}
+.pricing-card.featured{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.pricing-card-header{margin-bottom:1.25rem}
+.pricing-card-name{font-size:1rem;font-weight:700;margin-bottom:0.25rem}
+.pricing-card-price{font-size:1.8rem;font-weight:700;color:var(--accent)}
+.pricing-card-price .period{font-size:0.8rem;font-weight:500;color:var(--muted)}
+.pricing-card-desc{font-size:0.8rem;color:var(--muted);margin-top:0.35rem}
+.annual-badge{display:inline-block;font-size:0.68rem;font-weight:700;padding:0.15rem 0.5rem;border-radius:8px;background:rgba(52,211,153,0.12);color:var(--green);margin-left:0.5rem}
+.pricing-card-features{list-style:none;display:flex;flex-direction:column;gap:0.5rem;flex:1;margin-bottom:1.25rem}
+.pricing-card-features li{font-size:0.83rem;display:flex;align-items:flex-start;gap:0.5rem}
+.pricing-card-features .check{color:var(--green);font-weight:700;flex-shrink:0}
+.pricing-card-features .cross{color:var(--muted);flex-shrink:0;opacity:0.5}
+.pricing-card .btn-lg{padding:0.7rem 1.5rem;font-size:0.92rem;width:100%;text-align:center}
+
+/* Feature comparison table */
+.comparison-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;overflow-x:auto}
+.comparison-section h2{font-size:1rem;font-weight:700;margin-bottom:1rem}
+.comparison-table{width:100%;border-collapse:collapse;font-size:0.83rem}
+.comparison-table th,.comparison-table td{padding:0.6rem 0.75rem;text-align:left;border-bottom:1px solid var(--border)}
+.comparison-table th{font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:600}
+.comparison-table th:not(:first-child),.comparison-table td:not(:first-child){text-align:center;width:100px}
+.comparison-table .check-icon{color:var(--green);font-weight:700}
+.comparison-table .cross-icon{color:var(--muted);opacity:0.4}
+.comparison-table tbody tr:hover{background:var(--raised)}
+
+/* FAQ section */
+.faq-section h2{font-size:1rem;font-weight:700;margin-bottom:1rem}
+.faq-item{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:0.5rem;overflow:hidden}
+.faq-question{display:flex;align-items:center;justify-content:space-between;padding:0.85rem 1rem;cursor:pointer;font-size:0.88rem;font-weight:600;background:var(--surface);transition:background 0.12s}
+.faq-question:hover{background:var(--raised)}
+.faq-chevron{font-size:0.7rem;color:var(--muted);transition:transform 0.2s}
+.faq-item.open .faq-chevron{transform:rotate(180deg);color:var(--accent)}
+.faq-answer{display:none;padding:0 1rem 1rem;font-size:0.83rem;color:var(--muted);line-height:1.6}
+.faq-item.open .faq-answer{display:block}
+
+@media (max-width:768px){
+  .pricing-cards{grid-template-columns:1fr}
+  .pricing-page{padding:1.5rem 0.75rem;gap:1.75rem}
+}
+"""
+
+    return (
+        _head_html("Pricing — WealthEagle", extra_css=extra_css)
+        + f"""<body>
+{_header_html(username, role, "pricing")}
+<div class="pricing-page">
+  <section class="pricing-hero">
+    <h1>Simple, transparent pricing</h1>
+    <p>Everything you need to track your portfolio and file taxes — self-hosted and private.</p>
+  </section>
+
+  <section class="pricing-cards">
+    <div class="pricing-card">
+      <div class="pricing-card-header">
+        <div class="pricing-card-name">Demo</div>
+        <div class="pricing-card-price">Free</div>
+        <div class="pricing-card-desc">Explore with sample data</div>
+      </div>
+      <ul class="pricing-card-features">
+        <li><span class="check">&#10003;</span> Sample portfolio dashboard</li>
+        <li><span class="cross">&#10005;</span> Upload your own data</li>
+        <li><span class="cross">&#10005;</span> Tax exports</li>
+        <li><span class="cross">&#10005;</span> Projections &amp; reports</li>
+      </ul>
+      <a class="btn btn-secondary btn-lg" href="/report">Try Demo</a>
+    </div>
+    <div class="pricing-card featured">
+      <div class="pricing-card-header">
+        <div class="pricing-card-name">Premium<span class="annual-badge">Save 20% yearly</span></div>
+        <div class="pricing-card-price">&euro;9<span class="period">/month</span></div>
+        <div class="pricing-card-desc">Or &euro;86/year (billed annually)</div>
+      </div>
+      <ul class="pricing-card-features">
+        <li><span class="check">&#10003;</span> Upload your own data</li>
+        <li><span class="check">&#10003;</span> Multi-asset tracking</li>
+        <li><span class="check">&#10003;</span> eDavki XML tax export</li>
+        <li><span class="check">&#10003;</span> FIRE / Monte Carlo projections</li>
+        <li><span class="check">&#10003;</span> Email reports</li>
+        <li><span class="check">&#10003;</span> Everything included</li>
+      </ul>
+      {cta_btn}
+    </div>
+  </section>
+
+  <section class="comparison-section">
+    <h2>Feature Comparison</h2>
+    <table class="comparison-table">
+      <thead>
+        <tr><th>Feature</th><th>Demo</th><th>Premium</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Sample portfolio dashboard</td><td class="check-icon">&#10003;</td><td class="check-icon">&#10003;</td></tr>
+        <tr><td>Upload your own data</td><td class="cross-icon">&#10005;</td><td class="check-icon">&#10003;</td></tr>
+        <tr><td>Multi-asset tracking (stocks, CFD, crypto, savings)</td><td class="cross-icon">&#10005;</td><td class="check-icon">&#10003;</td></tr>
+        <tr><td>eDavki XML tax export</td><td class="cross-icon">&#10005;</td><td class="check-icon">&#10003;</td></tr>
+        <tr><td>Dividend income &amp; withholding tax report</td><td class="cross-icon">&#10005;</td><td class="check-icon">&#10003;</td></tr>
+        <tr><td>Tax-loss harvesting suggestions</td><td class="cross-icon">&#10005;</td><td class="check-icon">&#10003;</td></tr>
+        <tr><td>FIRE / Monte Carlo projections</td><td class="cross-icon">&#10005;</td><td class="check-icon">&#10003;</td></tr>
+        <tr><td>Email reports (weekly/monthly)</td><td class="cross-icon">&#10005;</td><td class="check-icon">&#10003;</td></tr>
+        <tr><td>Investment notes</td><td class="cross-icon">&#10005;</td><td class="check-icon">&#10003;</td></tr>
+        <tr><td>Real estate tracking</td><td class="cross-icon">&#10005;</td><td class="check-icon">&#10003;</td></tr>
+        <tr><td>PDF tax summary export</td><td class="cross-icon">&#10005;</td><td class="check-icon">&#10003;</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="faq-section">
+    <h2>Frequently Asked Questions</h2>
+    <div class="faq-item">
+      <div class="faq-question" onclick="this.parentElement.classList.toggle(&quot;open&quot;)">
+        <span>Where is my data stored?</span>
+        <span class="faq-chevron">&#9660;</span>
+      </div>
+      <div class="faq-answer">Your data is stored on your own self-hosted server in a local SQLite database. No third-party services have access to your portfolio or trading data.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-question" onclick="this.parentElement.classList.toggle(&quot;open&quot;)">
+        <span>Which brokers are supported?</span>
+        <span class="faq-chevron">&#9660;</span>
+      </div>
+      <div class="faq-answer">Currently supported: Revolut, Trading 212, IBKR (Interactive Brokers), Degiro, and Ilirika. CSV exports from these brokers are auto-detected on import.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-question" onclick="this.parentElement.classList.toggle(&quot;open&quot;)">
+        <span>Can I cancel anytime?</span>
+        <span class="faq-chevron">&#9660;</span>
+      </div>
+      <div class="faq-answer">Yes. You can cancel your subscription at any time. Your data remains accessible and you can export everything before your plan expires.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-question" onclick="this.parentElement.classList.toggle(&quot;open&quot;)">
+        <span>What tax regimes are supported?</span>
+        <span class="faq-chevron">&#9660;</span>
+      </div>
+      <div class="faq-answer">Slovenia (eDavki), Germany, and Austria tax reporting are supported. The system handles holding-period-based rates, FIFO matching, and generates the correct XML formats for each regime.</div>
+    </div>
+  </section>
+</div>
+{_COMMON_JS}
+</body>
+</html>"""
+    )
+
+
 def _upload_html(user_json: str) -> str:
     """Home / upload page. Replaces the old _UPLOAD_HTML constant."""
     user = json.loads(user_json)
@@ -2531,7 +2704,8 @@ def _upload_html(user_json: str) -> str:
     guest_banner = "" if is_premium else (
         '<div class="guest-banner">'
         '&#128275; You\'re viewing the <strong>demo portfolio</strong>. '
-        '<a href="/login" style="color:var(--accent);font-weight:700">Log in</a> to view your own data.'
+        '<a href="/login" style="color:var(--accent);font-weight:700">Log in</a> to view your own data'
+        ' or <a href="/pricing" style="color:var(--accent);font-weight:700">see pricing &rarr;</a>'
         '</div>'
     )
     upload_display = '' if is_premium else ' style="display:none"'
