@@ -40,7 +40,7 @@
 
   function getPage(id) { return document.getElementById('page-' + id); }
 
-  function switchPage(id) {
+  var switchPage = function(id) {
     if (id === currentPage) return;
     const prev = getPage(currentPage);
     const next = getPage(id);
@@ -171,10 +171,132 @@
     if (navProj) navProj.style.display = '';
   }
 
+  // --- Mobile "More" bottom sheet ---
+  var PRIMARY_PAGES = ['overview', 'charts', 'positions', 'tax'];
+  // Promote Risk to primary mobile nav when portfolio has 5+ positions
+  if (D.positions && D.positions.length >= 5) {
+    PRIMARY_PAGES.push('risk');
+  }
+  var moreBtn = document.getElementById('navMoreBtn');
+  var moreSheet = document.getElementById('moreSheet');
+  var moreBackdrop = document.getElementById('moreSheetBackdrop');
+  var moreList = document.getElementById('moreSheetList');
+
+  function isMobile() { return window.innerWidth <= 768; }
+
+  function applyMobileHidden() {
+    navItems.forEach(function(item) {
+      var page = item.dataset.page;
+      if (!page) return;
+      if (PRIMARY_PAGES.indexOf(page) === -1) {
+        item.classList.add('mobile-hidden');
+      } else {
+        item.classList.remove('mobile-hidden');
+      }
+    });
+  }
+
+  function getSecondaryItems() {
+    return [...navItems].filter(function(item) {
+      return item.dataset.page &&
+             PRIMARY_PAGES.indexOf(item.dataset.page) === -1 &&
+             item.style.display !== 'none' &&
+             !item.classList.contains('nav-more-btn');
+    });
+  }
+
+  function populateSheet() {
+    if (!moreList) return;
+    moreList.innerHTML = '';
+    getSecondaryItems().forEach(function(item) {
+      var div = document.createElement('div');
+      div.className = 'more-sheet-item';
+      if (item.dataset.page === currentPage) div.classList.add('sheet-active');
+      div.innerHTML = item.querySelector('svg').outerHTML + '<span>' + item.querySelector('span').textContent + '</span>';
+      div.addEventListener('click', function() {
+        switchPage(item.dataset.page);
+        closeMoreSheet();
+      });
+      moreList.appendChild(div);
+    });
+  }
+
+  function openMoreSheet() {
+    if (!moreSheet || !moreBackdrop) return;
+    populateSheet();
+    moreBackdrop.classList.add('visible');
+    // Force reflow before adding open class for transition
+    void moreSheet.offsetWidth;
+    moreSheet.classList.add('open');
+  }
+
+  function closeMoreSheet() {
+    if (!moreSheet || !moreBackdrop) return;
+    moreSheet.classList.remove('open');
+    setTimeout(function() { moreBackdrop.classList.remove('visible'); }, 250);
+  }
+
+  if (moreBtn) {
+    moreBtn.addEventListener('click', function() {
+      if (moreSheet && moreSheet.classList.contains('open')) {
+        closeMoreSheet();
+      } else {
+        openMoreSheet();
+      }
+    });
+  }
+  if (moreBackdrop) {
+    moreBackdrop.addEventListener('click', closeMoreSheet);
+  }
+
+  // Swipe-down to dismiss sheet
+  (function() {
+    if (!moreSheet) return;
+    var sheetTouchStartY = 0;
+    moreSheet.addEventListener('touchstart', function(e) {
+      sheetTouchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    moreSheet.addEventListener('touchend', function(e) {
+      var dy = e.changedTouches[0].clientY - sheetTouchStartY;
+      if (dy > 60) closeMoreSheet();
+    }, { passive: true });
+  })();
+
+  // Highlight "More" button when a secondary page is active
+  function updateMoreBtnActive() {
+    if (!moreBtn) return;
+    var secondaryPages = getSecondaryItems().map(function(i) { return i.dataset.page; });
+    if (secondaryPages.indexOf(currentPage) !== -1) {
+      moreBtn.classList.add('active');
+    } else {
+      moreBtn.classList.remove('active');
+    }
+  }
+
+  // Patch switchPage to update More button state
+  var _origSwitchPage = switchPage;
+  switchPage = function(id) {
+    _origSwitchPage(id);
+    setTimeout(updateMoreBtnActive, 130);
+  };
+
+  // Apply mobile classes on load
+  applyMobileHidden();
+  updateMoreBtnActive();
+  window.addEventListener('resize', function() {
+    applyMobileHidden();
+    updateMoreBtnActive();
+  });
+
+  // Close sheet on Escape
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && moreSheet && moreSheet.classList.contains('open')) {
+      closeMoreSheet();
+    }
+  });
+
   // Touch swipe: left/right to navigate between pages.
-  // Requires the gesture to be clearly horizontal: |dx| > 70px AND |dx| > 3*|dy|
-  // (angle within ~18° of horizontal). This prevents vertical scrolls from
-  // accidentally triggering a page switch regardless of speed.
+  // On mobile, only cycles through primary pages + "more" secondary page if active.
   (function() {
     var content = document.querySelector('.content');
     if (!content) return;
@@ -187,23 +309,52 @@
     }, { passive: true });
 
     content.addEventListener('touchend', function(e) {
-      // Ignore slow gestures — a swipe must complete within 300ms
       if (Date.now() - touchStartTime > 300) return;
       var dx = e.changedTouches[0].clientX - touchStartX;
       var dy = e.changedTouches[0].clientY - touchStartY;
       var adx = Math.abs(dx), ady = Math.abs(dy);
-      // Must travel at least 70px horizontally AND be 3× more horizontal than vertical
       if (adx < 70 || adx < ady * 3) return;
 
-      var ids = [...navItems]
-        .filter(function(i) { return i.style.display !== 'none'; })
-        .map(function(i) { return i.dataset.page; });
+      var ids;
+      if (isMobile()) {
+        ids = PRIMARY_PAGES.filter(function(p) {
+          return document.getElementById('page-' + p);
+        });
+      } else {
+        ids = [...navItems]
+          .filter(function(i) { return i.style.display !== 'none'; })
+          .map(function(i) { return i.dataset.page; });
+      }
       var idx = ids.indexOf(currentPage);
 
-      if (dx < 0 && idx < ids.length - 1) switchPage(ids[idx + 1]); // swipe left → next
-      if (dx > 0 && idx > 0)              switchPage(ids[idx - 1]); // swipe right → prev
+      if (dx < 0 && idx < ids.length - 1) switchPage(ids[idx + 1]);
+      if (dx > 0 && idx > 0)              switchPage(ids[idx - 1]);
     }, { passive: true });
   })();
 
   window.switchPage = switchPage;
+})();
+
+// --- Tax sub-tab switching ---
+(function() {
+  var tabs = document.querySelectorAll('#taxSubtabs .tax-subtab');
+  var panels = document.querySelectorAll('.tax-subtab-content[data-subtab-panel]');
+  if (!tabs.length) return;
+
+  var saved = localStorage.getItem('taxSubtab');
+  if (saved && document.querySelector('[data-subtab-panel="' + saved + '"]')) {
+    switchTaxSubtab(saved, true);
+  }
+
+  function switchTaxSubtab(id, silent) {
+    tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.subtab === id); });
+    panels.forEach(function(p) { p.style.display = p.dataset.subtabPanel === id ? '' : 'none'; });
+    if (!silent) localStorage.setItem('taxSubtab', id);
+  }
+
+  tabs.forEach(function(t) {
+    t.addEventListener('click', function() { switchTaxSubtab(t.dataset.subtab); });
+  });
+
+  window.switchTaxSubtab = switchTaxSubtab;
 })();

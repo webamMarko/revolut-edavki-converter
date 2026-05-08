@@ -307,10 +307,10 @@
     goToStep(currentStep - 1);
   });
 
-  // Close button returns to tax page
+  // Close button returns to Summary sub-tab
   var closeBtn = document.getElementById('wizardCloseBtn');
   if (closeBtn) closeBtn.addEventListener('click', function() {
-    window.switchPage('tax');
+    if (window.switchTaxSubtab) window.switchTaxSubtab('summary');
   });
 
   // Done button
@@ -325,6 +325,7 @@
   window.openTaxWizard = function(year) {
     if (year) selectedYear = year;
     goToStep(1);
-    window.switchPage('taxwizard');
+    if (window.switchTaxSubtab) window.switchTaxSubtab('file');
+    else window.switchPage('tax');
   };
 })();

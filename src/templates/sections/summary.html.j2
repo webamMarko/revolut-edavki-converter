@@ -3,7 +3,7 @@
   <button onclick="resetZoom()">Reset</button>
 </div>
 
-<div id="taxSeasonBanner" class="tax-season-banner" style="display:none" onclick="window.switchPage('taxwizard')">
+<div id="taxSeasonBanner" class="tax-season-banner" style="display:none" onclick="window.switchPage('tax');setTimeout(function(){if(window.switchTaxSubtab)window.switchTaxSubtab('file')},150)">
   <span class="tax-season-banner-icon">&#128203;</span>
   <span class="tax-season-banner-text">It's tax season! <strong>File your taxes</strong> for the previous year using our step-by-step wizard.</span>
   <button class="tax-season-banner-btn">File My Taxes</button>
