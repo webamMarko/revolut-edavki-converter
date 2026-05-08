@@ -3,9 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Interactive portfolio report with performance charts, tax overview, and FIRE projections — powered by WealthEagle.">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="Portfolio Report — WealthEagle">
+<meta property="og:description" content="Interactive portfolio report with performance charts, tax overview, and FIRE projections.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="WealthEagle">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Portfolio Report — WealthEagle">
+<meta name="twitter:description" content="Interactive portfolio report with performance charts, tax overview, and FIRE projections.">
 <!-- Apply saved theme before paint to avoid flash -->
 <script>(function(){var t=localStorage.getItem('theme');if(!t&&window.matchMedia&&window.matchMedia('(prefers-color-scheme:light)').matches)t='light';if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
-<title>{{ title }}</title>
+<title>Portfolio Report — WealthEagle</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
@@ -18,6 +27,7 @@
 </style>
 </head>
 <body>
+{% include "sections/quick_glance.html.j2" %}
 <div class="layout">
 
   {% include "sections/header.html.j2" %}
@@ -87,9 +97,11 @@
 {% include "assets/sections/notes.js" %}
 {% include "assets/sections/risk.js" %}
 {% include "assets/sections/monte_carlo.js" %}
+{% include "assets/sections/quick_glance.js" %}
 {% include "assets/nav.js" %}
 {% include "assets/layout.js" %}
 {% include "assets/notifications.js" %}
+{% include "assets/achievements.js" %}
 {% include "assets/onboarding.js" %}
 
 // --- Initial render ---
