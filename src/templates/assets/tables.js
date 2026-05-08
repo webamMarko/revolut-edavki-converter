@@ -2,7 +2,9 @@
 function makeSortable(table) {
   const ths = table.querySelectorAll('th');
   ths.forEach((th, idx) => {
-    th.innerHTML = th.textContent + ' <span class="arrow"></span>';
+    const arrow = document.createElement('span');
+    arrow.className = 'arrow';
+    th.appendChild(arrow);
     th.addEventListener('click', function() {
       const tbody = table.querySelector('tbody');
       if (!tbody) return;

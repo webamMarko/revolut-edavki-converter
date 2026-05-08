@@ -77,7 +77,7 @@
     const exemptionThreshold = _regime.crypto_exemption_threshold;
     const exemptionRef = (_regime.legal_refs || {}).crypto_exemption || '';
     const exemptionNote = cryptoExempt
-      ? `<div class="metric-card" style="grid-column:1/-1;background:var(--card-bg);border:1px solid var(--pos);color:var(--pos);font-size:0.78rem;padding:0.5rem 0.75rem;border-radius:6px">
+      ? `<div class="metric-card" style="grid-column:1/-1;background:var(--card-bg);border:1px solid var(--green);color:var(--green);font-size:0.78rem;padding:0.5rem 0.75rem;border-radius:6px">
            ℹ️ ${t('tax.crypto_exempt', {threshold: fmt(exemptionThreshold, 0), currency: _currency})}${exemptionRef ? ' (' + exemptionRef + ')' : ''}
          </div>` : '';
 

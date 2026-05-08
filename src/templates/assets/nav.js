@@ -55,10 +55,12 @@
 
     setTimeout(function() {
       prev.style.display = 'none';
+      prev.classList.remove('active');
       prev.style.transition = '';
       prev.style.opacity = '';
 
       next.style.display = 'block';
+      next.classList.add('active');
       next.style.opacity = '0';
       next.style.transition = 'opacity 0.12s ease';
       // Force reflow before starting fade-in
