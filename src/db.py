@@ -8,7 +8,7 @@ from pathlib import Path
 DB_DIR = Path.home() / ".revolut-edavki"
 DB_PATH = DB_DIR / "portfolio.db"
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS transactions (
@@ -84,6 +84,13 @@ CREATE TABLE IF NOT EXISTS investment_notes (
     action      TEXT NOT NULL DEFAULT 'watch'  CHECK(action IN ('buy','watch','avoid','sell')),
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS cached_analytics (
+    scope       TEXT PRIMARY KEY,
+    data_hash   TEXT NOT NULL,
+    result_json TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
 
@@ -184,6 +191,16 @@ def _init_schema(conn: sqlite3.Connection):
         conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_row_hash ON transactions(row_hash)"
         )
+
+    if current_version < 6:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS cached_analytics (
+                scope       TEXT PRIMARY KEY,
+                data_hash   TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+        """)
 
     if current_version < SCHEMA_VERSION:
         conn.execute(

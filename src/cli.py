@@ -81,6 +81,7 @@ def cmd_import(args):
     """Import Revolut CSV/Excel files into the portfolio database."""
     from .db import get_connection
     from .importer import import_csv
+    from .analytics_cache import invalidate_cache
 
     conn = get_connection()
     try:
@@ -89,6 +90,7 @@ def cmd_import(args):
                 print(f"Importing {file_path}...")
             result = import_csv(conn, file_path, verbose=args.verbose)
             print(f"{file_path}: {result.new} new, {result.skipped} skipped (of {result.total} rows)")
+        invalidate_cache(conn)
     finally:
         conn.close()
 
@@ -97,6 +99,7 @@ def cmd_sync(args):
     """Fetch historical prices from Yahoo Finance."""
     from .db import get_connection
     from .price_fetcher import sync_all
+    from .analytics_cache import invalidate_cache
 
     if getattr(args, 'all_users', False):
         project_data = Path(__file__).resolve().parent.parent / "data"
@@ -116,6 +119,7 @@ def cmd_sync(args):
             conn = get_connection(db_path=db_path)
             try:
                 sync_all(conn, start_date=args.start_date, end_date=args.end_date, verbose=args.verbose)
+                invalidate_cache(conn)
                 synced += 1
             except Exception as e:
                 print(f"  Error syncing {user_dir.name}: {e}")
@@ -126,6 +130,7 @@ def cmd_sync(args):
         conn = get_connection()
         try:
             sync_all(conn, start_date=args.start_date, end_date=args.end_date, verbose=args.verbose)
+            invalidate_cache(conn)
         finally:
             conn.close()
 

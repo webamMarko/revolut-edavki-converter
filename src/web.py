@@ -255,6 +255,9 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._handle_dividend_summary()
         elif path == "/api/email-preferences":
             self._api_get_email_preferences()
+        elif path.startswith("/api/analytics/"):
+            scope = path[len("/api/analytics/"):]
+            self._api_get_analytics(scope)
         elif path == "/settings":
             self._serve_settings_page()
         elif path == "/pricing":
@@ -560,14 +563,19 @@ class UploadHandler(BaseHTTPRequestHandler):
 
         from .db import get_connection
         from .price_fetcher import sync_all
+        from .prices_db import get_prices_connection
+        from .analytics_cache import invalidate_cache
 
         conn = get_connection(db_path=_user_db_path(session["username"]))
+        prices_conn = get_prices_connection()
         try:
-            sync_all(conn, verbose=self.verbose)
+            sync_all(conn, verbose=self.verbose, prices_conn=prices_conn)
+            invalidate_cache(conn)
             self._json_response({"ok": True})
         except Exception as e:
             self._json_response({"error": str(e)}, status=500)
         finally:
+            prices_conn.close()
             conn.close()
 
     # ------------------------------------------------------------------
@@ -577,6 +585,7 @@ class UploadHandler(BaseHTTPRequestHandler):
     def _serve_report(self):
         session = _get_session(self)
         from .analytics import compute_analytics
+        from .analytics_cache import compute_data_hash, get_cached, put_cache
         from .tax import compute_tax_report
         from .html_report import (generate_html_report, query_transactions,
                                    query_real_estate, query_fire_config,
@@ -590,7 +599,17 @@ class UploadHandler(BaseHTTPRequestHandler):
 
         conn = _portfolio_conn(session)
         try:
-            analytics = compute_analytics(conn, scope="all")
+            data_hash = compute_data_hash(conn)
+
+            def _cached_analytics(scope):
+                cached = get_cached(conn, scope, data_hash)
+                if cached is not None:
+                    return cached
+                result = compute_analytics(conn, scope=scope)
+                put_cache(conn, scope, data_hash, result)
+                return result
+
+            analytics = _cached_analytics("all")
             tax_by_year = {}
             try:
                 years_with_tx = [
@@ -608,16 +627,13 @@ class UploadHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
             transactions = query_transactions(conn)
-            per_class = {}
-            for ac in [r[0] for r in conn.execute("SELECT DISTINCT asset_class FROM transactions").fetchall()]:
-                try:
-                    per_class[ac] = compute_analytics(conn, scope=ac)
-                except Exception:
-                    pass
+            # Lazy-load: pass only class names; frontend fetches per-class data on demand
+            available_classes = [r[0] for r in conn.execute("SELECT DISTINCT asset_class FROM transactions").fetchall()]
             re_data = query_real_estate(conn)
             fire_cfg = query_fire_config(conn)
             notes = query_investment_notes(conn)
-            html = generate_html_report(analytics, tax_by_year, transactions, per_class=per_class,
+            html = generate_html_report(analytics, tax_by_year, transactions, per_class=None,
+                                        available_classes=available_classes,
                                         real_estate=re_data, fire_config=fire_cfg,
                                         investment_notes=notes, conn=conn,
                                         country=country)
@@ -649,6 +665,102 @@ class UploadHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/plain")
             self.end_headers()
             self.wfile.write(f"Error generating report: {e}".encode("utf-8"))
+        finally:
+            conn.close()
+
+    # ------------------------------------------------------------------
+    # Analytics API (lazy-load per-class)
+    # ------------------------------------------------------------------
+
+    def _api_get_analytics(self, scope: str):
+        valid_scopes = ("stock", "cfd", "crypto", "savings")
+        if scope not in valid_scopes:
+            self._json_response({"error": f"Invalid scope. Must be one of: {', '.join(valid_scopes)}"}, status=400)
+            return
+        session = _get_session(self)
+        conn = _portfolio_conn(session)
+        try:
+            from .analytics import compute_analytics
+            from .analytics_cache import compute_data_hash, get_cached, put_cache
+            data_hash = compute_data_hash(conn)
+            cached = get_cached(conn, scope, data_hash)
+            if cached is not None:
+                ac_analytics = cached
+            else:
+                ac_analytics = compute_analytics(conn, scope=scope)
+                put_cache(conn, scope, data_hash, ac_analytics)
+
+            ac_daily = ac_analytics.daily_series
+            result = {
+                "dates": [str(d) for d in ac_daily.index],
+                "value_eur": [round(float(v), 2) for v in ac_daily["value_eur"]],
+                "invested_eur": [round(float(v), 2) for v in ac_daily["invested_eur"]],
+                "dividends_eur": [round(float(v), 2) for v in ac_daily["dividends_eur"]],
+                "realized_gain_eur": [round(float(v), 2) for v in ac_daily["realized_gain_eur"]],
+                "perf_index": [round(float(v), 2) for v in ac_daily["perf_index"]] if "perf_index" in ac_daily.columns else [],
+                "summary": {
+                    "portfolio_value_eur": round(ac_analytics.portfolio_value_eur, 2),
+                    "total_invested_eur": round(ac_analytics.total_invested_eur, 2),
+                    "absolute_gain_eur": round(ac_analytics.absolute_gain_eur, 2),
+                    "total_return_pct": round(ac_analytics.total_return_pct, 2),
+                    "cagr_pct": round(ac_analytics.cagr_pct, 2) if ac_analytics.cagr_pct else None,
+                    "twr_pct": round(ac_analytics.twr_pct, 2) if ac_analytics.twr_pct else None,
+                    "max_drawdown_pct": round(ac_analytics.max_drawdown_pct, 2),
+                    "max_drawdown_peak_date": ac_analytics.max_drawdown_peak_date,
+                    "max_drawdown_trough_date": ac_analytics.max_drawdown_trough_date,
+                    "risk_metrics": ac_analytics.risk_metrics,
+                },
+                "gains": {
+                    "realized_eur": round(ac_analytics.total_realized_gain_eur, 2),
+                    "unrealized_eur": round(ac_analytics.total_unrealized_gain_eur, 2),
+                    "dividends_eur": round(ac_analytics.total_dividends_eur, 2),
+                    "fees_eur": round(ac_analytics.total_fees_eur, 2),
+                },
+                "positions": sorted(
+                    [
+                        {
+                            "ticker": p.ticker,
+                            "quantity": round(p.quantity, 4),
+                            "cost_basis_eur": round(p.cost_basis_eur, 2),
+                            "avg_cost_eur": round(p.cost_basis_eur / p.quantity, 4) if p.quantity else 0,
+                            "market_value_eur": round(p.market_value_eur, 2),
+                            "unrealized_gain_eur": round(p.unrealized_gain_eur, 2),
+                            "unrealized_gain_pct": round(p.unrealized_gain_pct, 2),
+                            "weight_pct": round(p.weight_pct, 2),
+                            "realized_gain_eur": round(p.realized_gain_eur, 2),
+                        }
+                        for p in ac_analytics.positions
+                    ],
+                    key=lambda x: x["market_value_eur"],
+                    reverse=True,
+                ),
+                "closed_positions": sorted(
+                    [
+                        {
+                            "ticker": p.ticker,
+                            "total_cost_eur": round(p.total_cost_eur, 2),
+                            "total_proceeds_eur": round(p.total_proceeds_eur, 2),
+                            "realized_gain_eur": round(p.realized_gain_eur, 2),
+                            "realized_gain_pct": round(p.realized_gain_pct, 2),
+                        }
+                        for p in ac_analytics.closed_positions
+                    ],
+                    key=lambda x: abs(x["realized_gain_eur"]),
+                    reverse=True,
+                ),
+                "position_lots": {
+                    ticker: [
+                        {"qty": round(qty, 4), "cost_eur": round(cost, 4), "date": date}
+                        for qty, cost, date in lots
+                    ]
+                    for ticker, lots in ac_analytics.position_lots.items()
+                },
+            }
+            self._json_response(result)
+        except ValueError as e:
+            self._json_response({"error": str(e)}, status=400)
+        except Exception as e:
+            self._json_response({"error": f"Analytics computation failed: {e}"}, status=500)
         finally:
             conn.close()
 
@@ -1255,6 +1367,7 @@ class UploadHandler(BaseHTTPRequestHandler):
             return
 
         from .importer import import_csv_mapped
+        from .analytics_cache import invalidate_cache
         conn = _portfolio_conn(session)
         try:
             result = import_csv_mapped(
@@ -1265,6 +1378,7 @@ class UploadHandler(BaseHTTPRequestHandler):
                 filename_hint=filename or staging["filename"],
                 verbose=self.verbose,
             )
+            invalidate_cache(conn)
         except Exception as e:
             conn.close()
             self._json_response({"error": str(e)}, status=500)
