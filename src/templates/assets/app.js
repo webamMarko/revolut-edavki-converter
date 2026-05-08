@@ -135,5 +135,6 @@ function updateAll() {
   updateTransactions();
   if (typeof updateTaxTable === 'function') updateTaxTable();
   if (typeof updateTaxPreview === 'function') updateTaxPreview();
+  if (typeof updateHoldingCountdown === 'function') updateHoldingCountdown();
   if (typeof updateFire === 'function') updateFire();
 }
