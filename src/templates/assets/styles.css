@@ -22,6 +22,8 @@
   --savings-color: #34d399;
   --re-color:      #fb7185;
 
+  --card-bg:   var(--surface);
+
   --sidebar-w: 220px;
   --radius:    10px;
   --radius-sm: 6px;
@@ -44,6 +46,8 @@
   --green:        #059669;
   --red:          #dc2626;
   --blue:         #2563eb;
+
+  --card-bg:   var(--surface);
 
   --stock-color:   #2563eb;
   --cfd-color:     #d97706;
@@ -144,7 +148,7 @@ body {
   cursor: pointer;
   outline: none;
 }
-.regime-select:focus { border-color: var(--accent, #6366f1); }
+.regime-select:focus { border-color: var(--accent, #f59e0b); }
 
 /* Sidebar nav */
 .sidebar-nav { flex: 1; padding: 0.5rem 0; }
@@ -649,7 +653,7 @@ body {
 /* ---- Mobile: bottom tab bar ---- */
 @media (max-width: 768px) {
   body { overflow: hidden; }
-  .layout { flex-direction: column; height: 100dvh; }
+  .layout { flex-direction: column; height: 100vh; height: 100dvh; }
 
   /* Mobile top bar */
   .mobile-topbar {
@@ -708,7 +712,7 @@ body {
   }
 
   .content { order: 1; flex: 1; overflow: hidden; min-width: 0; display: flex; flex-direction: column; }
-  .page { flex: 1; min-height: 0; padding: 0.75rem; overflow-x: hidden; overflow-y: auto; }
+  .page { flex: 1; min-height: 0; height: auto; padding: 0.75rem; overflow-x: hidden; overflow-y: auto; }
 
   /* All grid/flex containers must not overflow */
   .page-stack { gap: 0.75rem; }
@@ -756,7 +760,7 @@ body {
 
   /* Notes modal: full screen on small devices */
   .note-modal-backdrop { padding: 0; align-items: flex-end; }
-  .note-modal { max-height: 92dvh; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+  .note-modal { max-height: 92vh; max-height: 92dvh; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 }
 
 /* ---- More bottom sheet ---- */
@@ -783,6 +787,7 @@ body {
   transform: translateY(100%);
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 0.5rem 0 1rem;
+  max-height: 60vh;
   max-height: 60dvh;
   overflow-y: auto;
   box-shadow: 0 -4px 20px rgba(0,0,0,0.2);

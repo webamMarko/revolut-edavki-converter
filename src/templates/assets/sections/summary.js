@@ -126,7 +126,7 @@ function updateSummary() {
 }
 
 function updateRiskMetrics() {
-  const section = document.getElementById('riskMetricsSection');
+  const section = document.getElementById('chartsRiskMetricsSection');
   if (isZoomed) { section.style.display = 'none'; return; }
   const s = getActiveSummary();
   const rm = s.risk_metrics;

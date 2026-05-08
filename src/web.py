@@ -3192,7 +3192,8 @@ def _pricing_html(username: str = "", role: str = "guest") -> str:
     stripe_url = STRIPE_CHECKOUT_URL
     cta_btn = (
         f'<a class="btn btn-primary btn-lg" href="{stripe_url}">Get Started</a>'
-        if stripe_url else ""
+        if stripe_url
+        else '<span class="btn btn-secondary btn-lg disabled">Coming soon</span>'
     )
 
     extra_css = r"""
@@ -3217,6 +3218,7 @@ def _pricing_html(username: str = "", role: str = "guest") -> str:
 .pricing-card-features .check{color:var(--green);font-weight:700;flex-shrink:0}
 .pricing-card-features .cross{color:var(--muted);flex-shrink:0;opacity:0.5}
 .pricing-card .btn-lg{padding:0.7rem 1.5rem;font-size:0.92rem;width:100%;text-align:center}
+.pricing-card .btn-lg.disabled{opacity:0.5;cursor:default;pointer-events:none}
 
 /* Feature comparison table */
 .comparison-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;overflow-x:auto}
