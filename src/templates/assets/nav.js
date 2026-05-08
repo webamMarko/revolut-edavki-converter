@@ -71,6 +71,7 @@
 
       currentPage = id;
       localStorage.setItem('activePage', id);
+      if (window.notifyBadgeClear) window.notifyBadgeClear(id);
     }, 110);
   }
 
@@ -82,9 +83,9 @@
   // Keyboard: ← → or ↑ ↓ to step through visible nav items, plus page shortcuts
   var _shortcutMap = {
     '1': 'overview', '2': 'charts', '3': 'positions', '4': 'dividends',
-    '5': 'notes', '6': 'tax', '7': 'history',
+    '5': 'projections', '6': 'notes', '7': 'tax', '8': 'history',
     'o': 'overview', 'c': 'charts', 'p': 'positions', 'd': 'dividends',
-    'n': 'notes', 't': 'tax', 'h': 'history',
+    'j': 'projections', 'n': 'notes', 't': 'tax', 'h': 'history',
   };
   document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -136,11 +137,12 @@
         + _shortcutRow('?', 'Toggle this help')
         + _shortcutRow('← →', 'Previous / next page')
         + _shortcutRow('↑ ↓', 'Previous / next page')
-        + _shortcutRow('1-7', 'Jump to page by number')
+        + _shortcutRow('1-8', 'Jump to page by number')
         + _shortcutRow('O', 'Overview')
-        + _shortcutRow('C', 'Charts')
+        + _shortcutRow('C', 'Performance')
         + _shortcutRow('P', 'Positions')
         + _shortcutRow('D', 'Dividends')
+        + _shortcutRow('J', 'Projections')
         + _shortcutRow('N', 'Notes')
         + _shortcutRow('T', 'Tax')
         + _shortcutRow('H', 'History')
@@ -161,6 +163,12 @@
   if (D.real_estate && D.real_estate.properties && D.real_estate.properties.length > 0) {
     var navRE = document.getElementById('navRealestate');
     if (navRE) navRE.style.display = '';
+  }
+
+  // Show projections nav item when Monte Carlo or FIRE data exists
+  if ((D.summary && D.summary.cagr_pct != null) || D.fire != null) {
+    var navProj = document.getElementById('navProjections');
+    if (navProj) navProj.style.display = '';
   }
 
   // Touch swipe: left/right to navigate between pages.
