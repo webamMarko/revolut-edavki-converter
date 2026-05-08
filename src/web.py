@@ -259,8 +259,43 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._serve_settings_page()
         elif path == "/pricing":
             self._serve_pricing_page()
+        elif path == "/robots.txt":
+            self._serve_robots_txt()
+        elif path == "/sitemap.xml":
+            self._serve_sitemap_xml()
         else:
             self.send_error(404)
+
+    def _serve_robots_txt(self):
+        body = (
+            "User-agent: *\n"
+            "Allow: /\n"
+            "Disallow: /admin\n"
+            "Disallow: /api\n"
+            "Disallow: /settings\n"
+            "Disallow: /import\n"
+            "Disallow: /export/\n"
+            "\n"
+            f"Sitemap: {APP_BASE_URL.rstrip('/')}/sitemap.xml\n"
+        )
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(body.encode("utf-8"))
+
+    def _serve_sitemap_xml(self):
+        base = APP_BASE_URL.rstrip("/")
+        urls = ["/", "/pricing", "/report", "/login"]
+        lines = ['<?xml version="1.0" encoding="UTF-8"?>']
+        lines.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
+        for u in urls:
+            lines.append(f"  <url><loc>{base}{u}</loc></url>")
+        lines.append("</urlset>")
+        body = "\n".join(lines)
+        self.send_response(200)
+        self.send_header("Content-Type", "application/xml; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(body.encode("utf-8"))
 
     def do_POST(self):
         path = urlparse(self.path).path
@@ -1732,12 +1767,32 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 """
 
 
-def _head_html(title: str, extra_css: str = "") -> str:
+def _head_html(title: str, extra_css: str = "", description: str = "",
+               canonical_path: str = "", robots: str = "") -> str:
     """Shared <head> block for all non-report pages."""
+    meta = ""
+    if description:
+        meta += f'<meta name="description" content="{description}">\n'
+    if robots:
+        meta += f'<meta name="robots" content="{robots}">\n'
+    if canonical_path:
+        canonical_url = APP_BASE_URL.rstrip("/") + canonical_path
+        meta += f'<link rel="canonical" href="{canonical_url}">\n'
+        meta += f'<meta property="og:title" content="{title}">\n'
+        meta += f'<meta property="og:description" content="{description}">\n'
+        meta += '<meta property="og:type" content="website">\n'
+        meta += f'<meta property="og:url" content="{canonical_url}">\n'
+        meta += f'<meta property="og:image" content="{APP_BASE_URL.rstrip("/")}/static/og-card.png">\n'
+        meta += '<meta property="og:site_name" content="WealthEagle">\n'
+        meta += '<meta name="twitter:card" content="summary_large_image">\n'
+        meta += f'<meta name="twitter:title" content="{title}">\n'
+        meta += f'<meta name="twitter:description" content="{description}">\n'
+        meta += f'<meta name="twitter:image" content="{APP_BASE_URL.rstrip("/")}/static/og-card.png">\n'
     return (
         '<!DOCTYPE html>\n<html lang="en">\n<head>\n'
         '<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        f'{meta}'
         f'{_FOUC_SCRIPT}\n'
         f'<title>{title}</title>\n'
         '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
@@ -2204,7 +2259,11 @@ def _global_drop_import_html() -> str:
 def _login_html(error: str = "") -> str:
     error_block = f'<p class="auth-error">{error}</p>' if error else ""
     return (
-        _head_html("Login — Portfolio", "body{display:flex;align-items:center;justify-content:center;padding:1rem}")
+        _head_html("Log In — WealthEagle",
+                   "body{display:flex;align-items:center;justify-content:center;padding:1rem}",
+                   description="Log in to your WealthEagle account to access portfolio analytics and tax reports.",
+                   canonical_path="/login",
+                   robots="index, follow")
         + f"""<body>
 <div class="auth-card">
   <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>
@@ -2308,7 +2367,7 @@ def _admin_html(users, current_username: str) -> str:
     )
 
     return (
-        _head_html("Admin — Portfolio", extra_css)
+        _head_html("Admin — Portfolio", extra_css, robots="noindex, nofollow")
         + f"""<body>
 {_header_html(current_username, "admin", "admin")}
 <div class="app-main">
@@ -2403,7 +2462,7 @@ def _settings_html(username: str, role: str) -> str:
     )
 
     return (
-        _head_html("Settings — Portfolio", extra_css)
+        _head_html("Settings — Portfolio", extra_css, robots="noindex, nofollow")
         + f"""<body>
 {_header_html(username, role, "settings")}
 <div class="app-main">
@@ -2592,7 +2651,11 @@ def _pricing_html(username: str = "", role: str = "guest") -> str:
 """
 
     return (
-        _head_html("Pricing — WealthEagle", extra_css=extra_css)
+        _head_html("Pricing — WealthEagle Portfolio Analytics",
+                   extra_css=extra_css,
+                   description="Simple, transparent pricing for WealthEagle portfolio analytics and Slovenian tax reporting. Free demo included.",
+                   canonical_path="/pricing",
+                   robots="index, follow")
         + f"""<body>
 {_header_html(username, role, "pricing")}
 <div class="pricing-page">
@@ -2825,7 +2888,11 @@ def _upload_html(user_json: str) -> str:
     extra_css = landing_css
 
     return (
-        _head_html("WealthEagle — Portfolio Analytics & Tax Reporting", extra_css=extra_css)
+        _head_html("WealthEagle — Portfolio Analytics & Tax Reporting for Revolut Investors",
+                   extra_css=extra_css,
+                   description="Track your Revolut portfolio performance, generate eDavki tax reports, and plan your FIRE journey with daily-granularity analytics.",
+                   canonical_path="/",
+                   robots="index, follow")
         + f"""<body>
 {_header_html(username, role, "home")}
 {'<div class="app-main">' if is_premium else ''}
@@ -3011,7 +3078,7 @@ def _import_wizard_html() -> str:
 def _import_wizard_html_with_user(username: str = "", role: str = "premium") -> str:
     extra_css = ".app-main{max-width:780px}"
     return (
-        _head_html("Import Wizard — Portfolio", extra_css)
+        _head_html("Import Wizard — Portfolio", extra_css, robots="noindex, nofollow")
         + _header_html(username, role, "import")
         + _COMMON_JS
         + r"""
