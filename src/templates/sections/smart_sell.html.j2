@@ -1,0 +1,44 @@
+<section class="card" id="smartSellSection">
+  <div class="chart-header">
+    <h2 id="smartSellTitle">Smart Sell Advisor</h2>
+  </div>
+  <p id="smartSellDesc" style="color:var(--muted);font-size:0.8rem;margin:-0.5rem 0 1rem"></p>
+
+  <!-- Ticker + quantity selector -->
+  <div id="smartSellControls" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:end;margin-bottom:1.25rem">
+    <div style="flex:1;min-width:160px">
+      <label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem" id="smartSellTickerLabel">Position</label>
+      <select id="smartSellTicker" class="regime-select" style="width:100%"></select>
+    </div>
+    <div style="flex:0 0 150px">
+      <label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem" id="smartSellQtyLabel">Shares to sell</label>
+      <input type="number" id="smartSellQty" min="0" step="any" style="width:100%;padding:0.4rem 0.5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:0.85rem">
+    </div>
+    <button id="smartSellCalc" class="tax-export-btn" style="height:2rem;padding:0 0.75rem;font-size:0.8rem">Analyze</button>
+  </div>
+
+  <!-- Result area -->
+  <div id="smartSellResult" style="display:none">
+    <!-- Summary cards -->
+    <div id="smartSellCards" class="card-grid small"></div>
+
+    <!-- Per-lot breakdown table -->
+    <div class="table-scroll" style="margin-top:1.25rem">
+      <h3 style="font-size:0.9rem;margin:0 0 0.5rem" id="smartSellLotsTitle">Lot-by-Lot Breakdown (FIFO Order)</h3>
+      <table id="smartSellLotsTable" class="data-table"></table>
+    </div>
+
+    <!-- Bracket transitions / wait suggestions -->
+    <div id="smartSellWaitSection" style="margin-top:1.25rem;padding:1rem;border:1px solid var(--border);border-radius:8px">
+      <h3 style="font-size:0.9rem;margin:0 0 0.75rem" id="smartSellWaitTitle">Tax Savings If You Wait</h3>
+      <p id="smartSellWaitDesc" style="font-size:0.75rem;color:var(--muted);margin:0 0 0.75rem"></p>
+      <table id="smartSellWaitTable" class="data-table"></table>
+      <div id="smartSellWaitNote" style="margin-top:0.5rem;font-size:0.75rem;color:var(--muted)"></div>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div id="smartSellEmpty" style="text-align:center;color:var(--muted);padding:2rem;display:none">
+    <p id="smartSellEmptyMsg">Select a position and quantity to see tax-optimized sell analysis</p>
+  </div>
+</section>

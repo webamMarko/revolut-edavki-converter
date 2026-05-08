@@ -64,6 +64,7 @@
     <div class="page" id="page-tax">
       <div class="tax-subtabs" id="taxSubtabs">
         <button class="tax-subtab active" data-subtab="summary">Summary</button>
+        <button class="tax-subtab" data-subtab="smart-sell">Smart Sell</button>
         <button class="tax-subtab" data-subtab="file">File</button>
       </div>
       <div class="tax-subtab-content" id="taxSubtabSummary" data-subtab-panel="summary">
@@ -71,6 +72,9 @@
         {% include "sections/tax_preview.html.j2" %}
         {% include "sections/holding_countdown.html.j2" %}
         {% include "sections/tax.html.j2" %}
+      </div>
+      <div class="tax-subtab-content" id="taxSubtabSmartSell" data-subtab-panel="smart-sell" style="display:none">
+        {% include "sections/smart_sell.html.j2" %}
       </div>
       <div class="tax-subtab-content" id="taxSubtabFile" data-subtab-panel="file" style="display:none">
         {% include "sections/tax_wizard.html.j2" %}
@@ -106,6 +110,7 @@
 {% include "assets/sections/tax_preview.js" %}
 {% include "assets/sections/holding_countdown.js" %}
 {% include "assets/sections/tax_wizard.js" %}
+{% include "assets/sections/smart_sell.js" %}
 {% include "assets/sections/transactions.js" %}
 {% include "assets/sections/real_estate.js" %}
 {% include "assets/sections/notes.js" %}

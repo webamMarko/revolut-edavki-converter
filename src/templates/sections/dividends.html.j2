@@ -20,6 +20,19 @@
   </div>
 </section>
 
+<section class="card" id="dividendCalendarSection" style="display:none">
+  <h3>Dividend Calendar</h3>
+  <p style="color:var(--muted);font-size:0.8rem;margin:-0.25rem 0 0.75rem">Upcoming ex-dividend dates and projected income for held positions</p>
+  <div id="divCalendarCards" class="card-grid small"></div>
+  <div id="divCalendarAlerts" style="margin-bottom:1rem"></div>
+  <div class="chart-wrap" style="height:240px">
+    <canvas id="divCalendarChart"></canvas>
+  </div>
+  <div class="table-scroll" style="margin-top:1rem">
+    <table id="divCalendarTable" class="data-table sortable"></table>
+  </div>
+</section>
+
 <section class="card" id="dividendProjectionSection" style="display:none">
   <h3 id="divProjectionTitle">Income Projection</h3>
   <p id="divProjectionDesc" style="color:var(--muted);font-size:0.8rem;margin:-0.25rem 0 0.75rem"></p>

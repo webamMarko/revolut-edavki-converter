@@ -36,6 +36,9 @@ function updateDividends() {
   // Monthly bar chart
   _buildDividendChart(monthly);
 
+  // Dividend calendar & forecast
+  _buildDividendCalendar();
+
   // Per-ticker table
   const dt = document.getElementById('dividendTable');
   dt.innerHTML = '<thead><tr>'
@@ -213,6 +216,126 @@ function _buildDividendGrowth(monthly) {
 
   // --- Dividend Projection ---
   _buildDividendProjection(monthly);
+}
+
+// --- Dividend Calendar ---
+let _divCalendarChart = null;
+
+function _buildDividendCalendar() {
+  if (_divCalendarChart) { _divCalendarChart.destroy(); _divCalendarChart = null; }
+
+  var cal = D.dividend_calendar;
+  var section = document.getElementById('dividendCalendarSection');
+  if (!cal || !cal.upcoming || cal.upcoming.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+
+  // Summary cards
+  var cards = document.getElementById('divCalendarCards');
+  var nextEvent = cal.upcoming[0];
+  var daysUntil = Math.ceil((new Date(nextEvent.ex_date) - new Date()) / 86400000);
+  cards.innerHTML = [
+    [t('div.cal.annual_projected'), fmtCcy(cal.projected_annual_income_eur), ''],
+    [t('div.cal.monthly_avg'), fmtCcy(cal.projected_monthly_income_eur), ''],
+    [t('div.cal.yield_on_cost'), cal.yield_on_cost != null ? fmt(cal.yield_on_cost, 2) + '%' : '—', ''],
+    [t('div.cal.next_exdate'), nextEvent.ticker + ' (' + daysUntil + 'd)', ''],
+  ].map(function(row) {
+    return '<div class="metric-card"><div class="label">' + row[0] + '</div><div class="value ' + row[2] + '">' + row[1] + '</div></div>';
+  }).join('');
+
+  // Dividend change alerts
+  var alertsEl = document.getElementById('divCalendarAlerts');
+  if (cal.dividend_changes && cal.dividend_changes.length > 0) {
+    alertsEl.innerHTML = cal.dividend_changes.map(function(ch) {
+      var icon = ch.type === 'increase' ? '↑' : '↓';
+      var cls = ch.type === 'increase' ? 'pos' : 'neg';
+      return '<div class="alert-badge ' + cls + '" style="display:inline-block;padding:0.25rem 0.6rem;border-radius:4px;font-size:0.75rem;margin-right:0.5rem;margin-bottom:0.25rem;background:var(--card-bg);border:1px solid var(--border)">'
+        + '<strong>' + ch.ticker + '</strong> ' + icon + ' '
+        + (ch.change_pct > 0 ? '+' : '') + fmt(ch.change_pct, 1) + '% '
+        + '($' + fmt(ch.previous_amount, 4) + ' → $' + fmt(ch.latest_amount, 4) + ')'
+        + '</div>';
+    }).join('');
+  } else {
+    alertsEl.innerHTML = '';
+  }
+
+  // Monthly projected income chart (next 12 months)
+  var months = Object.keys(cal.monthly_breakdown).sort().slice(0, 12);
+  var values = months.map(function(m) { return cal.monthly_breakdown[m]; });
+
+  if (months.length > 0) {
+    var canvas = document.getElementById('divCalendarChart');
+    _divCalendarChart = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: months,
+        datasets: [{
+          label: t('div.cal.projected_income') + ' (' + _currency + ')',
+          data: values,
+          backgroundColor: function(ctx) {
+            // Past months lighter, future months brighter
+            var m = months[ctx.dataIndex];
+            var now = new Date().toISOString().slice(0, 7);
+            return m <= now ? 'rgba(52,211,153,0.3)' : 'rgba(52,211,153,0.6)';
+          },
+          borderColor: '#34d399',
+          borderWidth: 1,
+          borderRadius: 3,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: '#556075', font: { size: 10 } },
+          },
+          y: {
+            position: 'right',
+            grid: { color: 'rgba(30,42,58,0.8)' },
+            ticks: { color: '#556075', font: { size: 10 }, callback: function(v) { return fmtCcy(v); } },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: function(c) { return fmtCcy(c.parsed.y); } } },
+        },
+      },
+    });
+  }
+
+  // Upcoming events table
+  var tbl = document.getElementById('divCalendarTable');
+  var now = new Date().toISOString().slice(0, 10);
+  tbl.innerHTML = '<thead><tr>'
+    + '<th>' + t('div.cal.ex_date') + '</th>'
+    + '<th>' + t('pos.ticker') + '</th>'
+    + '<th>' + t('div.cal.amount_share') + '</th>'
+    + '<th>' + t('div.cal.shares') + '</th>'
+    + '<th>' + t('div.cal.est_income') + '</th>'
+    + '<th>' + t('div.cal.type') + '</th>'
+    + '</tr></thead><tbody>'
+    + cal.upcoming.slice(0, 30).map(function(ev) {
+      var days = Math.ceil((new Date(ev.ex_date) - new Date()) / 86400000);
+      var badge = ev.is_projected
+        ? '<span style="font-size:0.7rem;padding:0.1rem 0.3rem;border-radius:3px;background:var(--muted-bg,rgba(99,102,241,0.15));color:var(--muted)">projected</span>'
+        : '<span style="font-size:0.7rem;padding:0.1rem 0.3rem;border-radius:3px;background:rgba(52,211,153,0.15);color:#34d399">confirmed</span>';
+      return '<tr>'
+        + '<td><strong>' + ev.ex_date + '</strong><br><span style="font-size:0.7rem;color:var(--muted)">' + (days > 0 ? 'in ' + days + 'd' : 'today') + '</span></td>'
+        + '<td><strong>' + ev.ticker + '</strong></td>'
+        + '<td>$' + fmt(ev.amount_per_share, 4) + '</td>'
+        + '<td>' + fmt(ev.shares_held, 2) + '</td>'
+        + '<td>' + fmtEur(ev.projected_income_eur) + '</td>'
+        + '<td>' + badge + '</td>'
+        + '</tr>';
+    }).join('')
+    + '</tbody>';
+  makeSortable(tbl);
 }
 
 let _dividendProjectionChart = null;

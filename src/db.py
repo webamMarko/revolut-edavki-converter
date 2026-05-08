@@ -8,7 +8,7 @@ from pathlib import Path
 DB_DIR = Path.home() / ".revolut-edavki"
 DB_PATH = DB_DIR / "portfolio.db"
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 9
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS transactions (
@@ -91,6 +91,31 @@ CREATE TABLE IF NOT EXISTS cached_analytics (
     data_hash   TEXT NOT NULL,
     result_json TEXT NOT NULL,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS dividend_schedule (
+    ticker          TEXT NOT NULL,
+    ex_date         TEXT NOT NULL,
+    payment_date    TEXT,
+    amount          REAL NOT NULL,
+    currency        TEXT NOT NULL DEFAULT 'USD',
+    frequency       TEXT,
+    fetched_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (ticker, ex_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dividend_schedule_date ON dividend_schedule(ex_date);
+
+CREATE TABLE IF NOT EXISTS goals (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    name                TEXT NOT NULL,
+    target_amount_eur   REAL NOT NULL,
+    target_date         TEXT NOT NULL,
+    monthly_contribution REAL NOT NULL DEFAULT 0,
+    scope               TEXT NOT NULL DEFAULT 'all',
+    tickers             TEXT NOT NULL DEFAULT '',
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
 
@@ -213,6 +238,36 @@ def _init_schema(conn: sqlite3.Connection):
                 is_immutable INTEGER NOT NULL DEFAULT 0,
                 created_at  TEXT NOT NULL DEFAULT (datetime('now')),
                 PRIMARY KEY (year, scope, country)
+            );
+        """)
+
+    if current_version < 8:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS dividend_schedule (
+                ticker          TEXT NOT NULL,
+                ex_date         TEXT NOT NULL,
+                payment_date    TEXT,
+                amount          REAL NOT NULL,
+                currency        TEXT NOT NULL DEFAULT 'USD',
+                frequency       TEXT,
+                fetched_at      TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (ticker, ex_date)
+            );
+            CREATE INDEX IF NOT EXISTS idx_dividend_schedule_date ON dividend_schedule(ex_date);
+        """)
+
+    if current_version < 9:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS goals (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                name                TEXT NOT NULL,
+                target_amount_eur   REAL NOT NULL,
+                target_date         TEXT NOT NULL,
+                monthly_contribution REAL NOT NULL DEFAULT 0,
+                scope               TEXT NOT NULL DEFAULT 'all',
+                tickers             TEXT NOT NULL DEFAULT '',
+                created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
             );
         """)
 

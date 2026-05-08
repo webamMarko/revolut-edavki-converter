@@ -410,6 +410,10 @@ def sync_all(conn: sqlite3.Connection, start_date: datetime | None = None,
     print("\nSyncing ticker metadata (sector/industry)...")
     sync_ticker_metadata(conn, verbose)
 
+    # Sync dividend schedules for held stock tickers
+    print("\nSyncing dividend schedules...")
+    sync_dividend_schedules(conn, verbose)
+
     # Record sync time in both user DB and shared prices DB
     target = prices_conn if prices_conn is not None else conn
     target.execute(
@@ -421,3 +425,104 @@ def sync_all(conn: sqlite3.Connection, start_date: datetime | None = None,
             "INSERT OR REPLACE INTO metadata (key, value) VALUES ('last_price_sync', datetime('now'))"
         )
         conn.commit()
+
+
+def _infer_frequency(dates: list) -> str | None:
+    """Infer dividend payment frequency from historical ex-dates."""
+    if len(dates) < 2:
+        return None
+    gaps = [(dates[i] - dates[i - 1]).days for i in range(1, len(dates))]
+    avg_gap = sum(gaps) / len(gaps)
+    if avg_gap < 45:
+        return "monthly"
+    elif avg_gap < 100:
+        return "quarterly"
+    elif avg_gap < 200:
+        return "semi-annual"
+    else:
+        return "annual"
+
+
+def sync_dividend_schedules(conn: sqlite3.Connection, verbose: bool = False):
+    """Fetch historical dividend data from yfinance for held stock tickers."""
+    tickers = [
+        row[0] for row in
+        conn.execute(
+            "SELECT DISTINCT ticker FROM transactions "
+            "WHERE ticker IS NOT NULL AND asset_class = 'stock'"
+        ).fetchall()
+    ]
+    if not tickers:
+        return
+
+    delisted = set(get_delisted(conn))
+    tickers = [t for t in tickers if t not in delisted]
+
+    fetched = 0
+    for ticker in sorted(tickers):
+        last_row = conn.execute(
+            "SELECT MAX(ex_date) FROM dividend_schedule WHERE ticker = ?", (ticker,)
+        ).fetchone()
+        last_date = last_row[0] if last_row and last_row[0] else None
+
+        # Skip if we already fetched recently (within last 7 days)
+        if last_date:
+            fetch_row = conn.execute(
+                "SELECT MAX(fetched_at) FROM dividend_schedule WHERE ticker = ?", (ticker,)
+            ).fetchone()
+            if fetch_row and fetch_row[0]:
+                last_fetch = datetime.fromisoformat(fetch_row[0])
+                if (datetime.now() - last_fetch).days < 7:
+                    continue
+
+        yf_ticker = _yf_ticker(ticker)
+        try:
+            tk = yf.Ticker(yf_ticker)
+            divs = tk.dividends
+            if divs is None or divs.empty:
+                continue
+
+            # Get calendar info for payment dates
+            try:
+                cal = tk.calendar
+                next_payment_date = None
+                if cal is not None and hasattr(cal, 'get'):
+                    ex_date_info = cal.get("Ex-Dividend Date")
+                    payment_info = cal.get("Dividend Date")
+                    if payment_info is not None:
+                        next_payment_date = str(payment_info)[:10] if not isinstance(payment_info, str) else payment_info
+            except Exception:
+                next_payment_date = None
+
+            # Determine frequency from historical dates
+            div_dates = sorted(divs.index.to_pydatetime().tolist())
+            frequency = _infer_frequency(div_dates)
+
+            rows = []
+            for dt_idx, amount in divs.items():
+                ex_date_str = dt_idx.strftime("%Y-%m-%d")
+                if last_date and ex_date_str <= last_date:
+                    continue
+                rows.append((ticker, ex_date_str, None, float(amount), "USD", frequency))
+
+            if rows:
+                conn.executemany(
+                    "INSERT OR REPLACE INTO dividend_schedule "
+                    "(ticker, ex_date, payment_date, amount, currency, frequency) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    rows,
+                )
+                fetched += 1
+                if verbose:
+                    print(f"  {ticker}: {len(rows)} dividend records")
+
+        except Exception as e:
+            if verbose:
+                print(f"  {ticker}: failed ({e})")
+            continue
+
+    conn.commit()
+    if fetched:
+        print(f"Dividend schedules: {fetched} tickers updated")
+    else:
+        print("Dividend schedules: up to date")
