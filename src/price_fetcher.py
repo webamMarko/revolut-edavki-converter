@@ -121,11 +121,25 @@ def _last_price_date(conn: sqlite3.Connection, ticker: str, prices_conn: sqlite3
 
 
 def _store_prices(conn: sqlite3.Connection, revolut_ticker: str, df: pd.DataFrame, currency: str = "USD"):
-    """Insert price rows into daily_prices."""
-    rows = [
-        (revolut_ticker, idx.strftime("%Y-%m-%d"), float(row["close"]), currency)
-        for idx, row in df.iterrows()
-    ]
+    """Insert price rows into daily_prices, rejecting outliers."""
+    # Get last known price for this ticker to seed outlier detection
+    prev_row = conn.execute(
+        "SELECT close FROM daily_prices WHERE ticker = ? ORDER BY date DESC LIMIT 1",
+        (revolut_ticker,)
+    ).fetchone()
+    prev_close = prev_row[0] if prev_row else None
+
+    rows = []
+    for idx, row in df.iterrows():
+        close = float(row["close"])
+        if prev_close and prev_close > 0 and close > 0:
+            ratio = close / prev_close
+            if ratio > 5.0 or ratio < 0.2:
+                # Skip obvious outlier (>5x or <0.2x previous price)
+                continue
+        rows.append((revolut_ticker, idx.strftime("%Y-%m-%d"), close, currency))
+        prev_close = close
+
     conn.executemany(
         "INSERT OR REPLACE INTO daily_prices (ticker, date, close, currency) VALUES (?, ?, ?, ?)",
         rows,
