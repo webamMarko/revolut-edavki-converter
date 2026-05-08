@@ -101,43 +101,50 @@ def cmd_sync(args):
     """Fetch historical prices from Yahoo Finance."""
     from .db import get_connection
     from .price_fetcher import sync_all
+    from .prices_db import get_prices_connection
     from .analytics_cache import invalidate_cache
     from .tax_cache import invalidate_current_year_tax
 
-    if getattr(args, 'all_users', False):
-        project_data = Path(__file__).resolve().parent.parent / "data"
-        default_dir = str(project_data) if project_data.is_dir() else str(Path.home() / ".revolut-edavki")
-        data_dir = Path(os.environ.get("REVOLUT_DATA_DIR", default_dir))
-        if not data_dir.is_dir():
-            print(f"Data directory not found: {data_dir}")
-            return
-        synced = 0
-        for user_dir in sorted(data_dir.iterdir()):
-            if not user_dir.is_dir() or user_dir.name.startswith("_"):
-                continue
-            db_path = user_dir / "portfolio.db"
-            if not db_path.exists():
-                continue
-            print(f"Syncing {user_dir.name} ...")
-            conn = get_connection(db_path=db_path)
+    prices_conn = get_prices_connection()
+    try:
+        if getattr(args, 'all_users', False):
+            project_data = Path(__file__).resolve().parent.parent / "data"
+            default_dir = str(project_data) if project_data.is_dir() else str(Path.home() / ".revolut-edavki")
+            data_dir = Path(os.environ.get("REVOLUT_DATA_DIR", default_dir))
+            if not data_dir.is_dir():
+                print(f"Data directory not found: {data_dir}")
+                return
+            synced = 0
+            for user_dir in sorted(data_dir.iterdir()):
+                if not user_dir.is_dir() or user_dir.name.startswith("_"):
+                    continue
+                db_path = user_dir / "portfolio.db"
+                if not db_path.exists():
+                    continue
+                print(f"Syncing {user_dir.name} ...")
+                conn = get_connection(db_path=db_path)
+                try:
+                    sync_all(conn, start_date=args.start_date, end_date=args.end_date,
+                             verbose=args.verbose, prices_conn=prices_conn)
+                    invalidate_cache(conn)
+                    invalidate_current_year_tax(conn)
+                    synced += 1
+                except Exception as e:
+                    print(f"  Error syncing {user_dir.name}: {e}")
+                finally:
+                    conn.close()
+            print(f"Synced {synced} portfolio(s).")
+        else:
+            conn = get_connection()
             try:
-                sync_all(conn, start_date=args.start_date, end_date=args.end_date, verbose=args.verbose)
+                sync_all(conn, start_date=args.start_date, end_date=args.end_date,
+                         verbose=args.verbose, prices_conn=prices_conn)
                 invalidate_cache(conn)
                 invalidate_current_year_tax(conn)
-                synced += 1
-            except Exception as e:
-                print(f"  Error syncing {user_dir.name}: {e}")
             finally:
                 conn.close()
-        print(f"Synced {synced} portfolio(s).")
-    else:
-        conn = get_connection()
-        try:
-            sync_all(conn, start_date=args.start_date, end_date=args.end_date, verbose=args.verbose)
-            invalidate_cache(conn)
-            invalidate_current_year_tax(conn)
-        finally:
-            conn.close()
+    finally:
+        prices_conn.close()
 
 
 def cmd_analytics(args):
@@ -432,7 +439,12 @@ def cmd_realestate(args):
             print(f"{args.ticker}: manual valuation set to {args.value_eur:,.0f} EUR")
 
         elif subcmd == "sync":
-            sync_etn_valuations(conn, verbose=args.verbose)
+            from .prices_db import get_prices_connection
+            prices_conn = get_prices_connection()
+            try:
+                sync_etn_valuations(conn, verbose=args.verbose, prices_conn=prices_conn)
+            finally:
+                prices_conn.close()
 
     finally:
         conn.close()
@@ -599,10 +611,15 @@ def cmd_status(args):
         last_import = conn.execute(
             "SELECT imported_at FROM import_log ORDER BY imported_at DESC LIMIT 1"
         ).fetchone()
-        price_count = conn.execute("SELECT COUNT(*) FROM daily_prices").fetchone()[0]
-        last_sync = conn.execute(
+        from .prices_db import get_prices_conn_or_none
+        _pconn = get_prices_conn_or_none()
+        _price_src = _pconn if _pconn else conn
+        price_count = _price_src.execute("SELECT COUNT(*) FROM daily_prices").fetchone()[0]
+        last_sync = _price_src.execute(
             "SELECT value FROM metadata WHERE key = 'last_price_sync'"
         ).fetchone()
+        if _pconn:
+            _pconn.close()
 
         print(f"Database:       {DB_PATH}")
         print(f"Transactions:   {row_count}")

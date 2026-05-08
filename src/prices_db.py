@@ -27,11 +27,14 @@ CREATE TABLE IF NOT EXISTS metadata (
 
 
 def _default_prices_db_path() -> Path:
-    project_data = Path(__file__).resolve().parent.parent / "data"
-    if project_data.is_dir():
-        base = project_data
+    if "REVOLUT_DATA_DIR" in os.environ:
+        base = Path(os.environ["REVOLUT_DATA_DIR"])
     else:
-        base = Path.home() / ".revolut-edavki"
+        project_data = Path(__file__).resolve().parent.parent / "data"
+        if project_data.is_dir():
+            base = project_data
+        else:
+            base = Path.home() / ".revolut-edavki"
     return base / "_system" / "prices.db"
 
 
@@ -73,3 +76,62 @@ def get_prices_conn_or_none() -> sqlite3.Connection | None:
         return conn
     except Exception:
         return None
+
+
+def migrate_prices_from_user_db(user_conn: sqlite3.Connection,
+                                prices_conn: sqlite3.Connection,
+                                drop_from_user: bool = False) -> int:
+    """Copy daily_prices and fx_rates from a user DB into the shared prices DB.
+
+    Returns the number of rows migrated. Skips if shared DB already has data
+    (idempotent — safe to call multiple times).
+    """
+    migrated = 0
+
+    # Copy daily_prices
+    try:
+        rows = user_conn.execute(
+            "SELECT ticker, date, close, currency FROM daily_prices"
+        ).fetchall()
+        if rows:
+            prices_conn.executemany(
+                "INSERT OR IGNORE INTO daily_prices (ticker, date, close, currency) VALUES (?, ?, ?, ?)",
+                [(r[0], r[1], r[2], r[3]) for r in rows],
+            )
+            migrated += len(rows)
+    except Exception:
+        pass
+
+    # Copy fx_rates
+    try:
+        rows = user_conn.execute("SELECT date, eur_usd FROM fx_rates").fetchall()
+        if rows:
+            prices_conn.executemany(
+                "INSERT OR IGNORE INTO fx_rates (date, eur_usd) VALUES (?, ?)",
+                [(r[0], r[1]) for r in rows],
+            )
+            migrated += len(rows)
+    except Exception:
+        pass
+
+    # Copy delisted metadata
+    try:
+        rows = user_conn.execute(
+            "SELECT key, value FROM metadata WHERE key LIKE 'delisted:%'"
+        ).fetchall()
+        if rows:
+            prices_conn.executemany(
+                "INSERT OR IGNORE INTO metadata (key, value) VALUES (?, ?)",
+                [(r[0], r[1]) for r in rows],
+            )
+    except Exception:
+        pass
+
+    prices_conn.commit()
+
+    if drop_from_user and migrated > 0:
+        user_conn.execute("DELETE FROM daily_prices")
+        user_conn.execute("DELETE FROM fx_rates")
+        user_conn.commit()
+
+    return migrated

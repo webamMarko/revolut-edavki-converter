@@ -67,7 +67,8 @@ if [[ "$SKIP_DB" == false ]]; then
   for db_path in \
     "data/marko/portfolio.db" \
     "data/_demo/portfolio.db" \
-    "data/_system/users.db"; do
+    "data/_system/users.db" \
+    "data/_system/prices.db"; do
     local_file="${LOCAL_DIR}/${db_path}"
     if [[ -f "$local_file" ]]; then
       echo "   Copying ${db_path}..."

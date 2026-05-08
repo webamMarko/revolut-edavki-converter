@@ -62,11 +62,13 @@ def delete_note(conn: sqlite3.Connection, note_id: int) -> bool:
     return cur.rowcount > 0
 
 
-def query_notes_for_report(conn: sqlite3.Connection) -> list[dict]:
+def query_notes_for_report(conn: sqlite3.Connection, prices_conn: sqlite3.Connection | None = None) -> list[dict]:
     """Return all notes enriched with live ticker data for the HTML report."""
     notes = list_notes(conn)
     if not notes:
         return []
+
+    _pconn = prices_conn if prices_conn is not None else conn
 
     # Collect all unique tickers mentioned across notes
     all_tickers = set()
@@ -77,7 +79,7 @@ def query_notes_for_report(conn: sqlite3.Connection) -> list[dict]:
     # Latest price per ticker
     prices: dict[str, dict] = {}
     for ticker in all_tickers:
-        row = conn.execute(
+        row = _pconn.execute(
             """SELECT close, currency, date FROM daily_prices
                WHERE ticker = ? ORDER BY date DESC LIMIT 1""",
             (ticker,),

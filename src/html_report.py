@@ -605,18 +605,20 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                            fire_config: dict | None = None,
                            investment_notes: list[dict] | None = None,
                            conn: sqlite3.Connection | None = None,
-                           country: str = "SI") -> dict:
+                           country: str = "SI",
+                           prices_conn: sqlite3.Connection | None = None) -> dict:
     """Convert analytics/tax results + transactions to JSON-safe dict."""
     from .tax_regimes import get_regime, REGIMES
     from .i18n import get_translations, get_locale_for_country
 
+    _pconn = prices_conn if prices_conn is not None else conn
     regime = get_regime(country)
     lang = get_locale_for_country(country)
 
     # FX rate for display currency conversion (EUR → regime currency)
     fx_display_rate = 1.0  # EUR→EUR
-    if regime.currency != "EUR" and conn is not None:
-        row = conn.execute(
+    if regime.currency != "EUR" and _pconn is not None:
+        row = _pconn.execute(
             "SELECT eur_usd FROM fx_rates ORDER BY date DESC LIMIT 1"
         ).fetchone()
         if row:
@@ -940,11 +942,11 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
 
     # Price history and company names for expandable position rows
     pos_tickers = [p["ticker"] for p in data["positions"]]
-    data["position_price_history"] = _query_position_price_history(conn, pos_tickers)
+    data["position_price_history"] = _query_position_price_history(conn, pos_tickers, prices_conn=_pconn)
     data["company_names"] = _query_company_names(conn, pos_tickers)
 
     # Currency exposure
-    data["currency_exposure"] = _query_currency_exposure(conn, analytics.positions)
+    data["currency_exposure"] = _query_currency_exposure(conn, analytics.positions, prices_conn=_pconn)
 
     # Sector/industry allocation
     data["sector_allocation"] = _query_sector_allocation(conn, analytics.positions)
@@ -956,7 +958,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
     data["concentration_risk"] = _compute_concentration_risk(analytics.positions)
 
     # Correlation matrix
-    data["correlation"] = _compute_correlation_matrix(conn, analytics.positions)
+    data["correlation"] = _compute_correlation_matrix(conn, analytics.positions, prices_conn=_pconn)
 
     return data
 
@@ -968,13 +970,14 @@ def generate_html_report(analytics, tax_by_year, transactions: list[dict],
                          fire_config: dict | None = None,
                          investment_notes: list[dict] | None = None,
                          conn: sqlite3.Connection | None = None,
-                         country: str = "SI") -> str:
+                         country: str = "SI",
+                         prices_conn: sqlite3.Connection | None = None) -> str:
     """Generate a self-contained HTML report."""
     data = _serialize_report_data(analytics, tax_by_year, transactions, per_class=per_class,
                                   available_classes=available_classes,
                                   real_estate=real_estate, fire_config=fire_config,
                                   investment_notes=investment_notes, conn=conn,
-                                  country=country)
+                                  country=country, prices_conn=prices_conn)
 
     template = _env.get_template("report.html.j2")
     return template.render(

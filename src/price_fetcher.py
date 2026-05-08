@@ -373,6 +373,20 @@ def sync_all(conn: sqlite3.Connection, start_date: datetime | None = None,
     conn: user portfolio DB (reads tickers from transactions).
     prices_conn: shared system prices DB (writes prices/FX). Falls back to conn if None.
     """
+    # One-time migration: copy existing price data from user DB to shared DB
+    if prices_conn is not None:
+        shared_count = prices_conn.execute("SELECT COUNT(*) FROM daily_prices").fetchone()[0]
+        if shared_count == 0:
+            try:
+                user_count = conn.execute("SELECT COUNT(*) FROM daily_prices").fetchone()[0]
+            except Exception:
+                user_count = 0
+            if user_count > 0:
+                from .prices_db import migrate_prices_from_user_db
+                migrated = migrate_prices_from_user_db(conn, prices_conn)
+                if migrated:
+                    print(f"Migrated {migrated} price/FX rows to shared database.")
+
     print("Syncing stock prices...")
     sync_stock_prices(conn, start_date, end_date, verbose, prices_conn=prices_conn)
 

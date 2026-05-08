@@ -603,8 +603,11 @@ class UploadHandler(BaseHTTPRequestHandler):
         qs = parse_qs(urlparse(self.path).query)
         country = qs.get("country", ["SI"])[0].upper()
 
+        from .prices_db import get_prices_conn_or_none
+
         username = session["username"] if session else "_demo"
         conn = _portfolio_conn(session)
+        prices_conn = get_prices_conn_or_none()
         try:
             data_hash = compute_data_hash(conn)
             etag = f'"{data_hash}"'
@@ -629,7 +632,7 @@ class UploadHandler(BaseHTTPRequestHandler):
                 cached = get_cached(conn, scope, data_hash)
                 if cached is not None:
                     return cached
-                result = compute_analytics(conn, scope=scope)
+                result = compute_analytics(conn, scope=scope, prices_conn=prices_conn)
                 put_cache(conn, scope, data_hash, result)
                 return result
 
@@ -650,7 +653,8 @@ class UploadHandler(BaseHTTPRequestHandler):
                             tax_by_year[yr] = cached
                         else:
                             report = compute_tax_report(conn, year=yr, include_unrealized=False,
-                                                       scope="all", country=country)
+                                                       scope="all", country=country,
+                                                       prices_conn=prices_conn)
                             put_tax_cache(conn, yr, "all", country, data_hash, report, current_year)
                             tax_by_year[yr] = report
                     except Exception:
@@ -660,14 +664,14 @@ class UploadHandler(BaseHTTPRequestHandler):
             transactions = query_transactions(conn)
             # Lazy-load: pass only class names; frontend fetches per-class data on demand
             available_classes = [r[0] for r in conn.execute("SELECT DISTINCT asset_class FROM transactions").fetchall()]
-            re_data = query_real_estate(conn)
+            re_data = query_real_estate(conn, prices_conn=prices_conn)
             fire_cfg = query_fire_config(conn)
             notes = query_investment_notes(conn)
             html = generate_html_report(analytics, tax_by_year, transactions, per_class=None,
                                         available_classes=available_classes,
                                         real_estate=re_data, fire_config=fire_cfg,
                                         investment_notes=notes, conn=conn,
-                                        country=country)
+                                        country=country, prices_conn=prices_conn)
             # Inject current user into D so client JS can gate the edit UI.
             user_payload = json.dumps({
                 "id": session["user_id"],
@@ -699,6 +703,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(f"Error generating report: {e}".encode("utf-8"))
         finally:
+            if prices_conn:
+                prices_conn.close()
             conn.close()
 
     # ------------------------------------------------------------------
