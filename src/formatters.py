@@ -242,6 +242,87 @@ def format_tax(report, verbose: bool = False):
     print()
 
 
+def format_harvest(report, verbose: bool = False):
+    """Format and print tax-loss harvesting suggestions."""
+    from .harvest import HarvestReport
+
+    print(f"\n{'=' * 60}")
+    print(f"TAX-LOSS HARVESTING SUGGESTIONS  |  {report.year}")
+    print(f"Country: {report.country}  |  Scope: {report.scope}")
+    print(f"{'=' * 60}")
+
+    print(f"\nRealized gains this year:       {report.total_realized_gain_eur:>12,.2f} EUR")
+    print(f"Realized tax this year:         {report.total_realized_tax_eur:>12,.2f} EUR")
+    print(f"Total harvestable losses:       {report.total_harvestable_loss_eur:>12,.2f} EUR")
+    print(f"Total potential tax saving:     {report.total_potential_saving_eur:>12,.2f} EUR")
+    print(f"Directly offsetable (net):      {report.total_offsetable_eur:>12,.2f} EUR")
+
+    if report.wash_sale_warning_count > 0:
+        print(f"\n⚠  {report.wash_sale_warning_count} position(s) have wash-sale risk "
+              f"(bought within 30 days)")
+
+    if not report.suggestions:
+        print("\nNo tax-loss harvesting opportunities found.")
+        print()
+        return
+
+    print(f"\n--- Suggestions (ranked by net benefit) ---\n")
+
+    rows = []
+    for s in report.suggestions:
+        wash_flag = " *" if s.wash_sale_risk else ""
+        rows.append([
+            s.ticker + wash_flag,
+            s.asset_class,
+            f"{s.total_quantity:,.4f}",
+            f"{s.cost_basis_eur:,.2f}",
+            f"{s.market_value_eur:,.2f}",
+            f"{s.unrealized_loss_eur:+,.2f}",
+            f"{s.avg_holding_years:.1f}y",
+            f"{s.tax_rate:.0%}",
+            f"{s.potential_tax_saving_eur:,.2f}",
+            f"{s.net_benefit_eur:,.2f}",
+        ])
+
+    print(tabulate(rows,
+                   headers=["Ticker", "Class", "Qty", "Cost Basis", "Mkt Value",
+                            "Loss", "Held", "Rate", "Saving", "Net Benefit"],
+                   tablefmt="simple"))
+
+    if any(s.wash_sale_risk for s in report.suggestions):
+        print("\n  * = wash-sale risk (recent purchase within 30 days)")
+
+    if verbose:
+        for s in report.suggestions:
+            if s.wash_sale_risk:
+                print(f"\n  [{s.ticker}] {s.wash_sale_note}")
+            if s.lots:
+                print(f"\n  [{s.ticker}] Per-lot breakdown:")
+                lot_rows = []
+                for lot in s.lots:
+                    lot_rows.append([
+                        lot.buy_date,
+                        f"{lot.quantity:,.4f}",
+                        f"{lot.cost_per_share_eur:,.4f}",
+                        f"{lot.current_price_eur:,.4f}",
+                        f"{lot.unrealized_loss_eur:+,.2f}",
+                        f"{lot.holding_years:.2f}y",
+                        f"{lot.tax_rate:.0%}",
+                        f"{lot.potential_saving_eur:,.2f}",
+                    ])
+                print(tabulate(lot_rows,
+                               headers=["  Buy Date", "Qty", "Cost/Share", "Price",
+                                        "Loss", "Held", "Rate", "Saving"],
+                               tablefmt="simple"))
+
+    print(f"\n{'=' * 60}")
+    print(f"TOTAL POTENTIAL TAX SAVING:  {report.total_potential_saving_eur:,.2f} EUR")
+    if report.total_offsetable_eur < report.total_potential_saving_eur:
+        print(f"  (of which {report.total_offsetable_eur:,.2f} EUR directly offsets realized gains)")
+    print(f"{'=' * 60}")
+    print()
+
+
 def show_chart(result):
     """Display portfolio performance chart with benchmarks."""
     import matplotlib.pyplot as plt

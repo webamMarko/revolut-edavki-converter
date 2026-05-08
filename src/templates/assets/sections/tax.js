@@ -202,19 +202,30 @@
 
     section.style.display = '';
     document.getElementById('harvestTitle').textContent = t('tax.harvest.title');
-    document.getElementById('harvestDesc').textContent = t('tax.harvest.desc');
+
+    const washCount = filtered.filter(c => c.wash_sale_risk).length;
+    const descText = washCount > 0
+      ? t('tax.harvest.desc') + ` (${washCount} with wash-sale risk)`
+      : t('tax.harvest.desc');
+    document.getElementById('harvestDesc').textContent = descText;
 
     const totalSaving = filtered.reduce((s, c) => s + c.potential_tax_saving_eur, 0);
     const totalLoss = filtered.reduce((s, c) => s + c.unrealized_loss_eur, 0);
+    const totalNetBenefit = filtered.reduce((s, c) => s + (c.net_benefit_eur || 0), 0);
 
-    document.getElementById('harvestCards').innerHTML = [
+    const cards = [
       [t('tax.harvest.total_saving'), fmtCcy(totalSaving), 'pos'],
       [t('tax.harvest.total_loss'), signCcy(totalLoss), 'neg'],
       [t('tax.harvest.candidates'), filtered.length, ''],
-    ].map(([l, v, c]) =>
+    ];
+    if (totalNetBenefit > 0 && totalNetBenefit < totalSaving) {
+      cards.push(['Net Benefit (offsets gains)', fmtCcy(totalNetBenefit), 'pos']);
+    }
+    document.getElementById('harvestCards').innerHTML = cards.map(([l, v, c]) =>
       `<div class="metric-card"><div class="label">${l}</div><div class="value ${c}">${v}</div></div>`
     ).join('');
 
+    const hasNetBenefit = filtered.some(c => c.net_benefit_eur != null);
     const ht = document.getElementById('harvestTable');
     ht.innerHTML =
       '<thead><tr>' +
@@ -227,10 +238,12 @@
       '<th>'+t('tax.harvest.col.held')+'</th>' +
       '<th>'+t('tax.harvest.col.rate')+'</th>' +
       '<th>'+t('tax.harvest.col.saving')+'</th>' +
+      (hasNetBenefit ? '<th>Net Benefit</th>' : '') +
       '</tr></thead><tbody>' +
-      filtered.map(c =>
-        `<tr>` +
-        `<td><strong>${c.ticker}</strong></td>` +
+      filtered.map(c => {
+        const washIcon = c.wash_sale_risk ? ' <span title="' + (c.wash_sale_note || 'Wash-sale risk') + '" style="cursor:help">&#9888;</span>' : '';
+        return `<tr>` +
+        `<td><strong>${c.ticker}</strong>${washIcon}</td>` +
         `<td>${c.asset_class}</td>` +
         `<td>${fmt(c.quantity, 4)}</td>` +
         `<td>${fmtCcy(c.cost_basis_eur)}</td>` +
@@ -239,8 +252,9 @@
         `<td>${fmt(c.avg_holding_years, 1)}y</td>` +
         `<td>${Math.round(c.tax_rate * 100)}%</td>` +
         `<td class="pos">${fmtCcy(c.potential_tax_saving_eur)}</td>` +
-        `</tr>`
-      ).join('') +
+        (hasNetBenefit ? `<td class="pos">${fmtCcy(c.net_benefit_eur || 0)}</td>` : '') +
+        `</tr>`;
+      }).join('') +
       '</tbody>';
     makeSortable(ht);
   }

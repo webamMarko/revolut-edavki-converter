@@ -682,8 +682,17 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
             ],
         }
         if t.harvest_candidates:
-            d["harvest_candidates"] = [
-                {
+            # Compute enhanced harvest data with wash-sale and net-benefit info
+            try:
+                from .harvest import compute_harvest_suggestions
+                enhanced = compute_harvest_suggestions(conn, year=t.year, scope="all", country=t.country)
+                enhanced_map = {s.ticker: s for s in enhanced.suggestions}
+            except Exception:
+                enhanced_map = {}
+
+            d["harvest_candidates"] = []
+            for c in t.harvest_candidates:
+                entry = {
                     "ticker": c.ticker,
                     "asset_class": c.asset_class,
                     "quantity": round(c.quantity, 4),
@@ -694,8 +703,13 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                     "potential_tax_saving_eur": round(c.potential_tax_saving_eur, 2),
                     "avg_holding_years": round(c.avg_holding_years, 1),
                 }
-                for c in t.harvest_candidates
-            ]
+                enh = enhanced_map.get(c.ticker)
+                if enh:
+                    entry["wash_sale_risk"] = enh.wash_sale_risk
+                    entry["wash_sale_note"] = enh.wash_sale_note
+                    entry["net_benefit_eur"] = enh.net_benefit_eur
+                    entry["offsetable_gain_eur"] = enh.offsetable_gain_eur
+                d["harvest_candidates"].append(entry)
         return d
 
     if tax_by_year:
