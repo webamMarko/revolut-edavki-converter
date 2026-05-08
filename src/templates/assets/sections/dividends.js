@@ -19,14 +19,19 @@ function updateDividends() {
   const portfolioYield = portfolioValue > 0 && ttm > 0 ? (ttm / portfolioValue * 100) : null;
 
   document.getElementById('dividendCards').innerHTML = [
-    [t('div.total_income'), fmtCcy(div.total_eur), ''],
-    [t('div.last_12m'), fmtCcy(ttm), ''],
-    [t('div.ttm_yield'), portfolioYield != null ? fmt(portfolioYield, 2) + '%' : '—', ''],
-    [t('div.monthly_avg'), fmtCcy(avgMonthly), ''],
-    [t('div.paying_tickers'), tickers, ''],
-  ].map(([l, v, c]) =>
-    `<div class="metric-card"><div class="label">${l}</div><div class="value ${c}">${v}</div></div>`
-  ).join('');
+    ['div.total_income', t('div.total_income'), fmtCcy(div.total_eur), '', div.total_eur],
+    ['div.last_12m', t('div.last_12m'), fmtCcy(ttm), '', ttm],
+    ['div.ttm_yield', t('div.ttm_yield'), portfolioYield != null ? fmt(portfolioYield, 2) + '%' : '—', '', portfolioYield],
+    ['div.monthly_avg', t('div.monthly_avg'), fmtCcy(avgMonthly), '', avgMonthly],
+    ['div.paying_tickers', t('div.paying_tickers'), tickers, '', null],
+  ].map(([key, l, v, c, raw]) => {
+    var ttIcon = '';
+    if (typeof METRIC_TOOLTIPS !== 'undefined' && METRIC_TOOLTIPS[key]) {
+      var rv = raw != null ? raw : '';
+      ttIcon = ' <span class="tt-icon" data-tt-key="' + key + '" data-tt-val="' + rv + '" tabindex="0" aria-label="Info">&#9432;</span>';
+    }
+    return `<div class="metric-card"><div class="label">${l}${ttIcon}</div><div class="value ${c}">${v}</div></div>`;
+  }).join('');
 
   // Monthly bar chart
   _buildDividendChart(monthly);

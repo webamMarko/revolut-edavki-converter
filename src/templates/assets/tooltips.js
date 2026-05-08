@@ -173,6 +173,44 @@ const METRIC_TOOLTIPS = {
     definition: 'Simple return over the selected period (end value / start value - 1).',
     ranges: null,
     personalize: function(v) { return null; }
+  },
+  'summary.avg_yearly_growth': {
+    definition: 'Average yearly portfolio value growth in absolute terms across all calendar years.',
+    ranges: null,
+    personalize: function(v) { return null; }
+  },
+  'summary.avg_yearly_return': {
+    definition: 'Your total return divided evenly across the years you have been invested.',
+    ranges: [
+      { min: 10, label: 'Strong', color: 'green' },
+      { min: 5, label: 'Moderate', color: 'yellow' },
+      { min: -Infinity, label: 'Weak', color: 'red' }
+    ],
+    personalize: function(v) {
+      if (v == null) return null;
+      if (v > 10) return 'Averaging ' + fmt(v) + '% per year is strong performance.';
+      if (v > 0) return 'A ' + fmt(v) + '% yearly average is positive but below market averages.';
+      return 'A negative average yearly return means you are losing money on average.';
+    }
+  },
+  'summary.avg_yearly_invested': {
+    definition: 'Average net cash added to your portfolio each year (buys minus withdrawals).',
+    ranges: null,
+    personalize: function(v) { return null; }
+  },
+  'div.ttm_yield': {
+    definition: 'Trailing 12-month dividend income as a percentage of current portfolio value.',
+    ranges: [
+      { min: 4, label: 'High yield', color: 'green' },
+      { min: 2, label: 'Moderate', color: 'yellow' },
+      { min: 0, label: 'Low', color: 'red' }
+    ],
+    personalize: function(v) {
+      if (v == null) return null;
+      if (v >= 4) return 'A yield of ' + fmt(v) + '% is above average — good passive income.';
+      if (v >= 2) return 'Your ' + fmt(v) + '% yield is typical for diversified portfolios.';
+      return 'A ' + fmt(v) + '% yield is low — your portfolio is more growth-oriented.';
+    }
   }
 };
 

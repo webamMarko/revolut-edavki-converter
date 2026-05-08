@@ -37,16 +37,21 @@ function computePeriodMetrics(si, ei) {
 }
 
 // --- Summary cards ---
-function _renderCard(key, l, v, c, sub, isCustomize, isHidden) {
+function _renderCard(key, l, v, c, sub, isCustomize, isHidden, rawValue) {
   var hideStyle = isHidden ? ' style="opacity:0.35"' : '';
   var drag = isCustomize ? ' draggable="true"' : '';
   var hideBtn = '<button class="card-hide-btn" style="display:' + (isCustomize ? '' : 'none')
     + '" onclick="_layoutToggleCardVisibility(\'' + key + '\')" title="' + (isHidden ? 'Show' : 'Hide') + '">'
     + (isHidden ? '+' : '&times;') + '</button>';
   var handle = isCustomize ? '<span class="drag-handle">&#x2630;</span>' : '';
+  var ttIcon = '';
+  if (typeof METRIC_TOOLTIPS !== 'undefined' && METRIC_TOOLTIPS[key]) {
+    var rv = rawValue != null ? rawValue : '';
+    ttIcon = ' <span class="tt-icon" data-tt-key="' + key + '" data-tt-val="' + rv + '" tabindex="0" aria-label="Info">&#9432;</span>';
+  }
   return '<div class="metric-card" data-card-key="' + key + '"' + drag + hideStyle + '>'
     + handle + hideBtn
-    + '<div class="label">' + l + '</div><div class="value ' + (c||'') + '">' + v + '</div>'
+    + '<div class="label">' + l + ttIcon + '</div><div class="value ' + (c||'') + '">' + v + '</div>'
     + (sub ? '<div class="sub">' + sub + '</div>' : '')
     + '</div>';
 }
@@ -60,26 +65,26 @@ function updateSummary() {
   if (isZoomed) {
     const m = computePeriodMetrics(selStart, selEnd);
     const cards = [
-      ['period.start_value', t('period.start_value'), fmtCcy(m.startVal), '', allDates[selStart]],
-      ['period.end_value', t('period.end_value'), fmtCcy(m.endVal), '', allDates[selEnd]],
-      ['period.change', t('period.change'), signCcy(m.change), cls(m.change)],
-      ['period.return', t('period.return'), sign(m.returnPct)+'%', cls(m.returnPct)],
-      ['summary.cagr', t('summary.cagr'), m.cagr!=null?sign(m.cagr)+'%':'—', cls(m.cagr)],
-      ['summary.max_drawdown', t('summary.max_drawdown'), pct(m.maxDD), 'neg', m.peakDate+' → '+m.troughDate],
+      ['period.start_value', t('period.start_value'), fmtCcy(m.startVal), '', allDates[selStart], m.startVal],
+      ['period.end_value', t('period.end_value'), fmtCcy(m.endVal), '', allDates[selEnd], m.endVal],
+      ['period.change', t('period.change'), signCcy(m.change), cls(m.change), '', m.change],
+      ['period.return', t('period.return'), sign(m.returnPct)+'%', cls(m.returnPct), '', m.returnPct],
+      ['summary.cagr', t('summary.cagr'), m.cagr!=null?sign(m.cagr)+'%':'—', cls(m.cagr), '', m.cagr],
+      ['summary.max_drawdown', t('summary.max_drawdown'), pct(m.maxDD), 'neg', m.peakDate+' → '+m.troughDate, m.maxDD],
     ];
-    el.innerHTML = cards.map(([key,l,v,c,sub])=>
-      _renderCard(key, l, v, c, sub, isCustomize, hiddenCards.indexOf(key) >= 0)
+    el.innerHTML = cards.map(([key,l,v,c,sub,raw])=>
+      _renderCard(key, l, v, c, sub, isCustomize, hiddenCards.indexOf(key) >= 0, raw)
     ).join('');
   } else {
     const s = getActiveSummary();
     const cards = [
-      ['summary.portfolio_value', t('summary.portfolio_value'), fmtCcy(s.portfolio_value_eur)],
-      ['summary.total_invested', t('summary.total_invested'), fmtCcy(s.total_invested_eur)],
-      ['summary.absolute_gain', t('summary.absolute_gain'), signCcy(s.absolute_gain_eur), cls(s.absolute_gain_eur)],
-      ['summary.total_return', t('summary.total_return'), sign(s.total_return_pct)+'%', cls(s.total_return_pct)],
-      ['summary.cagr', t('summary.cagr'), s.cagr_pct!=null?sign(s.cagr_pct)+'%':'—', cls(s.cagr_pct)],
-      ['summary.twr', t('summary.twr'), s.twr_pct!=null?sign(s.twr_pct)+'%':'—', cls(s.twr_pct)],
-      ['summary.max_drawdown', t('summary.max_drawdown'), pct(s.max_drawdown_pct), 'neg', s.max_drawdown_peak_date+' → '+s.max_drawdown_trough_date],
+      ['summary.portfolio_value', t('summary.portfolio_value'), fmtCcy(s.portfolio_value_eur), '', '', s.portfolio_value_eur],
+      ['summary.total_invested', t('summary.total_invested'), fmtCcy(s.total_invested_eur), '', '', s.total_invested_eur],
+      ['summary.absolute_gain', t('summary.absolute_gain'), signCcy(s.absolute_gain_eur), cls(s.absolute_gain_eur), '', s.absolute_gain_eur],
+      ['summary.total_return', t('summary.total_return'), sign(s.total_return_pct)+'%', cls(s.total_return_pct), '', s.total_return_pct],
+      ['summary.cagr', t('summary.cagr'), s.cagr_pct!=null?sign(s.cagr_pct)+'%':'—', cls(s.cagr_pct), '', s.cagr_pct],
+      ['summary.twr', t('summary.twr'), s.twr_pct!=null?sign(s.twr_pct)+'%':'—', cls(s.twr_pct), '', s.twr_pct],
+      ['summary.max_drawdown', t('summary.max_drawdown'), pct(s.max_drawdown_pct), 'neg', s.max_drawdown_peak_date+' → '+s.max_drawdown_trough_date, s.max_drawdown_pct],
     ];
     const yearly = computeYearlyAverages();
     if (yearly) {
@@ -87,10 +92,10 @@ function updateSummary() {
         ? (new Date(allDates[allDates.length-1]) - new Date(allDates[0])) / (365.25 * 86400000)
         : 1;
       const sub = yearly.numYears + ' ' + t('summary.yr_avg');
-      cards.push(['summary.avg_yearly_growth', t('summary.avg_yearly_growth'), signCcy(yearly.avgValueGrowth), cls(yearly.avgValueGrowth), sub]);
+      cards.push(['summary.avg_yearly_growth', t('summary.avg_yearly_growth'), signCcy(yearly.avgValueGrowth), cls(yearly.avgValueGrowth), sub, yearly.avgValueGrowth]);
       if (s.total_return_pct != null && totalYears > 0)
-        cards.push(['summary.avg_yearly_return', t('summary.avg_yearly_return'), sign(s.total_return_pct / totalYears)+'%', cls(s.total_return_pct), sub]);
-      cards.push(['summary.avg_yearly_invested', t('summary.avg_yearly_invested'), signCcy(yearly.avgCashAdded), cls(yearly.avgCashAdded), sub]);
+        cards.push(['summary.avg_yearly_return', t('summary.avg_yearly_return'), sign(s.total_return_pct / totalYears)+'%', cls(s.total_return_pct), sub, s.total_return_pct / totalYears]);
+      cards.push(['summary.avg_yearly_invested', t('summary.avg_yearly_invested'), signCcy(yearly.avgCashAdded), cls(yearly.avgCashAdded), sub, yearly.avgCashAdded]);
     }
 
     // Apply card ordering from layout
@@ -114,8 +119,8 @@ function updateSummary() {
       return hiddenCards.indexOf(c[0]) < 0;
     });
 
-    el.innerHTML = visibleCards.map(([key,l,v,c,sub])=>
-      _renderCard(key, l, v, c, sub, isCustomize, hiddenCards.indexOf(key) >= 0)
+    el.innerHTML = visibleCards.map(([key,l,v,c,sub,raw])=>
+      _renderCard(key, l, v, c, sub, isCustomize, hiddenCards.indexOf(key) >= 0, raw)
     ).join('');
   }
 }
@@ -130,19 +135,24 @@ function updateRiskMetrics() {
 
   const el = document.getElementById('riskMetrics');
   const cards = [
-    [t('risk.volatility'), pct(rm.volatility_pct), '', t('risk.volatility_sub')],
-    [t('risk.sharpe'), rm.sharpe_ratio != null ? fmt(rm.sharpe_ratio) : '—', rm.sharpe_ratio != null ? cls(rm.sharpe_ratio) : '', t('risk.sharpe_sub')],
-    [t('risk.sortino'), rm.sortino_ratio != null ? fmt(rm.sortino_ratio) : '—', rm.sortino_ratio != null ? cls(rm.sortino_ratio) : '', t('risk.sortino_sub')],
-    [t('risk.calmar'), rm.calmar_ratio != null ? fmt(rm.calmar_ratio) : '—', rm.calmar_ratio != null ? cls(rm.calmar_ratio) : '', t('risk.calmar_sub')],
-    [t('risk.best_day'), rm.best_day_pct != null ? sign(rm.best_day_pct) + '%' : '—', 'pos'],
-    [t('risk.worst_day'), rm.worst_day_pct != null ? sign(rm.worst_day_pct) + '%' : '—', 'neg'],
-    [t('risk.best_month'), rm.best_month_pct != null ? sign(rm.best_month_pct) + '%' : '—', 'pos'],
-    [t('risk.worst_month'), rm.worst_month_pct != null ? sign(rm.worst_month_pct) + '%' : '—', 'neg'],
-    [t('risk.positive_days'), rm.positive_days_pct != null ? fmt(rm.positive_days_pct, 1) + '%' : '—', ''],
+    ['risk.volatility', t('risk.volatility'), pct(rm.volatility_pct), '', t('risk.volatility_sub'), rm.volatility_pct],
+    ['risk.sharpe', t('risk.sharpe'), rm.sharpe_ratio != null ? fmt(rm.sharpe_ratio) : '—', rm.sharpe_ratio != null ? cls(rm.sharpe_ratio) : '', t('risk.sharpe_sub'), rm.sharpe_ratio],
+    ['risk.sortino', t('risk.sortino'), rm.sortino_ratio != null ? fmt(rm.sortino_ratio) : '—', rm.sortino_ratio != null ? cls(rm.sortino_ratio) : '', t('risk.sortino_sub'), rm.sortino_ratio],
+    ['risk.calmar', t('risk.calmar'), rm.calmar_ratio != null ? fmt(rm.calmar_ratio) : '—', rm.calmar_ratio != null ? cls(rm.calmar_ratio) : '', t('risk.calmar_sub'), rm.calmar_ratio],
+    ['risk.best_day', t('risk.best_day'), rm.best_day_pct != null ? sign(rm.best_day_pct) + '%' : '—', 'pos', '', rm.best_day_pct],
+    ['risk.worst_day', t('risk.worst_day'), rm.worst_day_pct != null ? sign(rm.worst_day_pct) + '%' : '—', 'neg', '', rm.worst_day_pct],
+    ['risk.best_month', t('risk.best_month'), rm.best_month_pct != null ? sign(rm.best_month_pct) + '%' : '—', 'pos', '', rm.best_month_pct],
+    ['risk.worst_month', t('risk.worst_month'), rm.worst_month_pct != null ? sign(rm.worst_month_pct) + '%' : '—', 'neg', '', rm.worst_month_pct],
+    ['risk.positive_days', t('risk.positive_days'), rm.positive_days_pct != null ? fmt(rm.positive_days_pct, 1) + '%' : '—', '', '', rm.positive_days_pct],
   ];
-  el.innerHTML = cards.map(([l, v, c, sub]) =>
-    `<div class="metric-card"><div class="label">${l}</div><div class="value ${c || ''}">${v}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`
-  ).join('');
+  el.innerHTML = cards.map(([key, l, v, c, sub, raw]) => {
+    var ttIcon = '';
+    if (typeof METRIC_TOOLTIPS !== 'undefined' && METRIC_TOOLTIPS[key]) {
+      var rv = raw != null ? raw : '';
+      ttIcon = ' <span class="tt-icon" data-tt-key="' + key + '" data-tt-val="' + rv + '" tabindex="0" aria-label="Info">&#9432;</span>';
+    }
+    return `<div class="metric-card"><div class="label">${l}${ttIcon}</div><div class="value ${c || ''}">${v}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+  }).join('');
 }
 
 function updateTopMovers() {
