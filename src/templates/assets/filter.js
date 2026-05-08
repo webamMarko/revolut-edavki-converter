@@ -1,17 +1,47 @@
 // --- Asset class filter state ---
 const perClass = D.per_class || {};
-const classKeys = Object.keys(perClass);
+const classKeys = D.available_classes || Object.keys(perClass);
 const hasFilter = classKeys.length > 1;
 // These classes start inactive by default (different time horizon / skews the main chart)
 const defaultInactive = new Set(['realestate', 'savings']);
 let activeClasses = new Set(classKeys.filter(k => !defaultInactive.has(k)));
 const classLabels = {stock:t('class.stock'), cfd:t('class.cfd'), crypto:t('class.crypto'), savings:t('class.savings'), realestate:t('class.realestate')};
 
-// FIRE projection lines: off by default
-let showFire = false;
-
 // Keys included in the pre-computed "all" daily series (everything except realestate)
 const allSeriesKeys = new Set(classKeys.filter(k => k !== 'realestate'));
+
+// --- AJAX lazy-loading for per-class analytics ---
+const _fetchingClasses = new Set();
+let _loadingOverlay = null;
+
+function _showLoading() {
+  if (_loadingOverlay) return;
+  _loadingOverlay = document.createElement('div');
+  _loadingOverlay.id = 'analytics-loading';
+  _loadingOverlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;z-index:9999';
+  _loadingOverlay.innerHTML = '<div style="background:#fff;padding:24px 36px;border-radius:8px;font-size:16px;box-shadow:0 4px 20px rgba(0,0,0,0.15)">Loading analytics…</div>';
+  document.body.appendChild(_loadingOverlay);
+}
+
+function _hideLoading() {
+  if (_loadingOverlay) { _loadingOverlay.remove(); _loadingOverlay = null; }
+}
+
+function _fetchClassData(ac) {
+  if (perClass[ac] || _fetchingClasses.has(ac)) return Promise.resolve();
+  _fetchingClasses.add(ac);
+  return fetch('/api/analytics/' + ac)
+    .then(function(r) { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+    .then(function(data) { perClass[ac] = data; })
+    .finally(function() { _fetchingClasses.delete(ac); });
+}
+
+function _ensureClassData(classes) {
+  const needed = classes.filter(function(ac) { return !perClass[ac] && ac !== 'realestate'; });
+  if (needed.length === 0) return Promise.resolve();
+  _showLoading();
+  return Promise.all(needed.map(_fetchClassData)).finally(_hideLoading);
+}
 
 function buildCombinedSeries() {
   const nonReActive = [...activeClasses].filter(k => k !== 'realestate');
@@ -290,88 +320,8 @@ if (hasFilter) {
   });
 }
 
-// --- FIRE toggle + settings ---
-let fireInflationOverride = null;   // null = use D.fire.inflation_rate
-let fireMonthlyContribOverride = null; // null = use computed avg
 
-function getFireInflation() {
-  return fireInflationOverride != null ? fireInflationOverride : (D.fire ? D.fire.inflation_rate : 2.5);
-}
-function getFireMonthlyContrib() {
-  if (fireMonthlyContribOverride != null) return fireMonthlyContribOverride;
-  const yearly = computeYearlyAverages();
-  return yearly ? yearly.avgCashAdded / 12 : 0;
-}
-
-if (D.fire != null) {
-  document.getElementById('fireFilter').style.display = '';
-  const fireBtn = document.getElementById('fireToggleBtn');
-  const fireInputsEl = document.getElementById('fireInputs');
-  const mobileFireRow = document.getElementById('mobileFireRow');
-  const mobileFireBtn = document.getElementById('mobileFireToggleBtn');
-  const mobileFireInputsEl = document.getElementById('mobileFireInputs');
-  const mobileFiltersContainer = document.getElementById('mobileFilters');
-  if (mobileFireRow) mobileFireRow.style.display = '';
-  if (mobileFiltersContainer && !hasFilter) mobileFiltersContainer.style.display = '';
-
-  // Input elements
-  const inflInput = document.getElementById('fireInflationInput');
-  const contribInput = document.getElementById('fireContribInput');
-  const mInflInput = document.getElementById('mobileFireInflationInput');
-  const mContribInput = document.getElementById('mobileFireContribInput');
-
-  // Set defaults
-  const defaultInflation = D.fire.inflation_rate;
-  const yearly0 = computeYearlyAverages();
-  const defaultMonthly = yearly0 ? Math.round(yearly0.avgCashAdded / 12) : 0;
-  [inflInput, mInflInput].forEach(el => { if (el) el.value = defaultInflation; });
-  [contribInput, mContribInput].forEach(el => { if (el) el.value = defaultMonthly; });
-
-  function showFireInputs(visible) {
-    if (fireInputsEl) fireInputsEl.style.display = visible ? '' : 'none';
-    if (mobileFireInputsEl) mobileFireInputsEl.style.display = visible ? '' : 'none';
-  }
-
-  function onFireInputChange() {
-    fireInflationOverride = parseFloat(inflInput.value);
-    if (isNaN(fireInflationOverride)) fireInflationOverride = null;
-    fireMonthlyContribOverride = parseFloat(contribInput.value);
-    if (isNaN(fireMonthlyContribOverride)) fireMonthlyContribOverride = null;
-    // Sync mobile inputs
-    if (mInflInput) mInflInput.value = inflInput.value;
-    if (mContribInput) mContribInput.value = contribInput.value;
-    rebuildCharts();
-    updateAll();
-  }
-  function onMobileFireInputChange() {
-    fireInflationOverride = parseFloat(mInflInput.value);
-    if (isNaN(fireInflationOverride)) fireInflationOverride = null;
-    fireMonthlyContribOverride = parseFloat(mContribInput.value);
-    if (isNaN(fireMonthlyContribOverride)) fireMonthlyContribOverride = null;
-    // Sync sidebar inputs
-    inflInput.value = mInflInput.value;
-    contribInput.value = mContribInput.value;
-    rebuildCharts();
-    updateAll();
-  }
-  inflInput.addEventListener('change', onFireInputChange);
-  contribInput.addEventListener('change', onFireInputChange);
-  if (mInflInput) mInflInput.addEventListener('change', onMobileFireInputChange);
-  if (mContribInput) mContribInput.addEventListener('change', onMobileFireInputChange);
-
-  function toggleFire() {
-    showFire = !showFire;
-    fireBtn.classList.toggle('active', showFire);
-    if (mobileFireBtn) mobileFireBtn.classList.toggle('active', showFire);
-    showFireInputs(showFire);
-    rebuildCharts();
-    updateAll();
-  }
-  fireBtn.addEventListener('click', toggleFire);
-  if (mobileFireBtn) mobileFireBtn.addEventListener('click', toggleFire);
-}
-
-function onFilterChange() {
+function _applyFilterChange() {
   ds = buildCombinedSeries();
   allDates = ds.dates;
   N = allDates.length;
@@ -386,4 +336,12 @@ function onFilterChange() {
   document.querySelectorAll('.range-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.days === '-1' && !b.dataset.ytd);
   });
+}
+
+function onFilterChange() {
+  if (isDefaultSelection()) {
+    _applyFilterChange();
+    return;
+  }
+  _ensureClassData([...activeClasses]).then(_applyFilterChange);
 }

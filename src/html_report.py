@@ -16,21 +16,30 @@ _env = Environment(
 )
 
 
-def query_real_estate(conn: sqlite3.Connection) -> dict:
+def query_real_estate(conn: sqlite3.Connection, prices_conn: sqlite3.Connection | None = None) -> dict:
     """Return real estate properties with valuations and price history."""
+    _pconn = prices_conn if prices_conn is not None else conn
     try:
-        props = conn.execute("""
-            SELECT p.*,
-                   dp.close AS estimated_value_eur,
-                   dp.date  AS estimated_date
-            FROM real_estate_properties p
-            LEFT JOIN (
-                SELECT ticker, close, date,
-                       ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY date DESC) AS rn
-                FROM daily_prices WHERE currency = 'EUR'
-            ) dp ON dp.ticker = p.ticker AND dp.rn = 1
-            ORDER BY p.purchase_date
-        """).fetchall()
+        # Properties from user DB, valuations from prices DB
+        props_raw = conn.execute("SELECT * FROM real_estate_properties ORDER BY purchase_date").fetchall()
+    except Exception:
+        return {}
+    if not props_raw:
+        return {}
+
+    # Build props with latest valuation from prices DB
+    props = []
+    for p in props_raw:
+        p_dict = dict(p)
+        val_row = _pconn.execute(
+            "SELECT close, date FROM daily_prices WHERE ticker = ? AND currency = 'EUR' ORDER BY date DESC LIMIT 1",
+            (p["ticker"],)
+        ).fetchone()
+        p_dict["estimated_value_eur"] = val_row[0] if val_row else None
+        p_dict["estimated_date"] = val_row[1] if val_row else None
+        props.append(p_dict)
+    try:
+        pass  # props already fetched
     except Exception:
         return {}
 
@@ -586,6 +595,7 @@ def _compute_correlation_matrix(conn: sqlite3.Connection | None,
 
 def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                            per_class: dict | None = None,
+                           available_classes: list[str] | None = None,
                            real_estate: dict | None = None,
                            fire_config: dict | None = None,
                            investment_notes: list[dict] | None = None,
@@ -805,6 +815,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
 
     # Per-asset-class daily series (for the scope filter UI)
     data["per_class"] = {}
+    data["available_classes"] = available_classes or (list(per_class.keys()) if per_class else [])
     if per_class:
         for ac, ac_analytics in per_class.items():
             ac_daily = ac_analytics.daily_series
@@ -947,6 +958,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
 
 def generate_html_report(analytics, tax_by_year, transactions: list[dict],
                          per_class: dict | None = None,
+                         available_classes: list[str] | None = None,
                          real_estate: dict | None = None,
                          fire_config: dict | None = None,
                          investment_notes: list[dict] | None = None,
@@ -954,6 +966,7 @@ def generate_html_report(analytics, tax_by_year, transactions: list[dict],
                          country: str = "SI") -> str:
     """Generate a self-contained HTML report."""
     data = _serialize_report_data(analytics, tax_by_year, transactions, per_class=per_class,
+                                  available_classes=available_classes,
                                   real_estate=real_estate, fire_config=fire_config,
                                   investment_notes=investment_notes, conn=conn,
                                   country=country)
