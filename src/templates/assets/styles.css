@@ -1564,6 +1564,10 @@ body {
   .tax-wizard-card { padding: 1rem; }
 }
 
+@media (max-width: 768px) {
+  .customize-controls { display: none; }
+}
+
 /* ---- Layout Customization ---- */
 .customize-controls {
   padding: 0.5rem 1rem;
