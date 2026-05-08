@@ -37,31 +37,49 @@ function computePeriodMetrics(si, ei) {
 }
 
 // --- Summary cards ---
+function _renderCard(key, l, v, c, sub, isCustomize, isHidden) {
+  var hideStyle = isHidden ? ' style="opacity:0.35"' : '';
+  var drag = isCustomize ? ' draggable="true"' : '';
+  var hideBtn = '<button class="card-hide-btn" style="display:' + (isCustomize ? '' : 'none')
+    + '" onclick="_layoutToggleCardVisibility(\'' + key + '\')" title="' + (isHidden ? 'Show' : 'Hide') + '">'
+    + (isHidden ? '+' : '&times;') + '</button>';
+  var handle = isCustomize ? '<span class="drag-handle">&#x2630;</span>' : '';
+  return '<div class="metric-card" data-card-key="' + key + '"' + drag + hideStyle + '>'
+    + handle + hideBtn
+    + '<div class="label">' + l + '</div><div class="value ' + (c||'') + '">' + v + '</div>'
+    + (sub ? '<div class="sub">' + sub + '</div>' : '')
+    + '</div>';
+}
+
 function updateSummary() {
   const el = document.getElementById('summary');
+  var isCustomize = window._layoutIsCustomizeMode ? _layoutIsCustomizeMode() : false;
+  var layoutCfg = window._layoutGetCardOrder ? _layoutGetCardOrder() : { order: [], hidden: [] };
+  var hiddenCards = layoutCfg.hidden || [];
+
   if (isZoomed) {
     const m = computePeriodMetrics(selStart, selEnd);
     const cards = [
-      [t('period.start_value'), fmtCcy(m.startVal), '', allDates[selStart]],
-      [t('period.end_value'), fmtCcy(m.endVal), '', allDates[selEnd]],
-      [t('period.change'), signCcy(m.change), cls(m.change)],
-      [t('period.return'), sign(m.returnPct)+'%', cls(m.returnPct)],
-      [t('summary.cagr'), m.cagr!=null?sign(m.cagr)+'%':'—', cls(m.cagr)],
-      [t('summary.max_drawdown'), pct(m.maxDD), 'neg', m.peakDate+' → '+m.troughDate],
+      ['period.start_value', t('period.start_value'), fmtCcy(m.startVal), '', allDates[selStart]],
+      ['period.end_value', t('period.end_value'), fmtCcy(m.endVal), '', allDates[selEnd]],
+      ['period.change', t('period.change'), signCcy(m.change), cls(m.change)],
+      ['period.return', t('period.return'), sign(m.returnPct)+'%', cls(m.returnPct)],
+      ['summary.cagr', t('summary.cagr'), m.cagr!=null?sign(m.cagr)+'%':'—', cls(m.cagr)],
+      ['summary.max_drawdown', t('summary.max_drawdown'), pct(m.maxDD), 'neg', m.peakDate+' → '+m.troughDate],
     ];
-    el.innerHTML = cards.map(([l,v,c,sub])=>
-      `<div class="metric-card"><div class="label">${l}</div><div class="value ${c||''}">${v}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`
+    el.innerHTML = cards.map(([key,l,v,c,sub])=>
+      _renderCard(key, l, v, c, sub, isCustomize, hiddenCards.indexOf(key) >= 0)
     ).join('');
   } else {
     const s = getActiveSummary();
     const cards = [
-      [t('summary.portfolio_value'), fmtCcy(s.portfolio_value_eur)],
-      [t('summary.total_invested'), fmtCcy(s.total_invested_eur)],
-      [t('summary.absolute_gain'), signCcy(s.absolute_gain_eur), cls(s.absolute_gain_eur)],
-      [t('summary.total_return'), sign(s.total_return_pct)+'%', cls(s.total_return_pct)],
-      [t('summary.cagr'), s.cagr_pct!=null?sign(s.cagr_pct)+'%':'—', cls(s.cagr_pct)],
-      [t('summary.twr'), s.twr_pct!=null?sign(s.twr_pct)+'%':'—', cls(s.twr_pct)],
-      [t('summary.max_drawdown'), pct(s.max_drawdown_pct), 'neg', s.max_drawdown_peak_date+' → '+s.max_drawdown_trough_date],
+      ['summary.portfolio_value', t('summary.portfolio_value'), fmtCcy(s.portfolio_value_eur)],
+      ['summary.total_invested', t('summary.total_invested'), fmtCcy(s.total_invested_eur)],
+      ['summary.absolute_gain', t('summary.absolute_gain'), signCcy(s.absolute_gain_eur), cls(s.absolute_gain_eur)],
+      ['summary.total_return', t('summary.total_return'), sign(s.total_return_pct)+'%', cls(s.total_return_pct)],
+      ['summary.cagr', t('summary.cagr'), s.cagr_pct!=null?sign(s.cagr_pct)+'%':'—', cls(s.cagr_pct)],
+      ['summary.twr', t('summary.twr'), s.twr_pct!=null?sign(s.twr_pct)+'%':'—', cls(s.twr_pct)],
+      ['summary.max_drawdown', t('summary.max_drawdown'), pct(s.max_drawdown_pct), 'neg', s.max_drawdown_peak_date+' → '+s.max_drawdown_trough_date],
     ];
     const yearly = computeYearlyAverages();
     if (yearly) {
@@ -69,37 +87,35 @@ function updateSummary() {
         ? (new Date(allDates[allDates.length-1]) - new Date(allDates[0])) / (365.25 * 86400000)
         : 1;
       const sub = yearly.numYears + ' ' + t('summary.yr_avg');
-      cards.push([t('summary.avg_yearly_growth'),   signCcy(yearly.avgValueGrowth),              cls(yearly.avgValueGrowth), sub]);
+      cards.push(['summary.avg_yearly_growth', t('summary.avg_yearly_growth'), signCcy(yearly.avgValueGrowth), cls(yearly.avgValueGrowth), sub]);
       if (s.total_return_pct != null && totalYears > 0)
-        cards.push([t('summary.avg_yearly_return'), sign(s.total_return_pct / totalYears)+'%',       cls(s.total_return_pct),    sub]);
-      cards.push([t('summary.avg_yearly_invested'), signCcy(yearly.avgCashAdded),                cls(yearly.avgCashAdded),   sub]);
+        cards.push(['summary.avg_yearly_return', t('summary.avg_yearly_return'), sign(s.total_return_pct / totalYears)+'%', cls(s.total_return_pct), sub]);
+      cards.push(['summary.avg_yearly_invested', t('summary.avg_yearly_invested'), signCcy(yearly.avgCashAdded), cls(yearly.avgCashAdded), sub]);
     }
-    if (D.fire != null) {
-      const fire = D.fire;
-      const fireTarget = fire.target;
-      const progress = s.portfolio_value_eur / fireTarget * 100;
-      const remaining = fireTarget - s.portfolio_value_eur;
-      let fireSub = remaining > 0 ? '−'+fmtCcy(remaining)+' '+t('summary.fire_to_go') : t('summary.fire_achieved');
-      if (remaining > 0 && s.cagr_pct != null && s.cagr_pct > 0) {
-        const nominalCAGR = s.cagr_pct / 100;
-        const inflation = getFireInflation() / 100;
-        const realReturn = (1 + nominalCAGR) / (1 + inflation) - 1;
-        if (realReturn > 0) {
-          const monthlyContrib = getFireMonthlyContrib();
-          const annualContrib = monthlyContrib * 12;
-          const yearsToFire = annualContrib > 0
-            ? yearsToFireWithContrib(s.portfolio_value_eur, fireTarget, realReturn, annualContrib)
-            : Math.log(fireTarget / s.portfolio_value_eur) / Math.log(1 + realReturn);
-          if (yearsToFire != null) {
-            const fireYear = new Date().getFullYear() + Math.ceil(yearsToFire);
-            fireSub = '~' + fmt(yearsToFire, 1) + ' ' + t('summary.fire_years') + ' · ' + t('summary.fire_est') + ' ' + fireYear;
-          }
-        }
-      }
-      cards.push([t('summary.fire_progress'), fmt(progress, 1)+'%', progress >= 100 ? 'pos' : '', fireSub]);
+
+    // Apply card ordering from layout
+    var cardMap = {};
+    cards.forEach(function(c) { cardMap[c[0]] = c; });
+    var orderedCards = [];
+    var cardOrder = layoutCfg.order;
+    if (cardOrder && cardOrder.length > 0) {
+      cardOrder.forEach(function(key) {
+        if (cardMap[key]) orderedCards.push(cardMap[key]);
+      });
+      cards.forEach(function(c) {
+        if (cardOrder.indexOf(c[0]) < 0) orderedCards.push(c);
+      });
+    } else {
+      orderedCards = cards;
     }
-    el.innerHTML = cards.map(([l,v,c,sub])=>
-      `<div class="metric-card"><div class="label">${l}</div><div class="value ${c||''}">${v}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`
+
+    // Filter hidden (unless customize mode)
+    var visibleCards = isCustomize ? orderedCards : orderedCards.filter(function(c) {
+      return hiddenCards.indexOf(c[0]) < 0;
+    });
+
+    el.innerHTML = visibleCards.map(([key,l,v,c,sub])=>
+      _renderCard(key, l, v, c, sub, isCustomize, hiddenCards.indexOf(key) >= 0)
     ).join('');
   }
 }
@@ -233,20 +249,65 @@ function updateMilestones() {
     events.push({ date: dates[dates.length - 1], icon: '&#x1F4C5;', text: t('milestones.portfolio_age') + ': ' + ageStr, detail: days + ' ' + t('milestones.days') });
   }
 
-  if (events.length < 3) { section.style.display = 'none'; return; }
+  if (events.length < 2) { section.style.display = 'none'; return; }
   section.style.display = '';
 
   // Sort by date
   events.sort((a, b) => a.date.localeCompare(b.date));
 
-  const el = document.getElementById('milestonesList');
-  el.innerHTML = events.map(e =>
-    `<div class="milestone-item">`
-    + `<div class="milestone-icon">${e.icon}</div>`
-    + `<div class="milestone-body">`
-    + `<div class="milestone-date">${e.date}</div>`
-    + `<div class="milestone-text">${e.text}</div>`
-    + `<div class="milestone-detail">${e.detail}</div>`
-    + `</div></div>`
-  ).join('');
+  // Format date as short "Mon 'YY"
+  function shortDate(d) {
+    var parts = d.split('-');
+    var m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(parts[1],10)-1];
+    return m + " '" + parts[0].slice(2);
+  }
+
+  // Compact badge strip (top 6 most interesting)
+  var priority = events.filter(function(e) {
+    return e.text.indexOf('ATH') >= 0 || e.text.indexOf('ath') >= 0
+        || e.text.indexOf('first') >= 0 || e.text.indexOf('First') >= 0
+        || e.text.indexOf('age') >= 0 || e.text.indexOf('Age') >= 0
+        || e.text.indexOf('Reached') >= 0 || e.text.indexOf('reached') >= 0;
+  });
+  var badges = (priority.length >= 3 ? priority : events).slice(0, 6);
+
+  var strip = document.getElementById('milestonesStrip');
+  strip.innerHTML = badges.map(function(e) {
+    return '<span class="ms-badge">' + e.icon + ' ' + e.text + ' <span class="ms-date">' + shortDate(e.date) + '</span></span>';
+  }).join('<span class="ms-sep">&middot;</span>')
+    + (events.length > 6 ? ' <button class="ms-expand" id="msExpandBtn">Show all &#x25BE;</button>' : '');
+
+  // Full expandable list
+  var el = document.getElementById('milestonesList');
+  el.innerHTML = events.map(function(e) {
+    return '<div class="milestone-item">'
+      + '<div class="milestone-icon">' + e.icon + '</div>'
+      + '<div class="milestone-body">'
+      + '<div class="milestone-date">' + e.date + '</div>'
+      + '<div class="milestone-text">' + e.text + '</div>'
+      + '<div class="milestone-detail">' + e.detail + '</div>'
+      + '</div></div>';
+  }).join('');
+
+  // Toggle expand
+  var expandBtn = document.getElementById('msExpandBtn');
+  if (expandBtn) {
+    expandBtn.addEventListener('click', function() {
+      var list = document.getElementById('milestonesList');
+      var showing = list.style.display !== 'none';
+      list.style.display = showing ? 'none' : '';
+      expandBtn.innerHTML = showing ? 'Show all &#x25BE;' : 'Hide &#x25B4;';
+    });
+  }
 }
+
+// --- Tax season banner (Jan-Mar) ---
+(function() {
+  var banner = document.getElementById('taxSeasonBanner');
+  if (!banner) return;
+  var month = new Date().getMonth();
+  var hasTaxData = D.tax_by_year && Object.keys(D.tax_by_year).length > 0;
+  if (month <= 2 && hasTaxData) {
+    banner.style.display = '';
+  }
+})();

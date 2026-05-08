@@ -1251,3 +1251,216 @@ body {
   color: #f87171;
 }
 .risk-warning-body { flex: 1; font-size: 0.85rem; }
+
+/* ---- Tax Wizard ---- */
+.tax-wizard-card { max-width: 780px; margin: 0 auto; }
+.wizard-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+.wizard-header h2 { margin: 0; }
+.wizard-close-btn { background: none; border: none; color: var(--muted); font-size: 1.5rem; cursor: pointer; padding: 0.25rem; line-height: 1; }
+.wizard-close-btn:hover { color: var(--text); }
+
+.wizard-stepper { display: flex; align-items: center; gap: 0; margin-bottom: 1.5rem; overflow-x: auto; padding-bottom: 0.25rem; }
+.wizard-step { display: flex; align-items: center; gap: 0.4rem; white-space: nowrap; cursor: default; }
+.wizard-step-num { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; color: var(--muted); flex-shrink: 0; transition: all 0.2s; }
+.wizard-step-label { font-size: 0.75rem; font-weight: 600; color: var(--muted); transition: color 0.2s; }
+.wizard-step.active .wizard-step-num { border-color: var(--accent); color: var(--accent); background: rgba(245,158,11,0.1); }
+.wizard-step.active .wizard-step-label { color: var(--accent); }
+.wizard-step.done .wizard-step-num { border-color: var(--green); background: var(--green); color: transparent; font-size: 0; position: relative; overflow: hidden; }
+.wizard-step.done .wizard-step-num::after { content: "\2713"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #000; font-size: 0.72rem; font-weight: 700; }
+.wizard-step.done .wizard-step-label { color: var(--green); }
+.wizard-step-sep { flex: 1; min-width: 12px; max-width: 40px; height: 1px; background: var(--border); margin: 0 0.25rem; }
+
+.wizard-body { min-height: 280px; }
+.wizard-panel { animation: wizFadeIn 0.18s ease; }
+.wizard-panel h3 { margin: 0 0 0.25rem; font-size: 1.1rem; }
+.wizard-desc { color: var(--muted); font-size: 0.85rem; margin: 0 0 1rem; }
+
+@keyframes wizFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+.wizard-year-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.wizard-year-btn { padding: 0.6rem 1.25rem; border-radius: var(--radius-sm); border: 2px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.wizard-year-btn:hover { border-color: var(--accent); }
+.wizard-year-btn.active { border-color: var(--accent); background: rgba(245,158,11,0.1); color: var(--accent); }
+
+.wizard-download-area { text-align: center; padding: 2rem 1rem; }
+.wizard-download-icon { margin: 0 auto 1rem; width: 48px; height: 48px; color: var(--accent); }
+.wizard-download-icon svg { width: 100%; height: 100%; }
+.wizard-download-btn { padding: 0.75rem 2rem; border-radius: var(--radius-sm); border: none; background: var(--accent); color: #000; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+.wizard-download-btn:hover { opacity: 0.85; }
+.wizard-download-note { color: var(--muted); font-size: 0.8rem; margin-top: 0.75rem; }
+.wizard-download-note code { background: var(--raised); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.78rem; }
+
+.wizard-checklist { display: flex; flex-direction: column; gap: 0.6rem; }
+.wizard-check-item { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.6rem 0.75rem; border-radius: var(--radius-sm); background: var(--raised); cursor: pointer; font-size: 0.85rem; transition: background 0.12s; }
+.wizard-check-item:hover { background: var(--border); }
+.wizard-checkbox { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--green); margin-top: 0.1rem; cursor: pointer; }
+.wizard-check-item span { flex: 1; line-height: 1.4; }
+
+.wizard-empty-note { padding: 1.5rem; text-align: center; color: var(--muted); font-size: 0.85rem; background: var(--raised); border-radius: var(--radius-sm); }
+
+.wizard-detail-table { margin-top: 0.5rem; }
+
+.wizard-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.wizard-progress-text { font-size: 0.78rem; color: var(--muted); }
+.wizard-btn { padding: 0.5rem 1.25rem; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+.wizard-btn-back { background: var(--raised); color: var(--text); }
+.wizard-btn-back:hover { background: var(--border); }
+.wizard-btn-next { background: var(--accent); color: #000; }
+.wizard-btn-next:hover { opacity: 0.85; }
+
+.wizard-done { text-align: center; padding: 2rem 1rem; }
+.wizard-done-icon { width: 64px; height: 64px; margin: 0 auto 1rem; border-radius: 50%; background: var(--green); color: #000; font-size: 2rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.wizard-done h3 { font-size: 1.4rem; margin: 0 0 0.5rem; }
+.wizard-done p { color: var(--muted); font-size: 0.9rem; margin: 0.25rem 0; }
+.wizard-done-sub { font-size: 0.82rem !important; margin-top: 0.75rem !important; }
+
+/* Seasonal banner */
+.tax-season-banner { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: linear-gradient(135deg, rgba(245,158,11,0.08), rgba(245,158,11,0.02)); border: 1px solid rgba(245,158,11,0.3); border-radius: var(--radius); margin-bottom: 1rem; cursor: pointer; transition: border-color 0.15s; }
+.tax-season-banner:hover { border-color: var(--accent); }
+.tax-season-banner-icon { font-size: 1.25rem; flex-shrink: 0; }
+.tax-season-banner-text { flex: 1; font-size: 0.85rem; }
+.tax-season-banner-text strong { color: var(--accent); }
+.tax-season-banner-btn { padding: 0.4rem 0.9rem; border-radius: var(--radius-sm); background: var(--accent); color: #000; font-size: 0.78rem; font-weight: 600; border: none; cursor: pointer; white-space: nowrap; }
+
+@media (max-width: 768px) {
+  .wizard-stepper { gap: 0; }
+  .wizard-step-label { display: none; }
+  .wizard-step-num { width: 28px; height: 28px; font-size: 0.8rem; }
+  .wizard-step-sep { min-width: 8px; max-width: 24px; }
+  .wizard-body { min-height: 220px; }
+  .wizard-download-area { padding: 1.5rem 0.5rem; }
+  .tax-wizard-card { padding: 1rem; }
+}
+
+/* ---- Layout Customization ---- */
+.customize-controls {
+  padding: 0.5rem 1rem;
+  border-top: 1px solid var(--border);
+}
+.customize-btn {
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.customize-btn:hover { border-color: var(--accent); color: var(--text); }
+.customize-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
+.preset-bar {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+.preset-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.4rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.preset-btn:hover { border-color: var(--accent); color: var(--text); }
+.preset-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.preset-btn.reset-btn { color: var(--red); border-color: transparent; }
+.preset-btn.reset-btn:hover { border-color: var(--red); }
+
+/* Drag handle */
+.drag-handle {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.15s;
+  line-height: 1;
+  user-select: none;
+}
+.customize-mode .drag-handle { opacity: 0.6; }
+.customize-mode .metric-card:hover .drag-handle { opacity: 1; }
+
+/* Card hide button */
+.card-hide-btn {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.12s;
+}
+.card-hide-btn:hover { border-color: var(--red); color: var(--red); background: rgba(248,113,113,0.1); }
+
+/* Metric card relative positioning for handle/btn */
+.customize-mode .metric-card {
+  position: relative;
+  cursor: grab;
+  transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s;
+}
+.customize-mode .metric-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Drag states */
+.metric-card.dragging {
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+.metric-card.drag-over {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+
+/* Nav drag states */
+.customize-mode .nav-item[data-page] {
+  cursor: grab;
+  transition: transform 0.12s, background 0.12s;
+}
+.customize-mode .nav-item[data-page]:hover {
+  background: var(--raised);
+}
+.nav-item.dragging {
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+.nav-item.drag-over {
+  background: var(--accent-dim) !important;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* Customize mode active indicator */
+.customize-mode .sidebar-nav {
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 0.25rem;
+  margin: 0 0.5rem;
+}
+.customize-mode #summary {
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+}

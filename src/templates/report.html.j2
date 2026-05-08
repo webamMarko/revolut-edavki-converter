@@ -53,6 +53,9 @@
       {% include "sections/holding_countdown.html.j2" %}
       {% include "sections/tax.html.j2" %}
     </div>
+    <div class="page" id="page-taxwizard">
+      {% include "sections/tax_wizard.html.j2" %}
+    </div>
     <div class="page" id="page-history">
       {% include "sections/transactions.html.j2" %}
     </div>
@@ -77,12 +80,14 @@
 {% include "assets/sections/tax_timeline.js" %}
 {% include "assets/sections/tax_preview.js" %}
 {% include "assets/sections/holding_countdown.js" %}
+{% include "assets/sections/tax_wizard.js" %}
 {% include "assets/sections/transactions.js" %}
 {% include "assets/sections/real_estate.js" %}
 {% include "assets/sections/notes.js" %}
 {% include "assets/sections/risk.js" %}
 {% include "assets/sections/monte_carlo.js" %}
 {% include "assets/nav.js" %}
+{% include "assets/layout.js" %}
 {% include "assets/notifications.js" %}
 {% include "assets/onboarding.js" %}
 

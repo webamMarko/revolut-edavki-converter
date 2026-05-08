@@ -3,8 +3,19 @@
   <button onclick="resetZoom()">Reset</button>
 </div>
 
+<div id="taxSeasonBanner" class="tax-season-banner" style="display:none" onclick="window.switchPage('taxwizard')">
+  <span class="tax-season-banner-icon">&#128203;</span>
+  <span class="tax-season-banner-text">It's tax season! <strong>File your taxes</strong> for the previous year using our step-by-step wizard.</span>
+  <button class="tax-season-banner-btn">File My Taxes</button>
+</div>
+
 <div class="page-stack">
   <section id="summary" class="card-grid"></section>
+
+  <section id="milestonesSection" class="milestones-strip-wrap" style="display:none">
+    <div id="milestonesStrip" class="milestones-strip"></div>
+    <div id="milestonesList" class="milestones-list" style="display:none"></div>
+  </section>
 
   <section class="chart-section">
     <div class="chart-header">
@@ -23,6 +34,17 @@
     <div class="chart-wrap"><canvas id="portfolioChart"></canvas></div>
   </section>
 
+  <section class="two-col" id="topMoversSection" style="display:none">
+    <div class="card">
+      <h3>Top Gainers</h3>
+      <div id="topGainers" class="movers-list"></div>
+    </div>
+    <div class="card">
+      <h3>Top Losers</h3>
+      <div id="topLosers" class="movers-list"></div>
+    </div>
+  </section>
+
   <section class="two-col">
     <div class="card">
       <h2>Gains Breakdown</h2>
@@ -35,41 +57,5 @@
       <h2>Benchmark Comparison</h2>
       <table id="benchmarkTable" class="data-table"></table>
     </div>
-  </section>
-
-  <section id="riskMetricsSection" class="card" style="display:none">
-    <h2>Risk Metrics</h2>
-    <div id="riskMetrics" class="card-grid"></div>
-  </section>
-
-  <section class="two-col" id="topMoversSection" style="display:none">
-    <div class="card">
-      <h3>Top Gainers</h3>
-      <div id="topGainers" class="movers-list"></div>
-    </div>
-    <div class="card">
-      <h3>Top Losers</h3>
-      <div id="topLosers" class="movers-list"></div>
-    </div>
-  </section>
-
-  <section class="chart-section" id="benchmarkSection" style="display:none">
-    <h2 id="benchmarkSectionTitle">Performance vs Benchmarks</h2>
-    <div class="chart-wrap"><canvas id="benchmarkChart"></canvas></div>
-  </section>
-
-  <section class="card" id="milestonesSection" style="display:none">
-    <h2>Portfolio Milestones</h2>
-    <div id="milestonesList" class="milestones-list"></div>
-  </section>
-
-  <section class="card" id="monteCarloSection" style="display:none">
-    <div class="chart-header">
-      <h2 id="mcTitle">Monte Carlo Projection</h2>
-      <div class="range-bar" id="mcHorizonBar"></div>
-    </div>
-    <p id="mcDesc" style="color:var(--muted);font-size:0.8rem;margin:-0.25rem 0 0.75rem"></p>
-    <div id="mcCards" class="card-grid small" style="margin-bottom:0.75rem"></div>
-    <div class="chart-wrap" style="height:300px"><canvas id="mcChart"></canvas></div>
   </section>
 </div>
