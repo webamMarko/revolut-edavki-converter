@@ -2534,23 +2534,129 @@ def _upload_html(user_json: str) -> str:
         '<a href="/login" style="color:var(--accent);font-weight:700">Log in</a> to view your own data.'
         '</div>'
     )
-    guest_card = "" if is_premium else (
-        '<div class="card" style="text-align:center;padding:2rem">'
-        '<div style="font-size:1.05rem;font-weight:600;margin-bottom:0.5rem">Demo Portfolio</div>'
-        '<div style="color:var(--muted);font-size:0.85rem;margin-bottom:1.25rem">Explore the portfolio dashboard with sample data.</div>'
-        '<a class="btn btn-primary" href="/report">View Demo Report</a>'
-        '</div>'
-    )
     upload_display = '' if is_premium else ' style="display:none"'
 
+    landing_css = "" if is_premium else r"""
+/* ---- Landing page ---- */
+.landing{max-width:960px;width:100%;margin:0 auto;padding:2rem 1rem;display:flex;flex-direction:column;gap:3rem}
+.hero{text-align:center;padding:2.5rem 1rem 1.5rem}
+.hero-tagline{font-size:clamp(1.5rem,4vw,2.2rem);font-weight:700;letter-spacing:-0.03em;line-height:1.2;margin-bottom:0.75rem}
+.hero-tagline .hl{color:var(--accent)}
+.hero-sub{font-size:1rem;color:var(--muted);max-width:520px;margin:0 auto 1.75rem}
+.hero-ctas{display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap}
+.hero-ctas .btn{padding:0.7rem 1.6rem;font-size:0.95rem}
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
+.feature-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;text-align:center;transition:border-color 0.15s}
+.feature-card:hover{border-color:var(--accent)}
+.feature-icon{font-size:2rem;margin-bottom:0.6rem}
+.feature-title{font-size:0.92rem;font-weight:700;margin-bottom:0.35rem}
+.feature-desc{font-size:0.8rem;color:var(--muted);line-height:1.5}
+.how-section{text-align:center}
+.how-section h2{font-size:1.15rem;font-weight:700;margin-bottom:1.5rem}
+.how-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1.25rem}
+.how-step{display:flex;flex-direction:column;align-items:center;gap:0.5rem}
+.how-num{width:36px;height:36px;border-radius:50%;background:var(--accent-dim);color:var(--accent);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:0.95rem}
+.how-label{font-size:0.88rem;font-weight:600}
+.how-desc{font-size:0.78rem;color:var(--muted)}
+.how-arrow{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.2rem}
+.preview-section{text-align:center}
+.preview-section h2{font-size:1.15rem;font-weight:700;margin-bottom:1rem}
+.preview-frame{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;overflow:hidden}
+.preview-placeholder{display:flex;flex-direction:column;align-items:center;gap:0.75rem;padding:2rem 1rem}
+.preview-placeholder .icon{font-size:2.5rem}
+.preview-placeholder .text{font-size:0.88rem;color:var(--muted)}
+.preview-placeholder .btn{margin-top:0.5rem}
+@media (max-width:768px) {
+  .landing{padding:1.25rem 0.75rem;gap:2rem}
+  .hero{padding:1.5rem 0.5rem 1rem}
+  .features-grid{grid-template-columns:1fr 1fr}
+  .how-arrow{display:none}
+  .how-steps{grid-template-columns:1fr}
+}
+@media (max-width:480px) {
+  .features-grid{grid-template-columns:1fr}
+}
+"""
+
+    landing_html = "" if is_premium else """
+<div class="landing">
+  <section class="hero">
+    <h1 class="hero-tagline">Your Revolut portfolio.<br><span class="hl">Analyzed. Tax-ready. Private.</span></h1>
+    <p class="hero-sub">Import your Revolut trading CSV and get portfolio analytics, Monte Carlo projections, and eDavki-ready tax reports — all self-hosted.</p>
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="/report">Try the Demo</a>
+      <a class="btn btn-secondary" href="/login">Get Started</a>
+    </div>
+  </section>
+
+  <section class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">&#128202;</div>
+      <div class="feature-title">Tax Automation</div>
+      <div class="feature-desc">eDavki-ready capital gains &amp; dividend reporting with FIFO matching</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#128200;</div>
+      <div class="feature-title">Multi-Asset Analytics</div>
+      <div class="feature-desc">Stocks, CFDs, crypto &amp; savings in one unified dashboard</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#127919;</div>
+      <div class="feature-title">FIRE Projections</div>
+      <div class="feature-desc">Monte Carlo simulations for financial independence planning</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#128274;</div>
+      <div class="feature-title">Self-Hosted Privacy</div>
+      <div class="feature-desc">Your data stays on your server — no third-party access</div>
+    </div>
+  </section>
+
+  <section class="how-section">
+    <h2>How It Works</h2>
+    <div class="how-steps">
+      <div class="how-step">
+        <div class="how-num">1</div>
+        <div class="how-label">Upload CSV</div>
+        <div class="how-desc">Export from Revolut and drop the file here</div>
+      </div>
+      <div class="how-arrow">&rarr;</div>
+      <div class="how-step">
+        <div class="how-num">2</div>
+        <div class="how-label">Sync Prices</div>
+        <div class="how-desc">Historical prices and FX rates fetched automatically</div>
+      </div>
+      <div class="how-arrow">&rarr;</div>
+      <div class="how-step">
+        <div class="how-num">3</div>
+        <div class="how-label">Get Report</div>
+        <div class="how-desc">Analytics dashboard with tax-ready exports</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="preview-section">
+    <h2>See It in Action</h2>
+    <div class="preview-frame">
+      <div class="preview-placeholder">
+        <div class="icon">&#128202;</div>
+        <div class="text">Explore a live demo with sample portfolio data</div>
+        <a class="btn btn-primary btn-sm" href="/report">Open Demo Report</a>
+      </div>
+    </div>
+  </section>
+</div>
+"""
+
+    extra_css = landing_css
+
     return (
-        _head_html("Portfolio")
+        _head_html("WealthEagle — Portfolio Analytics & Tax Reporting", extra_css=extra_css)
         + f"""<body>
 {_header_html(username, role, "home")}
-<div class="app-main">
-  <div id="statusBar" class="status-bar" style="display:none"></div>
-  {guest_banner}
-  {guest_card}
+{'<div class="app-main">' if is_premium else ''}
+{'<div id="statusBar" class="status-bar" style="display:none"></div>' if is_premium else ''}
+{landing_html}
 
   <div id="uploadCard" class="card"{upload_display}>
     <h2>Upload CSV Files</h2>
@@ -2581,7 +2687,7 @@ def _upload_html(user_json: str) -> str:
       <button class="btn btn-secondary" id="resetBtn">Import More</button>
     </div>
   </div>
-</div>
+{'</div>' if is_premium else ''}
 
 {_COMMON_JS}
 <script>
