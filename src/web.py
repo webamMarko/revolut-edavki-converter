@@ -488,12 +488,15 @@ class UploadHandler(BaseHTTPRequestHandler):
                     with open(tmp_path, "wb") as tmp:
                         tmp.write(f["content"])
                     result = import_csv(conn, tmp_path, verbose=self.verbose)
-                    results.append({
+                    entry = {
                         "filename": filename,
                         "total": result.total,
                         "new": result.new,
                         "skipped": result.skipped,
-                    })
+                    }
+                    if result.warnings:
+                        entry["warnings"] = result.warnings
+                    results.append(entry)
                 except Exception as e:
                     results.append({"filename": filename, "error": str(e)})
                 finally:
@@ -1639,6 +1642,26 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 .success-links{display:flex;gap:0.6rem;justify-content:center;margin-top:1rem;flex-wrap:wrap}
 .chosen-file{margin-top:0.75rem;font-size:0.83rem;font-weight:500;color:var(--text)}
 
+/* ---- Validation Issues ---- */
+.validation-issues-list{max-height:320px;overflow-y:auto;border:1px solid var(--border,#e0e0e0);
+  border-radius:6px;font-size:0.78rem}
+.v-issue{display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0.6rem;
+  border-bottom:1px solid var(--border,#f0f0f0);flex-wrap:wrap}
+.v-issue:last-child{border-bottom:none}
+.v-issue.sev-error{background:rgba(248,113,113,0.06)}
+.v-issue.sev-warning{background:rgba(245,158,11,0.06)}
+.v-issue.sev-info{background:transparent}
+.v-sev{font-size:0.6rem;font-weight:700;padding:0.1rem 0.35rem;border-radius:6px;flex-shrink:0}
+.sev-error .v-sev{background:rgba(248,113,113,0.2);color:var(--red)}
+.sev-warning .v-sev{background:rgba(245,158,11,0.2);color:#b45309}
+.sev-info .v-sev{background:var(--raised,#f0f0f0);color:var(--muted)}
+.v-row{color:var(--muted);font-size:0.72rem;flex-shrink:0;min-width:45px}
+.v-col{color:var(--text);font-weight:600;flex-shrink:0}
+.v-msg{color:var(--text);flex:1}
+.v-val{font-family:monospace;font-size:0.72rem;color:var(--muted);
+  background:var(--raised,#f5f5f5);padding:0.1rem 0.3rem;border-radius:3px}
+.v-sug{font-size:0.72rem;color:var(--accent,#d97706);font-style:italic}
+
 /* ---- Responsive ---- */
 @media (max-width:768px) {
   .app-header{padding:0.75rem 1rem;gap:0.75rem;flex-wrap:wrap}
@@ -2530,9 +2553,9 @@ function validateStep2() {
   document.getElementById('step2Err').textContent = '';
 }
 
-// --- Step 2 → 3 ---
+// --- Step 2 → 3 (Validate) ---
 document.getElementById('nextBtn2').addEventListener('click', () => {
-  showStep3();
+  showStep3Validate();
 });
 
 function collectMapping() {
@@ -2543,20 +2566,160 @@ function collectMapping() {
   return mapping;
 }
 
-function showStep3() {
+let _validationData = null;
+
+async function showStep3Validate() {
   document.getElementById('step2').style.display = 'none';
   document.getElementById('step3').style.display = '';
   setStep(3);
+
+  document.getElementById('validationLoading').style.display = '';
+  document.getElementById('validationResults').style.display = 'none';
+  document.getElementById('step3Btns').style.display = 'none';
+  document.getElementById('step3Err').textContent = '';
+
+  const mapping = collectMapping();
+  try {
+    const resp = await fetch('/import/validate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ asset_class: _assetClass, mapping }),
+    });
+    const data = await resp.json();
+    if (data.error) {
+      document.getElementById('step3Err').textContent = data.error;
+      document.getElementById('validationLoading').style.display = 'none';
+      document.getElementById('step3Btns').style.display = '';
+      return;
+    }
+    _validationData = data;
+    renderValidationResults(data);
+  } catch(e) {
+    document.getElementById('step3Err').textContent = 'Network error: ' + e.message;
+    document.getElementById('validationLoading').style.display = 'none';
+    document.getElementById('step3Btns').style.display = '';
+  }
+}
+
+function renderValidationResults(data) {
+  document.getElementById('validationLoading').style.display = 'none';
+  document.getElementById('validationResults').style.display = '';
+  document.getElementById('step3Btns').style.display = '';
+
+  // Summary banner
+  const summary = document.getElementById('validationSummary');
+  if (data.error_rows === 0 && data.warning_rows === 0) {
+    summary.style.background = 'var(--bg-alt, #ecfdf5)';
+    summary.style.border = '1px solid var(--green, #34d399)';
+    summary.style.color = 'var(--green, #059669)';
+    summary.innerHTML = '<strong>&#10003;</strong> ' + esc(data.summary);
+  } else if (data.error_rows > 0) {
+    summary.style.background = '#fef2f2';
+    summary.style.border = '1px solid var(--red, #f87171)';
+    summary.style.color = '#991b1b';
+    summary.innerHTML = '<strong>&#9888;</strong> ' + esc(data.summary);
+  } else {
+    summary.style.background = '#fff8e1';
+    summary.style.border = '1px solid #ffe082';
+    summary.style.color = '#6d4c00';
+    summary.innerHTML = '<strong>&#9888;</strong> ' + esc(data.summary);
+  }
+
+  // Issues table (show first 50)
+  const issuesEl = document.getElementById('validationIssues');
+  if (data.issues && data.issues.length > 0) {
+    const shown = data.issues.slice(0, 50);
+    let html = '<div style="font-size:.8rem;font-weight:600;color:var(--muted);margin:.75rem 0 .4rem">Issues (' + data.issues.length + ' total)</div>';
+    html += '<div class="validation-issues-list">';
+    shown.forEach(issue => {
+      const sevClass = issue.severity === 'error' ? 'sev-error' : issue.severity === 'warning' ? 'sev-warning' : 'sev-info';
+      const sevLabel = issue.severity === 'error' ? 'ERR' : issue.severity === 'warning' ? 'WARN' : 'INFO';
+      html += `<div class="v-issue ${sevClass}">
+        <span class="v-sev">${sevLabel}</span>
+        <span class="v-row">Row ${issue.row}</span>
+        <span class="v-col">${esc(issue.column)}</span>
+        <span class="v-msg">${esc(issue.message)}</span>
+        ${issue.value ? '<span class="v-val">' + esc(issue.value) + '</span>' : ''}
+        ${issue.suggestion ? '<span class="v-sug">' + esc(issue.suggestion) + '</span>' : ''}
+      </div>`;
+    });
+    if (data.issues.length > 50) {
+      html += '<div style="font-size:.8rem;color:var(--muted);padding:.4rem">...and ' + (data.issues.length - 50) + ' more issues</div>';
+    }
+    html += '</div>';
+    issuesEl.innerHTML = html;
+  } else {
+    issuesEl.innerHTML = '';
+  }
+
+  // Missing buys
+  const mbEl = document.getElementById('validationMissingBuys');
+  if (data.missing_buys && data.missing_buys.length > 0) {
+    let html = '<div style="font-size:.8rem;font-weight:600;color:var(--muted);margin:.75rem 0 .4rem">Possible missing data</div>';
+    html += '<div style="font-size:.82rem">';
+    data.missing_buys.forEach(mb => {
+      html += `<div style="padding:.3rem 0;border-bottom:1px solid var(--border,#eee)">
+        <strong>${esc(mb.ticker)}</strong>: ${esc(mb.message)}
+      </div>`;
+    });
+    html += '</div>';
+    mbEl.innerHTML = html;
+  } else {
+    mbEl.innerHTML = '';
+  }
+
+  // Date gaps
+  const dgEl = document.getElementById('validationDateGaps');
+  if (data.date_gaps && data.date_gaps.length > 0) {
+    let html = '<div style="font-size:.8rem;font-weight:600;color:var(--muted);margin:.75rem 0 .4rem">Date gaps (&gt;1 year)</div>';
+    html += '<div style="font-size:.82rem">';
+    data.date_gaps.forEach(g => {
+      html += `<div style="padding:.3rem 0;border-bottom:1px solid var(--border,#eee)">
+        <strong>${esc(g.ticker)}</strong>: ${g.days} day gap (${esc(g.from)} to ${esc(g.to)})
+      </div>`;
+    });
+    html += '</div>';
+    dgEl.innerHTML = html;
+  } else {
+    dgEl.innerHTML = '';
+  }
+
+  // Update button text based on severity
+  const nextBtn = document.getElementById('nextBtn3');
+  if (data.error_rows > 0) {
+    nextBtn.textContent = 'Import Anyway (' + data.valid_rows + ' valid rows)';
+  } else {
+    nextBtn.textContent = 'Continue to Import';
+  }
+}
+
+// --- Step 3 → 4 (Import) ---
+document.getElementById('nextBtn3').addEventListener('click', () => {
+  showStep4();
+});
+
+function showStep4() {
+  document.getElementById('step3').style.display = 'none';
+  document.getElementById('step4').style.display = '';
+  setStep(4);
 
   const mapping = collectMapping();
   const mapLines = Object.entries(mapping).map(([k,v]) =>
     `<div class="summary-row"><span class="summary-lbl">${esc(FIELD_LABELS[k]||k)}</span><span class="summary-val">&#8594; ${esc(v)}</span></div>`
   ).join('');
 
+  let validInfo = '';
+  if (_validationData) {
+    const d = _validationData;
+    const statusColor = d.error_rows === 0 ? 'var(--green,#059669)' : 'var(--red,#dc2626)';
+    validInfo = `<div class="summary-row"><span class="summary-lbl">Validation</span><span class="summary-val" style="color:${statusColor}">${d.valid_rows} valid, ${d.error_rows} errors, ${d.warning_rows} warnings</span></div>`;
+  }
+
   document.getElementById('summaryList').innerHTML = `
     <div class="summary-row"><span class="summary-lbl">File</span><span class="summary-val">${esc(_filename)}</span></div>
     <div class="summary-row"><span class="summary-lbl">Rows</span><span class="summary-val">${_rowCount}</span></div>
     <div class="summary-row"><span class="summary-lbl">Asset class</span><span class="summary-val" style="text-transform:capitalize">${esc(_assetClass)}</span></div>
+    ${validInfo}
     <div class="summary-row" style="margin-top:.5rem"><span class="summary-lbl" style="color:var(--text)">Column mapping</span></div>
     ${mapLines}
   `;
@@ -2569,9 +2732,9 @@ function showStep3() {
     warn.style.display = 'none';
   }
 
-  document.getElementById('step3Err').textContent = '';
+  document.getElementById('step4Err').textContent = '';
   document.getElementById('successBox').style.display = 'none';
-  document.getElementById('step3Btns').style.display = '';
+  document.getElementById('step4Btns').style.display = '';
 }
 
 // --- Back buttons ---
@@ -2587,13 +2750,18 @@ document.getElementById('backBtn2').addEventListener('click', () => {
   document.getElementById('step2').style.display = '';
   setStep(2);
 });
+document.getElementById('backBtn3').addEventListener('click', () => {
+  document.getElementById('step4').style.display = 'none';
+  document.getElementById('step3').style.display = '';
+  setStep(3);
+});
 
 // --- Import ---
 document.getElementById('importBtn').addEventListener('click', async () => {
   const btn = document.getElementById('importBtn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Importing...';
-  document.getElementById('step3Err').textContent = '';
+  document.getElementById('step4Err').textContent = '';
 
   const mapping = collectMapping();
   try {
@@ -2604,11 +2772,11 @@ document.getElementById('importBtn').addEventListener('click', async () => {
     });
     const data = await resp.json();
     if (data.error) {
-      document.getElementById('step3Err').textContent = data.error;
+      document.getElementById('step4Err').textContent = data.error;
       btn.disabled = false; btn.textContent = 'Import';
       return;
     }
-    document.getElementById('step3Btns').style.display = 'none';
+    document.getElementById('step4Btns').style.display = 'none';
     const box = document.getElementById('successBox');
     box.style.display = '';
     box.innerHTML = `<div class="success-box">
@@ -2620,7 +2788,7 @@ document.getElementById('importBtn').addEventListener('click', async () => {
       </div>
     </div>`;
   } catch(e) {
-    document.getElementById('step3Err').textContent = 'Network error: ' + e.message;
+    document.getElementById('step4Err').textContent = 'Network error: ' + e.message;
     btn.disabled = false; btn.textContent = 'Import';
   }
 });

@@ -14,6 +14,11 @@ class ImportResult:
     total: int
     new: int
     skipped: int
+    warnings: list = None
+
+    def __post_init__(self):
+        if self.warnings is None:
+            self.warnings = []
 
 
 def _file_hash(file_path: str) -> str:
@@ -1063,11 +1068,17 @@ def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) 
 
     new = 0
     skipped = 0
+    warnings = []
+    parse_failed_count = 0
+    dup_count = 0
 
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         parsed = parse_row(row)
         if parsed is None:
             skipped += 1
+            parse_failed_count += 1
+            if parse_failed_count <= 5:
+                warnings.append(f"Row {idx + 2}: could not parse (missing required fields)")
             continue
 
         try:
@@ -1086,8 +1097,14 @@ def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) 
                 new += 1
             else:
                 skipped += 1
+                dup_count += 1
         except sqlite3.Error:
             skipped += 1
+
+    if parse_failed_count > 5:
+        warnings.append(f"...and {parse_failed_count - 5} more rows could not be parsed")
+    if dup_count > 0:
+        warnings.append(f"{dup_count} duplicate rows skipped")
 
     # Log the import
     conn.execute(
@@ -1097,4 +1114,4 @@ def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) 
     )
     conn.commit()
 
-    return ImportResult(total=total, new=new, skipped=total - new)
+    return ImportResult(total=total, new=new, skipped=total - new, warnings=warnings)
