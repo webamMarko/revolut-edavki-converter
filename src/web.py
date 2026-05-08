@@ -1662,6 +1662,54 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
   background:var(--raised,#f5f5f5);padding:0.1rem 0.3rem;border-radius:3px}
 .v-sug{font-size:0.72rem;color:var(--accent,#d97706);font-style:italic}
 
+/* ---- Global drop overlay ---- */
+.drop-overlay{position:fixed;inset:0;z-index:9999;background:rgba(10,12,16,0.88);
+  display:none;align-items:center;justify-content:center;flex-direction:column;
+  backdrop-filter:blur(4px);transition:opacity 0.15s}
+[data-theme="light"] .drop-overlay{background:rgba(0,0,0,0.55)}
+[data-theme="light"] .import-preview{background:rgba(0,0,0,0.55)}
+.drop-overlay.visible{display:flex}
+.drop-overlay-inner{border:2px dashed var(--accent);border-radius:var(--radius);
+  padding:3rem 2.5rem;text-align:center;max-width:680px;width:90%;
+  background:var(--surface);position:relative}
+.drop-overlay-icon{font-size:3rem;margin-bottom:0.75rem}
+.drop-overlay-title{font-size:1.15rem;font-weight:700;margin-bottom:0.3rem}
+.drop-overlay-hint{font-size:0.82rem;color:var(--muted)}
+.drop-overlay-close{position:absolute;top:0.75rem;right:1rem;background:none;border:none;
+  font-size:1.3rem;color:var(--muted);cursor:pointer}
+.drop-overlay-close:hover{color:var(--text)}
+
+/* ---- Import preview modal ---- */
+.import-preview{position:fixed;inset:0;z-index:10000;background:rgba(10,12,16,0.92);
+  display:none;align-items:flex-start;justify-content:center;overflow-y:auto;
+  padding:2rem 1rem;backdrop-filter:blur(4px)}
+.import-preview.visible{display:flex}
+.import-preview-card{background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:1.75rem;width:100%;max-width:780px;margin-top:2vh}
+.import-preview-card h2{font-size:1.05rem;font-weight:700;margin-bottom:1rem}
+.import-files-list{display:flex;flex-direction:column;gap:0.35rem;margin-bottom:1.25rem}
+.import-file-tag{display:inline-flex;align-items:center;gap:0.4rem;padding:0.3rem 0.7rem;
+  background:var(--raised);border-radius:var(--radius-sm);font-size:0.82rem}
+.import-file-tag .size{color:var(--muted);font-size:0.75rem}
+.import-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.6rem;margin-bottom:1.25rem}
+.import-stat{background:var(--raised);border-radius:var(--radius-sm);padding:0.6rem 0.8rem}
+.import-stat .val{font-size:1.1rem;font-weight:700}
+.import-stat .lbl{font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
+.import-preview-table{width:100%;border-collapse:collapse;font-size:0.78rem;margin-bottom:1rem}
+.import-preview-table th,.import-preview-table td{padding:0.35rem 0.55rem;text-align:left;
+  border-bottom:1px solid var(--border);white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.import-preview-table thead th{font-weight:600;color:var(--accent);font-size:0.68rem;
+  text-transform:uppercase;letter-spacing:0.05em}
+.import-issues{margin-bottom:1rem}
+.import-issue{display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0.6rem;
+  border-radius:var(--radius-sm);margin-bottom:0.25rem;font-size:0.8rem}
+.import-issue.error{background:rgba(248,113,113,0.08);color:var(--red)}
+.import-issue.warning{background:rgba(245,158,11,0.08);color:#b45309}
+.import-issue-icon{font-size:0.9rem;flex-shrink:0}
+.import-actions{display:flex;gap:0.6rem;margin-top:1.25rem;flex-wrap:wrap}
+.import-progress{margin-top:1rem;display:none}
+.import-progress.active{display:block}
+
 /* ---- Responsive ---- */
 @media (max-width:768px) {
   .app-header{padding:0.75rem 1rem;gap:0.75rem;flex-wrap:wrap}
@@ -1669,6 +1717,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
   .nav-link{padding:0.3rem 0.5rem;font-size:0.78rem}
   .app-main{padding:1.25rem 0.75rem}
   .card{padding:1.25rem}
+  .import-preview-card{padding:1.25rem}
 }
 """
 
@@ -1716,6 +1765,424 @@ def _header_html(username: str = "", role: str = "guest", active_page: str = "")
         f'  <div class="header-right">{right}</div>\n'
         '</header>\n'
     )
+
+
+# ---------------------------------------------------------------------------
+# Global drag-and-drop CSV import overlay (premium/admin pages)
+# ---------------------------------------------------------------------------
+
+def _global_drop_import_html() -> str:
+    """Full-page drag-and-drop overlay + preview modal for CSV import.
+
+    Included on premium/admin pages. Handles:
+    - Drag-over anywhere on the page shows the drop overlay
+    - Dropped CSVs are parsed client-side instantly
+    - Preview shows transaction count, tickers, buy/sell breakdown, date range
+    - Issues highlighted (duplicates, unrecognized formats, date gaps)
+    - Confirm triggers server import; Cancel discards
+    - Multiple files supported
+    """
+    return r"""
+<!-- Global drop overlay -->
+<div class="drop-overlay" id="globalDropOverlay">
+  <div class="drop-overlay-inner">
+    <button class="drop-overlay-close" id="dropOverlayClose">&times;</button>
+    <div class="drop-overlay-icon">&#128229;</div>
+    <div class="drop-overlay-title">Drop CSV files to import</div>
+    <div class="drop-overlay-hint">Drop one or more CSV files anywhere on the page</div>
+  </div>
+</div>
+
+<!-- Import preview modal -->
+<div class="import-preview" id="importPreviewModal">
+  <div class="import-preview-card">
+    <h2>Import Preview</h2>
+    <div class="import-files-list" id="importFilesList"></div>
+    <div class="import-stats" id="importStats"></div>
+    <div class="import-issues" id="importIssues"></div>
+    <div style="overflow-x:auto">
+      <table class="import-preview-table" id="importPreviewTable"></table>
+    </div>
+    <div class="import-progress" id="importProgress">
+      <div class="progress-bar"><div class="fill" id="importProgressFill" style="width:0%"></div></div>
+      <div class="progress-label" id="importProgressLabel">Importing...</div>
+    </div>
+    <div id="importResultBox" style="display:none"></div>
+    <div class="import-actions" id="importActions">
+      <button class="btn btn-secondary" id="importCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="importConfirmBtn">Confirm Import</button>
+      <input type="file" id="importFilePicker" accept=".csv" multiple style="display:none">
+      <button class="btn btn-secondary btn-sm" id="importAddMoreBtn" style="margin-left:auto">+ Add files</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var overlay = document.getElementById('globalDropOverlay');
+  var modal = document.getElementById('importPreviewModal');
+  var filesList = document.getElementById('importFilesList');
+  var statsEl = document.getElementById('importStats');
+  var issuesEl = document.getElementById('importIssues');
+  var tableEl = document.getElementById('importPreviewTable');
+  var confirmBtn = document.getElementById('importConfirmBtn');
+  var cancelBtn = document.getElementById('importCancelBtn');
+  var closeBtn = document.getElementById('dropOverlayClose');
+  var progressEl = document.getElementById('importProgress');
+  var progressFill = document.getElementById('importProgressFill');
+  var progressLabel = document.getElementById('importProgressLabel');
+  var resultBox = document.getElementById('importResultBox');
+  var actionsEl = document.getElementById('importActions');
+  var filePicker = document.getElementById('importFilePicker');
+  var addMoreBtn = document.getElementById('importAddMoreBtn');
+
+  var dragCounter = 0;
+  var pendingFiles = [];
+  var parsedData = [];
+
+  // --- Drag overlay logic ---
+  document.addEventListener('dragenter', function(e) {
+    if (!_hasCsvFiles(e)) return;
+    e.preventDefault();
+    dragCounter++;
+    if (dragCounter === 1) overlay.classList.add('visible');
+  });
+  document.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    dragCounter--;
+    if (dragCounter <= 0) { dragCounter = 0; overlay.classList.remove('visible'); }
+  });
+  document.addEventListener('dragover', function(e) {
+    if (!_hasCsvFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  document.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dragCounter = 0;
+    overlay.classList.remove('visible');
+    var files = Array.from(e.dataTransfer.files).filter(function(f) {
+      return f.name.toLowerCase().endsWith('.csv');
+    });
+    if (files.length > 0) handleFiles(files);
+  });
+  closeBtn.addEventListener('click', function() {
+    dragCounter = 0;
+    overlay.classList.remove('visible');
+  });
+
+  function _hasCsvFiles(e) {
+    if (e.dataTransfer && e.dataTransfer.types) {
+      return e.dataTransfer.types.indexOf('Files') !== -1;
+    }
+    return false;
+  }
+
+  // --- File picker fallback ---
+  addMoreBtn.addEventListener('click', function() { filePicker.click(); });
+  filePicker.addEventListener('change', function() {
+    var files = Array.from(filePicker.files).filter(function(f) {
+      return f.name.toLowerCase().endsWith('.csv');
+    });
+    if (files.length > 0) handleFiles(files);
+    filePicker.value = '';
+  });
+
+  // --- Handle dropped/picked files ---
+  function handleFiles(files) {
+    files.forEach(function(f) {
+      if (!pendingFiles.some(function(pf) { return pf.name === f.name && pf.size === f.size; })) {
+        pendingFiles.push(f);
+      }
+    });
+    parseAllFiles();
+  }
+
+  function parseAllFiles() {
+    parsedData = [];
+    var remaining = pendingFiles.length;
+    pendingFiles.forEach(function(file, idx) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var text = e.target.result;
+        parsedData[idx] = parseCSV(text, file.name);
+        remaining--;
+        if (remaining === 0) showPreview();
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  // --- CSV parser ---
+  function parseCSV(text, filename) {
+    var lines = text.split(/\r?\n/);
+    var sep = ',';
+    if (lines[0] && lines[0].indexOf(';') > lines[0].indexOf(',')) sep = ';';
+    var headers = splitCSVLine(lines[0], sep);
+    var rows = [];
+    for (var i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      rows.push(splitCSVLine(lines[i], sep));
+    }
+    var issues = detectIssues(headers, rows, filename);
+    var stats = computeStats(headers, rows);
+    return { filename: filename, headers: headers, rows: rows, issues: issues, stats: stats };
+  }
+
+  function splitCSVLine(line, sep) {
+    var result = [], current = '', inQuote = false;
+    for (var i = 0; i < line.length; i++) {
+      var ch = line[i];
+      if (ch === '"') { inQuote = !inQuote; continue; }
+      if (ch === sep && !inQuote) { result.push(current.trim()); current = ''; continue; }
+      current += ch;
+    }
+    result.push(current.trim());
+    return result;
+  }
+
+  // --- Stats computation ---
+  function computeStats(headers, rows) {
+    var stats = { total: rows.length, tickers: {}, types: {}, dateMin: null, dateMax: null };
+    var tickerIdx = findColIndex(headers, ['ticker','symbol','financialinstrument']);
+    var typeIdx = findColIndex(headers, ['type','transactiontypename','transaction type']);
+    var dateIdx = findColIndex(headers, ['date','started date','started_date','datevalue','settlementdate']);
+    rows.forEach(function(row) {
+      if (tickerIdx >= 0 && row[tickerIdx]) {
+        var t = row[tickerIdx].replace(/"/g,'').trim();
+        if (t) stats.tickers[t] = (stats.tickers[t] || 0) + 1;
+      }
+      if (typeIdx >= 0 && row[typeIdx]) {
+        var ty = row[typeIdx].replace(/"/g,'').trim().toLowerCase();
+        stats.types[ty] = (stats.types[ty] || 0) + 1;
+      }
+      if (dateIdx >= 0 && row[dateIdx]) {
+        var d = row[dateIdx].replace(/"/g,'').trim().slice(0, 10);
+        if (d && d.match(/\d{4}[-\/]\d{2}[-\/]\d{2}/)) {
+          if (!stats.dateMin || d < stats.dateMin) stats.dateMin = d;
+          if (!stats.dateMax || d > stats.dateMax) stats.dateMax = d;
+        }
+      }
+    });
+    return stats;
+  }
+
+  function findColIndex(headers, aliases) {
+    var lower = headers.map(function(h) { return h.toLowerCase().trim(); });
+    for (var i = 0; i < aliases.length; i++) {
+      var idx = lower.indexOf(aliases[i]);
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  }
+
+  // --- Issue detection ---
+  function detectIssues(headers, rows, filename) {
+    var issues = [];
+    var knownHeaders = ['date','started date','started_date','type','transactiontypename',
+      'transaction type','ticker','symbol','financialinstrument','quantity','volume',
+      'volumevalue','price per share','price','pricevalue','total amount','amount','value',
+      'total_amount','currency','ccy','fx rate','fxrate','fx_rate','exchange rate',
+      'quantity of shares','qty','price_per_share','description','margin','isin',
+      'settlementdate','datevalue'];
+    var lowerHeaders = headers.map(function(h) { return h.toLowerCase().trim(); });
+
+    // Check for unrecognized format
+    var recognized = lowerHeaders.filter(function(h) { return knownHeaders.indexOf(h) >= 0; });
+    if (recognized.length === 0 && headers.length > 0) {
+      issues.push({ severity: 'error', msg: 'Unrecognized CSV format — no known columns detected in ' + filename });
+    } else if (recognized.length < 2) {
+      issues.push({ severity: 'warning', msg: 'Only ' + recognized.length + ' recognized column(s) in ' + filename + '. May need manual mapping.' });
+    }
+
+    // Date column check
+    var dateIdx = findColIndex(headers, ['date','started date','started_date','datevalue','settlementdate']);
+    if (dateIdx < 0) {
+      issues.push({ severity: 'error', msg: 'No date column found in ' + filename });
+    }
+
+    // Duplicate detection (same row content)
+    var seen = {};
+    var dupeCount = 0;
+    rows.forEach(function(row) {
+      var key = row.join('|');
+      if (seen[key]) dupeCount++;
+      else seen[key] = true;
+    });
+    if (dupeCount > 0) {
+      issues.push({ severity: 'warning', msg: dupeCount + ' potential duplicate row(s) detected in ' + filename });
+    }
+
+    // Date gaps (more than 90 days between consecutive dates)
+    if (dateIdx >= 0) {
+      var dates = [];
+      rows.forEach(function(row) {
+        if (row[dateIdx]) {
+          var d = row[dateIdx].replace(/"/g,'').trim().slice(0, 10);
+          if (d.match(/\d{4}[-\/]\d{2}[-\/]\d{2}/)) dates.push(d);
+        }
+      });
+      dates.sort();
+      for (var i = 1; i < dates.length; i++) {
+        var prev = new Date(dates[i-1]);
+        var curr = new Date(dates[i]);
+        var gap = (curr - prev) / (1000*60*60*24);
+        if (gap > 90) {
+          issues.push({ severity: 'warning', msg: 'Date gap of ' + Math.round(gap) + ' days between ' + dates[i-1] + ' and ' + dates[i] + ' in ' + filename });
+          break;
+        }
+      }
+    }
+
+    return issues;
+  }
+
+  // --- Show preview modal ---
+  function showPreview() {
+    resultBox.style.display = 'none';
+    progressEl.classList.remove('active');
+    confirmBtn.disabled = false;
+    actionsEl.style.display = '';
+
+    // File list
+    filesList.innerHTML = pendingFiles.map(function(f, i) {
+      var sz = f.size < 1024 ? f.size + ' B' : f.size < 1048576 ? (f.size/1024).toFixed(1) + ' KB' : (f.size/1048576).toFixed(1) + ' MB';
+      return '<div class="import-file-tag"><span>' + esc(f.name) + '</span><span class="size">(' + sz + ')</span>'
+        + '<button style="background:none;border:none;color:var(--red);cursor:pointer;font-weight:700;padding:0 0.2rem" data-ridx="'+i+'">&times;</button></div>';
+    }).join('');
+    filesList.querySelectorAll('button[data-ridx]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        pendingFiles.splice(+btn.dataset.ridx, 1);
+        parsedData.splice(+btn.dataset.ridx, 1);
+        if (pendingFiles.length === 0) { closeModal(); return; }
+        showPreview();
+      });
+    });
+
+    // Aggregate stats
+    var totalRows = 0, allTickers = {}, allTypes = {}, dateMin = null, dateMax = null;
+    var allIssues = [];
+    var hasErrors = false;
+    parsedData.forEach(function(pd) {
+      totalRows += pd.stats.total;
+      Object.keys(pd.stats.tickers).forEach(function(t) { allTickers[t] = (allTickers[t]||0) + pd.stats.tickers[t]; });
+      Object.keys(pd.stats.types).forEach(function(t) { allTypes[t] = (allTypes[t]||0) + pd.stats.types[t]; });
+      if (pd.stats.dateMin && (!dateMin || pd.stats.dateMin < dateMin)) dateMin = pd.stats.dateMin;
+      if (pd.stats.dateMax && (!dateMax || pd.stats.dateMax > dateMax)) dateMax = pd.stats.dateMax;
+      pd.issues.forEach(function(iss) {
+        allIssues.push(iss);
+        if (iss.severity === 'error') hasErrors = true;
+      });
+    });
+
+    var tickerCount = Object.keys(allTickers).length;
+    var buyCount = (allTypes['buy'] || 0) + (allTypes['market buy'] || 0) + (allTypes['limit buy'] || 0);
+    var sellCount = (allTypes['sell'] || 0) + (allTypes['market sell'] || 0) + (allTypes['limit sell'] || 0);
+
+    statsEl.innerHTML = '<div class="import-stat"><div class="val">' + totalRows + '</div><div class="lbl">Transactions</div></div>'
+      + '<div class="import-stat"><div class="val">' + tickerCount + '</div><div class="lbl">Tickers</div></div>'
+      + '<div class="import-stat"><div class="val">' + buyCount + ' / ' + sellCount + '</div><div class="lbl">Buys / Sells</div></div>'
+      + (dateMin ? '<div class="import-stat"><div class="val">' + dateMin + ' — ' + dateMax + '</div><div class="lbl">Date Range</div></div>' : '');
+
+    // Issues
+    if (allIssues.length > 0) {
+      issuesEl.innerHTML = allIssues.map(function(iss) {
+        var cls = iss.severity === 'error' ? 'error' : 'warning';
+        var icon = iss.severity === 'error' ? '&#9888;' : '&#9888;';
+        return '<div class="import-issue ' + cls + '"><span class="import-issue-icon">' + icon + '</span>' + esc(iss.msg) + '</div>';
+      }).join('');
+    } else {
+      issuesEl.innerHTML = '<div class="import-issue" style="background:rgba(52,211,153,0.08);color:var(--green)"><span class="import-issue-icon">&#10003;</span>No issues detected — ready to import</div>';
+    }
+
+    // Preview table (first file, first 8 rows)
+    if (parsedData.length > 0 && parsedData[0].rows.length > 0) {
+      var pd = parsedData[0];
+      var html = '<thead><tr>' + pd.headers.map(function(h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>';
+      var showRows = pd.rows.slice(0, 8);
+      showRows.forEach(function(row) {
+        html += '<tr>' + row.map(function(c) { return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>';
+      });
+      if (pd.rows.length > 8) {
+        html += '<tr><td colspan="' + pd.headers.length + '" style="text-align:center;color:var(--muted);font-style:italic">... and ' + (pd.rows.length - 8) + ' more rows</td></tr>';
+      }
+      html += '</tbody>';
+      tableEl.innerHTML = html;
+    } else {
+      tableEl.innerHTML = '';
+    }
+
+    if (hasErrors) {
+      confirmBtn.disabled = true;
+      confirmBtn.title = 'Fix errors before importing';
+    }
+
+    modal.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+  }
+
+  // --- Confirm import ---
+  confirmBtn.addEventListener('click', async function() {
+    confirmBtn.disabled = true;
+    progressEl.classList.add('active');
+    progressFill.style.width = '30%';
+    progressLabel.textContent = 'Uploading ' + pendingFiles.length + ' file(s)...';
+
+    var form = new FormData();
+    pendingFiles.forEach(function(f) { form.append('files', f); });
+
+    try {
+      progressFill.style.width = '60%';
+      progressLabel.textContent = 'Importing...';
+      var resp = await fetch('/upload', { method: 'POST', body: form });
+      var data = await resp.json();
+      progressFill.style.width = '100%';
+      if (data.error) {
+        progressLabel.textContent = 'Error: ' + data.error;
+        confirmBtn.disabled = false;
+        return;
+      }
+      progressLabel.textContent = 'Done!';
+      actionsEl.style.display = 'none';
+      var rhtml = '<div class="success-box" style="margin-top:1rem"><div class="big">Import complete</div><div class="sub">';
+      data.results.forEach(function(r) {
+        if (r.error) {
+          rhtml += '<div style="color:var(--red)">' + esc(r.filename) + ': ' + esc(r.error) + '</div>';
+        } else {
+          rhtml += '<div>' + esc(r.filename) + ': ' + r.new + ' new, ' + r.skipped + ' skipped</div>';
+        }
+      });
+      rhtml += '</div><div class="success-links"><a class="btn btn-primary" href="/report">View Report</a>';
+      rhtml += '<button class="btn btn-secondary" onclick="document.getElementById(\'importPreviewModal\').classList.remove(\'visible\');document.body.style.overflow=\'\';location.reload()">Close</button>';
+      rhtml += '</div></div>';
+      resultBox.innerHTML = rhtml;
+      resultBox.style.display = '';
+      pendingFiles = [];
+      parsedData = [];
+    } catch (e) {
+      progressFill.style.width = '100%';
+      progressLabel.textContent = 'Error: ' + e.message;
+      confirmBtn.disabled = false;
+    }
+  });
+
+  // --- Cancel ---
+  cancelBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) closeModal();
+  });
+
+  function closeModal() {
+    modal.classList.remove('visible');
+    document.body.style.overflow = '';
+    pendingFiles = [];
+    parsedData = [];
+  }
+
+  function esc(s) { var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+})();
+</script>
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -1897,6 +2364,7 @@ document.querySelectorAll('.role-select').forEach(sel => {{
   }});
 }});
 </script>
+{_global_drop_import_html()}
 </body>
 </html>"""
     )
@@ -2047,6 +2515,7 @@ document.getElementById('saveBtn').addEventListener('click', async () => {{
   setTimeout(() => {{ msg.textContent = ''; }}, 4000);
 }});
 </script>
+{_global_drop_import_html()}
 </body>
 </html>"""
     )
@@ -2241,6 +2710,7 @@ def _upload_html(user_json: str) -> str:
   }});
 }})();
 </script>
+{_global_drop_import_html() if is_premium else ''}
 </body>
 </html>"""
     )
