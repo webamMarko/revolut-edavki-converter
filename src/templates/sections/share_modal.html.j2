@@ -1,0 +1,51 @@
+<div id="shareModal" class="share-modal-overlay" style="display:none" onclick="if(event.target===this)closeShareModal()">
+  <div class="share-modal">
+    <div class="share-modal-header">
+      <h2>Share Performance Snapshot</h2>
+      <button class="share-modal-close" onclick="closeShareModal()" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="share-modal-body">
+      <div class="share-preview-wrap">
+        <canvas id="shareCanvas" width="1200" height="630"></canvas>
+      </div>
+
+      <div class="share-controls">
+        <div class="share-control-group">
+          <label class="share-toggle-label">
+            <input type="checkbox" id="shareShowBenchmark" checked onchange="renderShareCard()">
+            <span>Show benchmark alpha</span>
+          </label>
+          <label class="share-toggle-label">
+            <input type="checkbox" id="shareShowTopPerformers" onchange="renderShareCard()">
+            <span>Show top performers</span>
+          </label>
+          <label class="share-toggle-label">
+            <input type="checkbox" id="shareShowAssetMix" onchange="renderShareCard()">
+            <span>Show asset mix</span>
+          </label>
+        </div>
+
+        <div class="share-control-group">
+          <label class="share-period-label">Time period</label>
+          <div class="share-period-btns">
+            <button class="share-period-btn active" data-period="ytd" onclick="setSharePeriod('ytd')">YTD</button>
+            <button class="share-period-btn" data-period="1y" onclick="setSharePeriod('1y')">1Y</button>
+            <button class="share-period-btn" data-period="all" onclick="setSharePeriod('all')">All-time</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="share-modal-footer">
+      <button class="share-btn share-btn-primary" onclick="downloadSharePNG()">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2v8m0 0l-3-3m3 3l3-3"/><path d="M2 12v2h12v-2"/></svg>
+        Download PNG
+      </button>
+      <button class="share-btn share-btn-secondary" onclick="copyShareToClipboard()">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3a1 1 0 01-1-1V3a1 1 0 011-1h7a1 1 0 011 1v2"/></svg>
+        Copy to Clipboard
+      </button>
+    </div>
+  </div>
+</div>
