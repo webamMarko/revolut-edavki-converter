@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-_DATA_DIR = Path(os.environ.get("REVOLUT_DATA_DIR", "/data"))
+_DATA_DIR = Path(os.environ.get("REVOLUT_DATA_DIR", str(Path.home() / ".revolut-edavki")))
 _USERS_DB_PATH = _DATA_DIR / "_system" / "users.db"
 
 INVITE_TTL_HOURS = 24
@@ -73,8 +73,7 @@ def get_users_db() -> sqlite3.Connection:
 
 def _users_db_path() -> Path:
     """Return path to users.db, respecting REVOLUT_DATA_DIR env var."""
-    data_dir = Path(os.environ.get("REVOLUT_DATA_DIR", "/data"))
-    return data_dir / "_system" / "users.db"
+    return _DATA_DIR / "_system" / "users.db"
 
 
 def _row_to_user(row: sqlite3.Row) -> User:

@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, urlparse
 # Environment / constants
 # ---------------------------------------------------------------------------
 
-DATA_DIR = Path(os.environ.get("REVOLUT_DATA_DIR", "/data"))
+DATA_DIR = Path(os.environ.get("REVOLUT_DATA_DIR", str(Path.home() / ".revolut-edavki")))
 DEMO_DB  = DATA_DIR / "_demo" / "portfolio.db"
 
 APP_BASE_URL           = os.environ.get("APP_BASE_URL", "http://localhost:8080")
@@ -296,7 +296,11 @@ class UploadHandler(BaseHTTPRequestHandler):
         password = fields.get("password", [""])[0]
 
         from .users import authenticate
-        user = authenticate(username_or_email, password)
+        try:
+            user = authenticate(username_or_email, password)
+        except Exception:
+            self._serve_login_page(error="Login service unavailable. Please try again later.")
+            return
         if not user:
             self._serve_login_page(error="Invalid username or password.")
             return
