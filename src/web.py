@@ -1087,17 +1087,103 @@ class UploadHandler(BaseHTTPRequestHandler):
 # Server entry point
 # ---------------------------------------------------------------------------
 
-def start_server(host="0.0.0.0", port=8080, verbose=False):
-    """Start the web server."""
+def start_server(host="0.0.0.0", port=8080, verbose=False, reload=False):
+    """Start the web server, optionally with file-watching auto-reload."""
+    if reload:
+        _run_with_reloader(host, port, verbose)
+    else:
+        _serve(host, port, verbose)
+
+
+def _serve(host, port, verbose):
+    """Run the HTTP server (inner worker)."""
     UploadHandler.verbose = verbose
+    ThreadingHTTPServer.allow_reuse_address = True
     server = ThreadingHTTPServer((host, port), UploadHandler)
-    print(f"Server running at http://{host}:{port}")
-    print("Press Ctrl+C to stop.")
+    print(f"Server running at http://{host}:{port}", flush=True)
+    print("Press Ctrl+C to stop.", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nShutting down.")
         server.shutdown()
+
+
+def _run_with_reloader(host, port, verbose):
+    """Spawn the server as a subprocess and restart it when source files change."""
+    import subprocess
+    import signal
+    import sys
+    from pathlib import Path
+
+    watch_dirs = [
+        Path(__file__).resolve().parent,                    # src/
+        Path(__file__).resolve().parent / "templates",      # src/templates/
+    ]
+    watch_extensions = {".py", ".html", ".j2", ".js", ".css", ".json"}
+
+    def _get_mtimes():
+        mtimes = {}
+        for d in watch_dirs:
+            if not d.exists():
+                continue
+            for f in d.rglob("*"):
+                if f.suffix in watch_extensions and f.is_file():
+                    try:
+                        mtimes[str(f)] = f.stat().st_mtime
+                    except OSError:
+                        pass
+        return mtimes
+
+    env = os.environ.copy()
+    env["_RELOADER_CHILD"] = "1"
+    cmd = [sys.executable, "-m", "src.cli", "web",
+           "--host", host, "--port", str(port)]
+    if verbose:
+        cmd.append("--verbose")
+
+    print(f"[reloader] Watching {', '.join(str(d) for d in watch_dirs)}", flush=True)
+    print(f"[reloader] Extensions: {', '.join(sorted(watch_extensions))}", flush=True)
+
+    proc = None
+    try:
+        while True:
+            proc = subprocess.Popen(cmd, env=env)
+            mtimes = _get_mtimes()
+
+            while proc.poll() is None:
+                time.sleep(1)
+                new_mtimes = _get_mtimes()
+                changed = []
+                for path, mtime in new_mtimes.items():
+                    if mtimes.get(path) != mtime:
+                        changed.append(path)
+                for path in set(mtimes) - set(new_mtimes):
+                    changed.append(path)
+                if changed:
+                    rel = [os.path.relpath(c) for c in changed[:3]]
+                    print(f"\n[reloader] Detected change in: {', '.join(rel)}", flush=True)
+                    print("[reloader] Restarting server...", flush=True)
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+                    break
+                mtimes = new_mtimes
+
+            if proc.returncode is not None and proc.returncode != 0:
+                if proc.returncode == -signal.SIGTERM:
+                    pass  # normal restart
+                else:
+                    print(f"[reloader] Server exited with code {proc.returncode}, restarting in 2s...")
+                    time.sleep(2)
+    except KeyboardInterrupt:
+        print("\n[reloader] Shutting down.")
+        if proc and proc.poll() is None:
+            proc.terminate()
+            proc.wait()
 
 
 # ---------------------------------------------------------------------------

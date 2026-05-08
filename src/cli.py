@@ -465,8 +465,11 @@ def cmd_delisted(args):
 
 def cmd_web(args):
     """Start web UI for CSV upload and import."""
+    import os
     from .web import start_server
-    start_server(host=args.host, port=args.port, verbose=args.verbose)
+    # When spawned by the reloader, always run as plain server (no re-reload)
+    reload = args.reload and not os.environ.get("_RELOADER_CHILD")
+    start_server(host=args.host, port=args.port, verbose=args.verbose, reload=reload)
 
 
 def cmd_status(args):
@@ -701,6 +704,8 @@ Examples:
     p_web.add_argument("--host", default="127.0.0.1", help="Bind address (default: 127.0.0.1)")
     p_web.add_argument("--port", type=int, default=8080, help="Port (default: 8080)")
     p_web.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    p_web.add_argument("--reload", "-r", action="store_true",
+                       help="Auto-reload on file changes (development mode)")
     p_web.set_defaults(func=cmd_web)
 
     # --- status ---
