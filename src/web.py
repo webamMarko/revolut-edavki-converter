@@ -572,6 +572,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
             self.wfile.write(html.encode("utf-8"))
+        except ValueError as e:
+            self._html_response(_error_html(str(e)))
         except Exception as e:
             self.send_response(500)
             self.send_header("Content-Type", "text/plain")
