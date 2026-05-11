@@ -10,6 +10,108 @@ const classLabels = {stock:t('class.stock'), cfd:t('class.cfd'), crypto:t('class
 // Keys included in the pre-computed "all" daily series (everything except realestate)
 const allSeriesKeys = new Set(classKeys.filter(k => k !== 'realestate'));
 
+// Build synthetic perClass['realestate'] from D.real_estate so the filter toggle works
+(function _buildRealEstatePerClass() {
+  const RE = D.real_estate;
+  if (!RE || !RE.properties || RE.properties.length === 0) return;
+  if (perClass['realestate']) return;
+
+  // Merge all property histories into a combined daily series
+  const hist = RE.history || {};
+  const dateValueMap = {};  // date -> total value across all properties
+  const propInvested = {}; // date -> total invested (purchase prices of properties owned by that date)
+
+  RE.properties.forEach(function(p) {
+    const h = hist[p.ticker];
+    if (h && h.dates && h.dates.length > 0) {
+      for (let i = 0; i < h.dates.length; i++) {
+        const d = h.dates[i];
+        dateValueMap[d] = (dateValueMap[d] || 0) + h.values[i];
+      }
+    }
+  });
+
+  const dates = Object.keys(dateValueMap).sort();
+  if (dates.length === 0) {
+    // No history: create a single-point series from current valuations
+    const today = new Date().toISOString().slice(0, 10);
+    dates.push(today);
+    dateValueMap[today] = RE.total_estimated_eur;
+  }
+
+  // Invested = sum of purchase prices for properties purchased on or before each date
+  const sortedProps = RE.properties.slice().sort(function(a, b) {
+    return (a.purchase_date || '').localeCompare(b.purchase_date || '');
+  });
+
+  const value_eur = [];
+  const invested_eur = [];
+  const dividends_eur = [];
+  const realized_gain_eur = [];
+
+  for (let i = 0; i < dates.length; i++) {
+    const d = dates[i];
+    value_eur.push(dateValueMap[d]);
+    let inv = 0;
+    sortedProps.forEach(function(p) {
+      if (p.purchase_date && p.purchase_date <= d) {
+        inv += p.purchase_price_eur || 0;
+      }
+    });
+    invested_eur.push(inv);
+    dividends_eur.push(0);
+    realized_gain_eur.push(0);
+  }
+
+  const lastVal = value_eur[value_eur.length - 1] || 0;
+  const lastInv = invested_eur[invested_eur.length - 1] || 0;
+  const absGain = lastVal - lastInv;
+  const retPct = lastInv > 0 ? (absGain / lastInv * 100) : 0;
+
+  // Positions from properties
+  const positions = RE.properties.map(function(p) {
+    return {
+      ticker: p.ticker,
+      quantity: 1,
+      avg_cost_eur: p.purchase_price_eur,
+      market_value_eur: p.estimated_value_eur || p.purchase_price_eur,
+      unrealized_gain_eur: p.unrealized_gain_eur || 0,
+      unrealized_gain_pct: p.unrealized_gain_pct || 0,
+      weight_pct: 0,
+      asset_class: 'realestate',
+    };
+  });
+
+  perClass['realestate'] = {
+    dates: dates,
+    value_eur: value_eur,
+    invested_eur: invested_eur,
+    dividends_eur: dividends_eur,
+    realized_gain_eur: realized_gain_eur,
+    perf_index: computePerfIndex(value_eur, invested_eur),
+    summary: {
+      portfolio_value_eur: lastVal,
+      total_invested_eur: lastInv,
+      absolute_gain_eur: absGain,
+      total_return_pct: Math.round(retPct * 100) / 100,
+      cagr_pct: null,
+      twr_pct: null,
+      max_drawdown_pct: 0,
+      max_drawdown_peak_date: '',
+      max_drawdown_trough_date: '',
+      risk_metrics: {},
+    },
+    gains: {
+      realized_eur: 0,
+      unrealized_eur: absGain,
+      dividends_eur: 0,
+      fees_eur: 0,
+    },
+    positions: positions,
+    closed_positions: [],
+  };
+})();
+
 // --- AJAX lazy-loading for per-class analytics ---
 const _fetchingClasses = new Set();
 let _loadingOverlay = null;
