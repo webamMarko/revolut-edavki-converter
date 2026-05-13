@@ -2630,6 +2630,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "sim.simulate": "Simuleren",
         "sim.reset": "Herstellen",
         "sim.close": "Sluiten",
+        "sim.tax_efficient": "Belastingefficiënt (oudste lots eerst)",
+        "sim.col.tax": "Ger. belasting",
+        "sim.col.rate": "Eff. tarief",
+        "sim.total_tax": "Totale ger. belasting",
 
         # --- Closed positions ---
         "closed.title": "Gesloten posities",

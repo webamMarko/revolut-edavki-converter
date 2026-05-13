@@ -653,7 +653,19 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
             "savings_brackets": [{"min_years": b.min_years, "rate": b.rate} for b in regime.savings_brackets],
         },
         "available_regimes": [
-            {"code": r.country_code, "name": r.country_name, "currency": r.currency}
+            {
+                "code": r.country_code,
+                "name": r.country_name,
+                "currency": r.currency,
+                "netting": r.netting,
+                "flat_rate": r.flat_rate,
+                "crypto_exemption_type": r.crypto_exemption_type,
+                "crypto_exemption_threshold": r.crypto_exemption_threshold,
+                "stock_brackets": [{"min_years": b.min_years, "rate": b.rate} for b in r.stock_brackets],
+                "cfd_brackets": [{"min_years": b.min_years, "rate": b.rate} for b in r.cfd_brackets],
+                "crypto_brackets": [{"min_years": b.min_years, "rate": b.rate} for b in r.crypto_brackets],
+                "savings_brackets": [{"min_years": b.min_years, "rate": b.rate} for b in r.savings_brackets],
+            }
             for r in REGIMES.values()
         ],
         "i18n": get_translations(lang),

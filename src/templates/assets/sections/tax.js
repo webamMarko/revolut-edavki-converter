@@ -25,29 +25,47 @@
 
   // Client-side netting: uses D.regime for country-specific rules
   const _regime = D.regime || {};
-  function computeTax(sales) {
+
+  // Lookup brackets for an asset class within an arbitrary regime object
+  function _getBrackets(regime, assetClass) {
+    const key = assetClass === 'cfd' ? 'cfd_brackets'
+               : assetClass === 'crypto' ? 'crypto_brackets'
+               : assetClass === 'savings' ? 'savings_brackets'
+               : 'stock_brackets';
+    return regime[key] || regime.stock_brackets || [{ min_years: 0, rate: 0 }];
+  }
+
+  function _getRate(brackets, holdingYears) {
+    let rate = brackets[0].rate;
+    for (const b of brackets) {
+      if (holdingYears >= b.min_years) rate = b.rate;
+    }
+    return rate;
+  }
+
+  // Compute tax for an arbitrary regime object (from D.available_regimes or D.regime)
+  function computeTaxForRegime(sales, regime) {
     const buckets = {};
     let totalGain = 0;
-    const nettingMode = _regime.netting || 'per_class';
+    const nettingMode = regime.netting || 'per_class';
     for (const s of sales) {
+      const brackets = _getBrackets(regime, s.asset_class);
+      const rate = regime.flat_rate != null ? regime.flat_rate : _getRate(brackets, s.holding_years);
       const gainAfterCosts = s.gain_eur > 0
         ? Math.max(0, s.gain_eur - s.std_costs_eur)
         : s.gain_eur;
-      // Netting: all_classes → single bucket, per_class → per asset class
       const acKey = nettingMode === 'all_classes' ? 'all' : s.asset_class;
-      const key = acKey + '|' + s.tax_rate;
+      const key = acKey + '|' + rate;
       buckets[key] = (buckets[key] || 0) + gainAfterCosts;
       totalGain += s.gain_eur;
     }
-    // Crypto exemption: threshold-based (e.g. SI: 5000 EUR, DE: 600 EUR)
     let cryptoExempt = false;
-    if (_regime.crypto_exemption_type === 'threshold' && _regime.crypto_exemption_threshold != null) {
+    if (regime.crypto_exemption_type === 'threshold' && regime.crypto_exemption_threshold != null) {
       const totalCryptoNet = Object.entries(buckets)
         .filter(([k]) => k.startsWith('crypto|'))
         .reduce((sum, [, net]) => sum + net, 0);
-      cryptoExempt = totalCryptoNet < _regime.crypto_exemption_threshold;
+      cryptoExempt = totalCryptoNet < regime.crypto_exemption_threshold;
     }
-
     let totalTax = 0;
     for (const [key, net] of Object.entries(buckets)) {
       const ac = key.split('|')[0];
@@ -55,7 +73,127 @@
       const rate = parseFloat(key.split('|')[1]);
       totalTax += Math.max(0, net) * rate;
     }
-    return { totalGain, totalTax, cryptoExempt };
+    const effectiveRate = totalGain > 0 ? totalTax / totalGain : 0;
+    const topRate = sales.length > 0 ? Math.max(...sales.map(s => {
+      if (regime.flat_rate != null) return regime.flat_rate;
+      return _getRate(_getBrackets(regime, s.asset_class), s.holding_years);
+    })) : 0;
+    return { totalGain, totalTax, cryptoExempt, effectiveRate, topRate };
+  }
+
+  function computeTax(sales) {
+    return computeTaxForRegime(sales, _regime);
+  }
+
+  // ── Compare regimes ───────────────────────────────────────────────────────
+  let _compareMode = false;
+  let _compareRegime = null;
+
+  const _compareToggle = document.getElementById('taxCompareToggle');
+  const _compareBar = document.getElementById('taxCompareBar');
+  const _compareSelect = document.getElementById('taxCompareSelect');
+  const _comparePanel = document.getElementById('taxCompareTable');
+  const _allRegimes = D.available_regimes || [];
+  const _currentCode = D.country || 'SI';
+
+  if (_compareSelect && _allRegimes.length > 1) {
+    _allRegimes.forEach(function(r) {
+      if (r.code === _currentCode) return;
+      const opt = document.createElement('option');
+      opt.value = r.code;
+      opt.textContent = r.name + ' (' + r.currency + ')';
+      _compareSelect.appendChild(opt);
+    });
+    _compareRegime = _allRegimes.find(r => r.code !== _currentCode) || null;
+  }
+
+  if (_compareToggle) {
+    _compareToggle.addEventListener('click', function() {
+      _compareMode = !_compareMode;
+      _compareToggle.classList.toggle('active', _compareMode);
+      if (_compareBar) _compareBar.style.display = _compareMode ? 'flex' : 'none';
+      if (_comparePanel) {
+        _comparePanel.style.display = _compareMode ? '' : 'none';
+        if (!_compareMode) _comparePanel.innerHTML = '';
+      }
+      renderTax();
+    });
+  }
+
+  if (_compareSelect) {
+    _compareSelect.addEventListener('change', function() {
+      _compareRegime = _allRegimes.find(r => r.code === _compareSelect.value) || null;
+      if (_compareMode) renderTax();
+    });
+  }
+
+  function renderCompare(sales) {
+    if (!_compareMode || !_compareRegime || !_comparePanel) return;
+    const regA = _regime;
+    const regB = _compareRegime;
+    const resA = computeTaxForRegime(sales, regA);
+    const resB = computeTaxForRegime(sales, regB);
+    const netA = resA.totalGain - resA.totalTax;
+    const netB = resB.totalGain - resB.totalTax;
+
+    function _winner(a, b, lowerIsBetter) {
+      if (lowerIsBetter) return a < b ? 'a' : b < a ? 'b' : 'tie';
+      return a > b ? 'a' : b > a ? 'b' : 'tie';
+    }
+
+    const rows = [
+      {
+        label: 'Total tax liability',
+        valA: fmtCcy(resA.totalTax),
+        valB: fmtCcy(resB.totalTax),
+        winner: _winner(resA.totalTax, resB.totalTax, true),
+      },
+      {
+        label: 'Effective rate',
+        valA: pct(+(resA.effectiveRate * 100).toFixed(1)),
+        valB: pct(+(resB.effectiveRate * 100).toFixed(1)),
+        winner: _winner(resA.effectiveRate, resB.effectiveRate, true),
+      },
+      {
+        label: 'Top bracket applied',
+        valA: pct(Math.round(resA.topRate * 1000) / 10),
+        valB: pct(Math.round(resB.topRate * 1000) / 10),
+        winner: _winner(resA.topRate, resB.topRate, true),
+      },
+      {
+        label: 'Net gain after tax',
+        valA: fmtCcy(netA),
+        valB: fmtCcy(netB),
+        winner: _winner(netA, netB, false),
+      },
+    ];
+
+    const nameA = (regA.country_name) || _currentCode;
+    const nameB = regB.name;
+
+    let html = '<div class="tax-compare-wrap">'
+      + '<table class="tax-compare-table">'
+      + '<thead><tr>'
+      + '<th></th>'
+      + '<th><span class="tax-compare-regime-name">' + nameA + '</span><span class="tax-compare-regime-badge">current</span></th>'
+      + '<th><span class="tax-compare-regime-name">' + nameB + '</span></th>'
+      + '</tr></thead><tbody>';
+
+    for (const row of rows) {
+      const clsA = row.winner === 'a' ? ' tax-compare-winner' : '';
+      const clsB = row.winner === 'b' ? ' tax-compare-winner' : '';
+      const badgeA = row.winner === 'a' ? ' <span class="tax-compare-badge tax-compare-badge-green">&#10003; lower</span>' : '';
+      const badgeB = row.winner === 'b' ? ' <span class="tax-compare-badge tax-compare-badge-green">&#10003; lower</span>' : '';
+      html += '<tr>'
+        + '<td class="tax-compare-label">' + row.label + '</td>'
+        + '<td class="tax-compare-val' + clsA + '">' + row.valA + badgeA + '</td>'
+        + '<td class="tax-compare-val' + clsB + '">' + row.valB + badgeB + '</td>'
+        + '</tr>';
+    }
+
+    html += '</tbody></table></div>';
+    _comparePanel.innerHTML = html;
+    _comparePanel.style.display = '';
   }
 
   function renderTax() {
@@ -91,6 +229,8 @@
     ].map(([l, v, c]) =>
       `<div class="metric-card"><div class="label">${l}</div><div class="value ${c}">${v}</div></div>`
     ).join('') + exemptionNote;
+
+    renderCompare(sales);
 
     const tt = document.getElementById('taxTable');
     if (sales.length > 0) {
