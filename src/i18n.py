@@ -123,6 +123,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "sim.simulate": "Simulate",
         "sim.reset": "Reset",
         "sim.close": "Close",
+        "sim.tax_efficient": "Tax-efficient (oldest lots first)",
+        "sim.col.tax": "Est. Tax",
+        "sim.col.rate": "Eff. Rate",
+        "sim.total_tax": "Total Est. Tax",
 
         # --- Closed positions ---
         "closed.title": "Closed Positions",
@@ -545,6 +549,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "sim.simulate": "Simuliraj",
         "sim.reset": "Ponastavi",
         "sim.close": "Zapri",
+        "sim.tax_efficient": "Davčno učinkovito (najstarejši loti najprej)",
+        "sim.col.tax": "Ocenjen davek",
+        "sim.col.rate": "Eff. stopnja",
+        "sim.total_tax": "Skupni ocenjen davek",
 
         # --- Closed positions ---
         "closed.title": "Zaprte pozicije",
@@ -966,6 +974,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "sim.simulate": "Simulieren",
         "sim.reset": "Zurücksetzen",
         "sim.close": "Schließen",
+        "sim.tax_efficient": "Steuereffizient (älteste Lots zuerst)",
+        "sim.col.tax": "Gesch. Steuer",
+        "sim.col.rate": "Eff. Satz",
+        "sim.total_tax": "Gesamte gesch. Steuer",
 
         # --- Closed positions ---
         "closed.title": "Geschlossene Positionen",
@@ -1376,6 +1388,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "sim.simulate": "Simuler",
         "sim.reset": "Réinitialiser",
         "sim.close": "Fermer",
+        "sim.tax_efficient": "Fiscalement efficace (lots les plus anciens en premier)",
+        "sim.col.tax": "Impôt est.",
+        "sim.col.rate": "Taux eff.",
+        "sim.total_tax": "Impôt total est.",
 
         # --- Closed positions ---
         "closed.title": "Positions fermées",
@@ -1771,6 +1787,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "pos.lots.cost": "Costo",
         "pos.lots.pl": "P&L",
         "pos.export": "Esporta CSV",
+        "pos.next_bracket": "Prossima fascia",
+        "pos.at_max_bracket": "Aliq. min.",
 
         # --- Simulator ---
         "sim.title": "Simulatore What-If",
@@ -1784,6 +1802,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "sim.simulate": "Simula",
         "sim.reset": "Reimposta",
         "sim.close": "Chiudi",
+        "sim.tax_efficient": "Fiscalmente efficiente (lotti più vecchi prima)",
+        "sim.col.tax": "Imposta st.",
+        "sim.col.rate": "Aliq. eff.",
+        "sim.total_tax": "Imposta totale st.",
 
         # --- Closed positions ---
         "closed.title": "Posizioni chiuse",
@@ -2179,6 +2201,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "pos.lots.cost": "Coste",
         "pos.lots.pl": "P&L",
         "pos.export": "Exportar CSV",
+        "pos.next_bracket": "Siguiente tramo",
+        "pos.at_max_bracket": "Tasa mín.",
 
         # --- Simulator ---
         "sim.title": "Simulador What-If",
@@ -2192,6 +2216,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "sim.simulate": "Simular",
         "sim.reset": "Restablecer",
         "sim.close": "Cerrar",
+        "sim.tax_efficient": "Eficiente fiscalmente (lotes más antiguos primero)",
+        "sim.col.tax": "Impuesto est.",
+        "sim.col.rate": "Tipo ef.",
+        "sim.total_tax": "Impuesto total est.",
 
         # --- Closed positions ---
         "closed.title": "Posiciones cerradas",
@@ -2587,6 +2615,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "pos.lots.cost": "Kosten",
         "pos.lots.pl": "W/V",
         "pos.export": "CSV exporteren",
+        "pos.next_bracket": "Volgende schijf",
+        "pos.at_max_bracket": "Min. tarief",
 
         # --- Simulator ---
         "sim.title": "What-If Simulator",

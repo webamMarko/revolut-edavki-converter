@@ -855,6 +855,38 @@ body {
   border-bottom: 1px solid rgba(30,42,58,0.4);
 }
 
+/* ---- Bracket progress bar ---- */
+.bracket-bar-wrap {
+  min-width: 120px;
+  max-width: 180px;
+}
+.bracket-bar-track {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--raised);
+  overflow: hidden;
+  margin-bottom: 0.2rem;
+}
+.bracket-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.bracket-bar-fill.bracket-green  { background: #34d399; }
+.bracket-bar-fill.bracket-amber  { background: #f59e0b; }
+.bracket-bar-fill.bracket-grey   { background: #556075; }
+.bracket-bar-label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bracket-bar-checkmark {
+  font-size: 0.78rem;
+  color: #34d399;
+}
+
 /* ---- Top movers ---- */
 .movers-list { display: flex; flex-direction: column; gap: 0.5rem; }
 .mover-row {

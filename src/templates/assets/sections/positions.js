@@ -196,6 +196,82 @@ function updateConcentration() {
   ).join('');
 }
 
+// --- Bracket progress helpers ---
+const _MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+function _getAssetClassForTicker(ticker) {
+  if (ticker.startsWith('CFD:')) return 'cfd';
+  if (ticker.startsWith('CRYPTO:')) return 'crypto';
+  if (ticker.startsWith('SAVINGS:')) return 'savings';
+  return 'stock';
+}
+
+function _getBracketsForTicker(ticker) {
+  const regime = D.regime || {};
+  const ac = _getAssetClassForTicker(ticker);
+  if (ac === 'cfd') return regime.cfd_brackets || [];
+  if (ac === 'crypto') return regime.crypto_brackets || [];
+  if (ac === 'savings') return regime.savings_brackets || [];
+  return regime.stock_brackets || [];
+}
+
+function _renderBracketProgress(ticker) {
+  const brackets = _getBracketsForTicker(ticker);
+  if (!brackets || brackets.length <= 1) return '';
+
+  const lots = _getLotsForTicker(ticker);
+  if (lots.length === 0) return '';
+
+  // Use oldest lot date to represent the position's holding period
+  const today = new Date();
+  let oldestDate = null;
+  for (let i = 0; i < lots.length; i++) {
+    const d = new Date(lots[i].date);
+    if (!oldestDate || d < oldestDate) oldestDate = d;
+  }
+  if (!oldestDate) return '';
+
+  const holdingDays = Math.floor((today - oldestDate) / _MS_PER_DAY);
+  const holdingYears = holdingDays / 365.25;
+
+  // Find current and next bracket
+  let currentRate = brackets[0].rate;
+  for (let i = 0; i < brackets.length; i++) {
+    if (holdingYears >= brackets[i].min_years) currentRate = brackets[i].rate;
+  }
+
+  let nextBracket = null;
+  for (let i = 0; i < brackets.length; i++) {
+    if (brackets[i].min_years > holdingYears) { nextBracket = brackets[i]; break; }
+  }
+
+  // At final bracket (0% or last step)
+  if (!nextBracket) {
+    return `<div class="bracket-bar-wrap"><span class="bracket-bar-checkmark">&#x2714;</span> <span class="bracket-bar-label">${t('pos.at_max_bracket')}</span></div>`;
+  }
+
+  // Compute progress between prev bracket threshold and next bracket threshold
+  let prevMin = 0;
+  for (let i = 0; i < brackets.length; i++) {
+    if (brackets[i].min_years <= holdingYears) prevMin = brackets[i].min_years;
+  }
+  const rangeYears = nextBracket.min_years - prevMin;
+  const progressYears = holdingYears - prevMin;
+  const pct = rangeYears > 0 ? Math.min(100, Math.round(progressYears / rangeYears * 100)) : 100;
+
+  const daysToNext = Math.ceil((nextBracket.min_years * 365.25) - holdingDays);
+  const targetDate = new Date(oldestDate.getTime() + nextBracket.min_years * 365.25 * _MS_PER_DAY);
+  const targetStr = targetDate.toISOString().slice(0, 10);
+
+  const colorClass = daysToNext <= 30 ? 'bracket-green' : daysToNext <= 90 ? 'bracket-amber' : 'bracket-grey';
+  const rateLabel = Math.round(nextBracket.rate * 100) + '%';
+
+  return `<div class="bracket-bar-wrap">`
+    + `<div class="bracket-bar-track"><div class="bracket-bar-fill ${colorClass}" style="width:${pct}%"></div></div>`
+    + `<div class="bracket-bar-label">${pct}% → ${rateLabel} · ${targetStr}</div>`
+    + `</div>`;
+}
+
 // --- Positions table ---
 const _posCharts = {};  // ticker -> Chart instance
 
@@ -396,6 +472,7 @@ function updatePositions() {
       <td class="${cls(p.realized_gain_eur || 0)}">${signCcy(p.realized_gain_eur || 0)}</td>
       <td class="${cls(totalGain)}">${signCcy(totalGain)}</td>
       <td>${fmt(p.weight_pct, 1)}%</td>
+      <td>${_renderBracketProgress(p.ticker)}</td>
     </tr>`;
 
     const lastHist = (D.position_price_history || {})[p.ticker];
@@ -406,7 +483,7 @@ function updatePositions() {
 
     const companyName = (D.company_names || {})[p.ticker] || '';
     const detail = `<tr class="pos-detail-row" id="pos-detail-${idx}" style="display:none">
-      <td colspan="9">
+      <td colspan="10">
         <div class="pos-detail">
           ${companyName ? `<div class="pos-detail-name">${companyName}</div>` : ''}
           <div class="pos-detail-body">
@@ -474,6 +551,7 @@ function updatePositions() {
     + '<th>' + t('pos.realized') + '</th>'
     + '<th>' + t('pos.total_pl') + '</th>'
     + '<th>' + t('pos.weight') + '</th>'
+    + '<th>' + t('pos.next_bracket') + '</th>'
     + '</tr></thead><tbody>' + tbody + '</tbody>';
 
   // Custom sortable that keeps detail rows paired with their parent rows
