@@ -108,6 +108,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "pos.lots.cost": "Cost",
         "pos.lots.pl": "P&L",
         "pos.export": "Export CSV",
+        "pos.next_bracket": "Next Bracket",
+        "pos.at_max_bracket": "Min. rate",
 
         # --- Simulator ---
         "sim.title": "What-If Simulator",
@@ -528,6 +530,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "pos.lots.cost": "Strošek",
         "pos.lots.pl": "D/I",
         "pos.export": "Izvozi CSV",
+        "pos.next_bracket": "Naslednja stopnja",
+        "pos.at_max_bracket": "Min. stopnja",
 
         # --- Simulator ---
         "sim.title": "Kaj-če simulator",
@@ -947,6 +951,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "pos.lots.cost": "Kosten",
         "pos.lots.pl": "G/V",
         "pos.export": "CSV exportieren",
+        "pos.next_bracket": "Nächste Stufe",
+        "pos.at_max_bracket": "Min. Satz",
 
         # --- Simulator ---
         "sim.title": "Was-wäre-wenn-Simulator",
@@ -1355,6 +1361,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "pos.lots.cost": "Coût",
         "pos.lots.pl": "P&L",
         "pos.export": "Exporter CSV",
+        "pos.next_bracket": "Prochain palier",
+        "pos.at_max_bracket": "Taux min.",
 
         # --- Simulator ---
         "sim.title": "Simulateur",

@@ -2119,3 +2119,17 @@ body {
   border-color: var(--border);
 }
 .share-btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Tax Action Nudge Widget */
+.tax-nudge-widget { margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.tax-nudge-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: var(--radius); border: 1px solid var(--border); font-size: 0.85rem; transition: border-color 0.15s; }
+.tax-nudge-item:hover { border-color: var(--accent); }
+.tax-nudge-harvest { background: linear-gradient(135deg, rgba(16,185,129,0.07), rgba(16,185,129,0.02)); border-color: rgba(16,185,129,0.3); }
+.tax-nudge-bracket { background: linear-gradient(135deg, rgba(59,130,246,0.07), rgba(59,130,246,0.02)); border-color: rgba(59,130,246,0.3); }
+.tax-nudge-yearend { background: linear-gradient(135deg, rgba(245,158,11,0.08), rgba(245,158,11,0.02)); border-color: rgba(245,158,11,0.3); }
+.tax-nudge-icon { font-size: 1.2rem; flex-shrink: 0; }
+.tax-nudge-text { flex: 1; line-height: 1.4; }
+.tax-nudge-text strong { color: var(--text); }
+.tax-nudge-action { padding: 0.35rem 0.8rem; border-radius: var(--radius-sm); font-size: 0.78rem; font-weight: 600; border: none; cursor: pointer; white-space: nowrap; background: var(--accent); color: #000; }
+.tax-nudge-dismiss { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0.2rem 0.4rem; font-size: 1rem; line-height: 1; flex-shrink: 0; border-radius: var(--radius-sm); }
+.tax-nudge-dismiss:hover { color: var(--text); }
