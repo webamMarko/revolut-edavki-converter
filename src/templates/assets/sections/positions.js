@@ -651,6 +651,7 @@ function updateClosedPositions() {
   document.getElementById('simulateBtn').textContent = t('sim.simulate');
   document.getElementById('simResetBtn').textContent = t('sim.reset');
   document.getElementById('simCloseBtn').textContent = t('sim.close');
+  var _simTaxEfficient = true;
   document.getElementById('simulateBtn').addEventListener('click', function() {
     var section = document.getElementById('simulatorSection');
     section.style.display = section.style.display === 'none' ? '' : 'none';
@@ -663,6 +664,57 @@ function updateClosedPositions() {
     for (var k in _simAdjustments) delete _simAdjustments[k];
     _renderSimulator();
   });
+  var taxEffToggle = document.getElementById('simTaxEfficientToggle');
+  if (taxEffToggle) {
+    taxEffToggle.checked = _simTaxEfficient;
+    document.getElementById('simTaxEfficientLabel').textContent = t('sim.tax_efficient');
+    taxEffToggle.addEventListener('change', function() {
+      _simTaxEfficient = this.checked;
+      _renderSimulator();
+    });
+  }
+
+  // Estimate tax for a hypothetical sale of `saleAmountEur` from `ticker`.
+  // When _simTaxEfficient is true, uses oldest-first (FIFO); otherwise newest-first (LIFO).
+  function _estimateSaleTax(ticker, saleAmountEur) {
+    if (saleAmountEur <= 0) return null;
+    var ac = ticker.startsWith('CFD:') ? 'cfd' : ticker.startsWith('CRYPTO:') ? 'crypto' : ticker.startsWith('SAVINGS:') ? 'savings' : 'stock';
+    var regime = D.regime || {};
+    var brackets = ac === 'cfd' ? (regime.cfd_brackets || []) : ac === 'crypto' ? (regime.crypto_brackets || []) : ac === 'savings' ? (regime.savings_brackets || []) : (regime.stock_brackets || []);
+    var pos = getActivePositions().find(function(p) { return p.ticker === ticker; });
+    if (!pos || pos.quantity <= 0 || pos.market_value_eur <= 0) return null;
+    var pricePerShare = pos.market_value_eur / pos.quantity;
+    var sharesToSell = saleAmountEur / pricePerShare;
+    var allLots = _getLotsForTicker(ticker);
+    if (allLots.length === 0) return null;
+    // oldest-first = FIFO = tax-efficient (long holders pay less); newest-first = LIFO
+    var lots = _simTaxEfficient ? allLots.slice() : allLots.slice().reverse();
+    var today = new Date();
+    var MS_PER_DAY = 1000 * 60 * 60 * 24;
+    var remaining = Math.min(sharesToSell, pos.quantity);
+    var totalGain = 0;
+    var totalTax = 0;
+    var stdCostRate = ac === 'cfd' ? (regime.std_cost_rate_leveraged || 0.0025) : (regime.std_cost_rate || 0.01);
+    for (var i = 0; i < lots.length && remaining > 0; i++) {
+      var lot = lots[i];
+      var matched = Math.min(lot.qty, remaining);
+      var holdingDays = Math.floor((today - new Date(lot.date)) / MS_PER_DAY);
+      var holdingYears = holdingDays / 365.25;
+      var rate = brackets.length === 0 ? 0.25 : brackets[0].rate;
+      for (var j = 0; j < brackets.length; j++) {
+        if (holdingYears >= brackets[j].min_years) rate = brackets[j].rate;
+      }
+      var cost = matched * lot.cost_eur;
+      var proceeds = matched * pricePerShare;
+      var gain = proceeds - cost;
+      var stdCosts = gain > 0 ? stdCostRate * (cost + proceeds) : 0;
+      var taxableGain = gain > 0 ? Math.max(0, gain - stdCosts) : gain;
+      totalGain += gain;
+      totalTax += Math.max(0, taxableGain * rate);
+      remaining -= matched;
+    }
+    return { tax: totalTax, effectiveRate: totalGain > 0 ? (totalTax / totalGain * 100) : 0 };
+  }
 
   function _renderSimulator() {
     var positions = getActivePositions();
@@ -677,26 +729,53 @@ function updateClosedPositions() {
     var totalAdj = sorted.reduce(function(s, p) { return s + p.market_value_eur + (_simAdjustments[p.ticker] || 0); }, 0);
     var totalChange = totalAdj - totalCurrent;
 
+    // Compute per-ticker tax estimates for all sell adjustments
+    var taxByTicker = {};
+    var totalEstTax = 0;
+    for (var ti = 0; ti < sorted.length; ti++) {
+      var tp = sorted[ti];
+      var tadj = _simAdjustments[tp.ticker] || 0;
+      if (tadj < 0) {
+        var est = _estimateSaleTax(tp.ticker, -tadj);
+        taxByTicker[tp.ticker] = est;
+        if (est) totalEstTax += est.tax;
+      }
+    }
+    var hasSales = Object.keys(taxByTicker).length > 0;
+
     document.getElementById('simCards').innerHTML = [
       [t('sim.current_value'), fmtCcy(totalCurrent), ''],
       [t('sim.simulated_value'), fmtCcy(totalAdj), ''],
       [t('sim.change'), signCcy(totalChange), cls(totalChange)],
-    ].map(function(row) {
+      hasSales ? [t('sim.total_tax'), fmtCcy(totalEstTax), totalEstTax > 0 ? 'neg' : ''] : null,
+    ].filter(Boolean).map(function(row) {
       return '<div class="metric-card"><div class="label">' + row[0] + '</div><div class="value ' + row[2] + '">' + row[1] + '</div></div>';
     }).join('');
 
-    // Table with input fields
-    var html = '<thead><tr><th>' + t('pos.ticker') + '</th><th>' + t('pos.market_value') + '</th><th>' + t('sim.adjust') + ' (' + _currency + ')</th><th>' + t('sim.new_weight') + '</th></tr></thead><tbody>';
+    // Table with input fields + tax columns
+    var html = '<thead><tr><th>' + t('pos.ticker') + '</th><th>' + t('pos.market_value') + '</th><th>' + t('sim.adjust') + ' (' + _currency + ')</th><th>' + t('sim.new_weight') + '</th><th>' + t('sim.col.tax') + '</th><th>' + t('sim.col.rate') + '</th></tr></thead><tbody>';
     for (var i = 0; i < sorted.length; i++) {
       var p = sorted[i];
       var adj = _simAdjustments[p.ticker] || 0;
       var newVal = p.market_value_eur + adj;
       var newWeight = totalAdj > 0 ? (newVal / totalAdj * 100) : 0;
+      var taxInfo = taxByTicker[p.ticker] || null;
+      var taxCell = taxInfo ? ('<span class="neg">' + fmtCcy(taxInfo.tax) + '</span>') : '—';
+      var rateCell = taxInfo && taxInfo.effectiveRate > 0 ? (fmt(taxInfo.effectiveRate, 1) + '%') : '—';
       html += '<tr>'
         + '<td><strong>' + p.ticker + '</strong></td>'
         + '<td>' + fmtCcy(p.market_value_eur) + '</td>'
         + '<td><input type="number" class="sim-input" data-ticker="' + p.ticker + '" value="' + adj + '" step="100" style="width:80px;padding:0.2rem 0.3rem;border:1px solid var(--border);border-radius:4px;background:var(--card-bg);color:var(--text);font-size:0.75rem;text-align:right"></td>'
         + '<td>' + fmt(newWeight, 1) + '%</td>'
+        + '<td>' + taxCell + '</td>'
+        + '<td>' + rateCell + '</td>'
+        + '</tr>';
+    }
+    if (hasSales) {
+      html += '<tr style="border-top:2px solid var(--border);font-weight:600">'
+        + '<td colspan="4">' + t('sim.total_tax') + '</td>'
+        + '<td class="neg">' + fmtCcy(totalEstTax) + '</td>'
+        + '<td>—</td>'
         + '</tr>';
     }
     html += '</tbody>';

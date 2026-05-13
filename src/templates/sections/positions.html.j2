@@ -79,7 +79,11 @@
 <section class="card" id="simulatorSection" style="display:none">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem">
     <h2 style="margin:0" id="simTitle">What-If Simulator</h2>
-    <div style="display:flex;gap:0.4rem">
+    <div style="display:flex;gap:0.4rem;align-items:center">
+      <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.72rem;color:var(--muted);cursor:pointer">
+        <input type="checkbox" id="simTaxEfficientToggle" style="cursor:pointer">
+        <span id="simTaxEfficientLabel">Tax-efficient (oldest lots first)</span>
+      </label>
       <button id="simResetBtn" class="tax-export-btn" style="font-size:0.72rem;padding:0.3rem 0.7rem">Reset</button>
       <button id="simCloseBtn" class="tax-export-btn" style="font-size:0.72rem;padding:0.3rem 0.7rem">Close</button>
     </div>
