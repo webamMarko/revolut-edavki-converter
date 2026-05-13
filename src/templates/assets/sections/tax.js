@@ -241,7 +241,22 @@
       (hasNetBenefit ? '<th>Net Benefit</th>' : '') +
       '</tr></thead><tbody>' +
       filtered.map(c => {
-        const washIcon = c.wash_sale_risk ? ' <span title="' + (c.wash_sale_note || 'Wash-sale risk') + '" style="cursor:help">&#9888;</span>' : '';
+        let washIcon = '';
+        if (c.wash_sale_risk) {
+          let tipText = 'Wash-sale risk';
+          if (c.wash_sale_trigger_date && c.wash_sale_clear_date) {
+            const clearDate = new Date(c.wash_sale_clear_date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const daysLeft = Math.max(0, Math.ceil((clearDate - today) / 86400000));
+            tipText = 'Wash-sale applies due to purchase on ' + c.wash_sale_trigger_date + '.' +
+              ' Selling before ' + c.wash_sale_clear_date + ' disallows this loss.' +
+              (daysLeft > 0 ? ' Wait ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' to harvest safely.' : ' Clear date has passed.');
+          }
+          washIcon = ' <button type="button" class="wash-tooltip-btn" aria-label="Wash-sale warning: ' +
+            tipText.replace(/"/g, '&quot;') + '" tabindex="0" title="' +
+            tipText.replace(/"/g, '&quot;') + '" style="background:none;border:none;cursor:help;padding:0;font:inherit;color:var(--warn,#e6a817)">&#9888;</button>';
+        }
         return `<tr>` +
         `<td><strong>${c.ticker}</strong>${washIcon}</td>` +
         `<td>${c.asset_class}</td>` +

@@ -812,6 +812,8 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                 if enh:
                     entry["wash_sale_risk"] = enh.wash_sale_risk
                     entry["wash_sale_note"] = enh.wash_sale_note
+                    entry["wash_sale_trigger_date"] = enh.wash_sale_trigger_date
+                    entry["wash_sale_clear_date"] = enh.wash_sale_clear_date
                     entry["net_benefit_eur"] = enh.net_benefit_eur
                     entry["offsetable_gain_eur"] = enh.offsetable_gain_eur
                 d["harvest_candidates"].append(entry)

@@ -55,6 +55,9 @@ class HarvestSuggestion:
     # Wash-sale risk: recent buy within 30 days of today
     wash_sale_risk: bool
     wash_sale_note: str
+    # The most recent purchase date that triggers wash-sale, and the safe-to-sell date
+    wash_sale_trigger_date: str = ""
+    wash_sale_clear_date: str = ""
     # Per-lot breakdown
     lots: list[HarvestLot] = field(default_factory=list)
 
@@ -301,8 +304,16 @@ def compute_harvest_suggestions(
         # Wash-sale risk detection
         wash_risk = bool(recent_buys.get(ticker))
         wash_note = ""
+        wash_trigger_date = ""
+        wash_clear_date = ""
         if wash_risk:
             dates = recent_buys[ticker]
+            # Most recent buy is the triggering date
+            trigger_date = max(dates)
+            trigger_dt = datetime.strptime(trigger_date, "%Y-%m-%d")
+            clear_dt = trigger_dt + timedelta(days=31)
+            wash_trigger_date = trigger_date
+            wash_clear_date = clear_dt.strftime("%Y-%m-%d")
             wash_note = (
                 f"Recent buy(s) within {WASH_SALE_WINDOW_DAYS} days: "
                 f"{', '.join(dates[:3])}"
@@ -324,6 +335,8 @@ def compute_harvest_suggestions(
             net_benefit_eur=round(net_benefit, 2),
             wash_sale_risk=wash_risk,
             wash_sale_note=wash_note,
+            wash_sale_trigger_date=wash_trigger_date,
+            wash_sale_clear_date=wash_clear_date,
             lots=lot_details,
         ))
 
