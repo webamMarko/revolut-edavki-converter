@@ -1,0 +1,59 @@
+<section class="card" id="yearEndCalendarSection">
+  <div class="chart-header">
+    <h2 id="yearEndCalendarTitle">Year-End Tax Action Calendar</h2>
+  </div>
+  <p id="yearEndCalendarDesc" style="color:var(--muted);font-size:0.8rem;margin:-0.5rem 0 1rem"></p>
+
+  <!-- Summary highlight cards -->
+  <div id="yearEndCalendarHighlight" class="card-grid small" style="margin-bottom:1.25rem"></div>
+
+  <!-- Action timeline (horizontal bar per month) -->
+  <div id="yearEndTimelineSection" style="margin-bottom:1.5rem">
+    <h3 id="yearEndTimelineTitle" style="font-size:0.85rem;font-weight:600;margin:0 0 0.75rem;color:var(--muted)"></h3>
+    <div id="yearEndTimeline" style="position:relative;overflow-x:auto"></div>
+  </div>
+
+  <!-- Action checklist table -->
+  <div id="yearEndActionsSection">
+    <!-- Urgent -->
+    <div id="yearEndGroupUrgent" style="display:none;margin-bottom:1.25rem">
+      <h3 id="yearEndGroupUrgentTitle" style="font-size:0.85rem;font-weight:700;color:var(--neg);margin:0 0 0.5rem"></h3>
+      <div class="table-scroll">
+        <table id="yearEndTableUrgent" class="data-table"></table>
+      </div>
+    </div>
+    <!-- Soon -->
+    <div id="yearEndGroupSoon" style="display:none;margin-bottom:1.25rem">
+      <h3 id="yearEndGroupSoonTitle" style="font-size:0.85rem;font-weight:700;color:var(--warn,#f59e0b);margin:0 0 0.5rem"></h3>
+      <div class="table-scroll">
+        <table id="yearEndTableSoon" class="data-table"></table>
+      </div>
+    </div>
+    <!-- Before year-end -->
+    <div id="yearEndGroupYearend" style="display:none;margin-bottom:1.25rem">
+      <h3 id="yearEndGroupYearendTitle" style="font-size:0.85rem;font-weight:700;color:var(--text);margin:0 0 0.5rem"></h3>
+      <div class="table-scroll">
+        <table id="yearEndTableYearend" class="data-table"></table>
+      </div>
+    </div>
+    <!-- Loss harvest -->
+    <div id="yearEndGroupHarvest" style="display:none;margin-bottom:1.25rem">
+      <h3 id="yearEndGroupHarvestTitle" style="font-size:0.85rem;font-weight:700;color:var(--accent);margin:0 0 0.5rem"></h3>
+      <div class="table-scroll">
+        <table id="yearEndTableHarvest" class="data-table"></table>
+      </div>
+    </div>
+    <!-- Hold (don't sell) -->
+    <div id="yearEndGroupHold" style="display:none;margin-bottom:1.25rem">
+      <h3 id="yearEndGroupHoldTitle" style="font-size:0.85rem;font-weight:700;color:var(--muted);margin:0 0 0.5rem"></h3>
+      <div class="table-scroll">
+        <table id="yearEndTableHold" class="data-table"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div id="yearEndCalendarEmpty" style="display:none;text-align:center;color:var(--muted);padding:2rem">
+    <p id="yearEndCalendarEmptyMsg"></p>
+  </div>
+</section>

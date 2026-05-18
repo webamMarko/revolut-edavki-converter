@@ -38,6 +38,7 @@
       <div id="mobileAssetToggles" class="page-filters-toggles"></div>
     </div>
     <div class="page active" id="page-overview">
+      {% include "sections/health_score.html.j2" %}
       {% include "sections/summary.html.j2" %}
     </div>
     <div class="page" id="page-charts">
@@ -67,6 +68,7 @@
     <div class="page" id="page-tax">
       <div class="tax-subtabs" id="taxSubtabs">
         <button class="tax-subtab active" data-subtab="summary">Summary</button>
+        <button class="tax-subtab" data-subtab="calendar">Calendar</button>
         <button class="tax-subtab" data-subtab="smart-sell">Smart Sell</button>
         <button class="tax-subtab" data-subtab="file">File</button>
       </div>
@@ -75,6 +77,9 @@
         {% include "sections/tax_preview.html.j2" %}
         {% include "sections/holding_countdown.html.j2" %}
         {% include "sections/tax.html.j2" %}
+      </div>
+      <div class="tax-subtab-content" id="taxSubtabCalendar" data-subtab-panel="calendar" style="display:none">
+        {% include "sections/year_end_calendar.html.j2" %}
       </div>
       <div class="tax-subtab-content" id="taxSubtabSmartSell" data-subtab-panel="smart-sell" style="display:none">
         {% include "sections/smart_sell.html.j2" %}
@@ -112,6 +117,7 @@
 {% include "assets/sections/tax_timeline.js" %}
 {% include "assets/sections/tax_preview.js" %}
 {% include "assets/sections/holding_countdown.js" %}
+{% include "assets/sections/year_end_calendar.js" %}
 {% include "assets/sections/tax_wizard.js" %}
 {% include "assets/sections/smart_sell.js" %}
 {% include "assets/sections/transactions.js" %}
@@ -122,6 +128,7 @@
 {% include "assets/sections/monte_carlo.js" %}
 {% include "assets/sections/quick_glance.js" %}
 {% include "assets/sections/tax_nudge.js" %}
+{% include "assets/sections/health_score.js" %}
 {% include "assets/nav.js" %}
 {% include "assets/layout.js" %}
 {% include "assets/notifications.js" %}
