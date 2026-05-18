@@ -255,6 +255,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._handle_dividend_summary()
         elif path == "/api/email-preferences":
             self._api_get_email_preferences()
+        elif path == "/api/edavki-filed":
+            self._api_get_edavki_filed()
         elif path.startswith("/api/analytics/"):
             scope = path[len("/api/analytics/"):]
             self._api_get_analytics(scope)
@@ -350,6 +352,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._handle_import_run()
         elif path == "/api/email-preferences":
             self._api_save_email_preferences()
+        elif path == "/api/edavki-filed":
+            self._api_save_edavki_filed()
         elif path == "/api/shares":
             self._api_create_share()
         elif path.startswith("/api/shares/") and path.endswith("/delete"):
@@ -1653,6 +1657,63 @@ class UploadHandler(BaseHTTPRequestHandler):
             country=data.get("country", "SI"),
         )
         self._json_response({"ok": True})
+
+    # ------------------------------------------------------------------
+    # eDavki filed-year tracking
+    # ------------------------------------------------------------------
+
+    def _api_get_edavki_filed(self):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return
+        conn = _portfolio_conn(session)
+        try:
+            row = conn.execute(
+                "SELECT value FROM metadata WHERE key = 'edavki_filed_years'"
+            ).fetchone()
+            filed_years = json.loads(row[0]) if row and row[0] else []
+            self._json_response({"filed_years": filed_years})
+        finally:
+            conn.close()
+
+    def _api_save_edavki_filed(self):
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return
+        body = self._read_body()
+        try:
+            data = json.loads(body)
+        except Exception:
+            self._json_response({"error": "Invalid JSON."}, status=400)
+            return
+        filed_years = data.get("filed_years")
+        dismissed_until = data.get("dismissed_until")
+        if filed_years is not None and not isinstance(filed_years, list):
+            self._json_response({"error": "filed_years must be a list."}, status=400)
+            return
+        conn = _portfolio_conn(session)
+        try:
+            if filed_years is not None:
+                conn.execute(
+                    "INSERT OR REPLACE INTO metadata (key, value) VALUES ('edavki_filed_years', ?)",
+                    (json.dumps(sorted(set(int(y) for y in filed_years))),)
+                )
+            if dismissed_until is not None:
+                conn.execute(
+                    "INSERT OR REPLACE INTO metadata (key, value) VALUES ('edavki_widget_dismissed_until', ?)",
+                    (str(dismissed_until),)
+                )
+            conn.commit()
+            from .report_cache import invalidate_user_html
+            try:
+                invalidate_user_html(session["username"])
+            except Exception:
+                pass
+            self._json_response({"ok": True})
+        finally:
+            conn.close()
 
     # ------------------------------------------------------------------
     # Portfolio sharing
