@@ -1,0 +1,11 @@
+<section id="returnWaterfallSection" class="chart-section" style="display:none">
+  <div class="chart-header">
+    <h2>Return Attribution</h2>
+    <span class="chart-hint">Gain/loss per position &middot; stacked: price return + FX impact (USD positions)</span>
+  </div>
+  <div class="chart-wrap" style="min-height:280px"><canvas id="waterfallChart"></canvas></div>
+  <div id="fxMaskingNote" style="display:none;margin-top:0.5rem;font-size:0.78rem;color:var(--muted)">
+    <span style="color:#fbbf24">&#9888;</span>
+    Amber bars indicate positions where EUR/USD movement is masking an underlying price loss.
+  </div>
+</section>

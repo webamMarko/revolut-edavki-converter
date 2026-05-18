@@ -143,4 +143,5 @@ function updateAll() {
   if (typeof updateWhatIf === 'function') updateWhatIf();
   if (typeof updateAchievements === 'function') updateAchievements();
   if (typeof updateDCAStrategy === 'function') updateDCAStrategy();
+  if (typeof updateWaterfall === 'function') updateWaterfall();
 }
