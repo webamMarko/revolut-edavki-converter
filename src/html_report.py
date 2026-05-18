@@ -598,6 +598,134 @@ def _compute_correlation_matrix(conn: sqlite3.Connection | None,
     }
 
 
+def _compute_return_attribution(
+    positions: list,
+    closed_positions: list,
+    total_invested_eur: float,
+    conn: sqlite3.Connection | None,
+    prices_conn: sqlite3.Connection | None,
+) -> list[dict]:
+    """Per-position return attribution with FX decomposition for USD-denominated assets.
+
+    For each position the gain is split into:
+      price_return_eur  — gain from underlying price movement (in EUR)
+      fx_gain_eur       — gain attributable to EUR/USD rate change
+
+    For non-USD positions fx_gain_eur is 0.  The FX split is approximated using
+    the weighted-average buy FX rate derived from BUY transactions and the most
+    recent EUR/USD rate.
+    """
+    if not conn or not positions:
+        return []
+
+    _pconn = prices_conn if prices_conn is not None else conn
+
+    # Most recent EUR/USD rate
+    row = _pconn.execute(
+        "SELECT eur_usd FROM fx_rates ORDER BY date DESC LIMIT 1"
+    ).fetchone()
+    fx_current = row[0] if row else 1.10
+
+    # Weighted average buy FX rate per ticker (from BUY transactions)
+    # EUR/USD at purchase — used to reconstruct buy_price_usd from cost_basis_eur
+    buy_fx_rows = conn.execute(
+        """SELECT ticker, SUM(ABS(total_amount)) as total_usd,
+                  SUM(CASE WHEN fx_rate > 0 THEN ABS(total_amount) ELSE 0 END) as fx_weighted_usd,
+                  SUM(CASE WHEN fx_rate > 0 THEN ABS(total_amount) / fx_rate ELSE 0 END) as total_eur_from_fx
+           FROM transactions
+           WHERE type IN ('BUY','RECEIVE','STAKING REWARD','LEARN REWARD')
+             AND currency != 'EUR' AND fx_rate > 0
+           GROUP BY ticker"""
+    ).fetchall()
+    # weighted avg FX = sum(amount_usd) / sum(amount_usd/fx_rate)
+    avg_buy_fx: dict[str, float] = {}
+    for r in buy_fx_rows:
+        ticker, total_usd, fx_weighted_usd, total_eur_from_fx = r
+        if total_eur_from_fx and total_eur_from_fx > 0:
+            avg_buy_fx[ticker] = total_usd / total_eur_from_fx  # EUR/USD at purchase
+
+    # Current USD price per share from daily_prices
+    current_price_usd: dict[str, float] = {}
+    price_rows = _pconn.execute(
+        """SELECT ticker, close FROM daily_prices
+           WHERE currency = 'USD'
+             AND date = (SELECT MAX(date) FROM daily_prices dp2 WHERE dp2.ticker = daily_prices.ticker)"""
+    ).fetchall()
+    for r in price_rows:
+        current_price_usd[r[0]] = r[1]
+
+    base = max(total_invested_eur, 1.0)
+    items = []
+
+    for pos in positions:
+        ticker = pos.ticker
+        db_ticker = ticker
+        for prefix in ("CFD:", "CRYPTO:", "SAVINGS:"):
+            if ticker.startswith(prefix):
+                db_ticker = ticker[len(prefix):]
+                break
+
+        total_gain_eur = pos.unrealized_gain_eur + pos.realized_gain_eur
+        contribution_pct = total_gain_eur / base * 100
+
+        # FX decomposition — only meaningful for USD-denominated long positions
+        price_return_eur = None
+        fx_gain_eur = None
+
+        fx_buy = avg_buy_fx.get(db_ticker)
+        cur_usd = current_price_usd.get(db_ticker)
+        qty = pos.quantity
+        cost_basis = pos.cost_basis_eur
+
+        if (fx_buy and fx_buy > 0 and cur_usd and cur_usd > 0 and qty > 0 and cost_basis > 0):
+            # Reconstruct average buy price in USD: cost_basis_eur × fx_buy / qty
+            avg_buy_price_usd = cost_basis * fx_buy / qty
+            # Price return: gain from stock movement, evaluated at current FX
+            price_return_eur = qty * (cur_usd - avg_buy_price_usd) / fx_current
+            fx_gain_eur = total_gain_eur - price_return_eur
+
+        fx_masks_loss = (
+            fx_gain_eur is not None
+            and price_return_eur is not None
+            and price_return_eur < 0
+            and fx_gain_eur > 0
+            and total_gain_eur >= 0
+        )
+
+        items.append({
+            "ticker": ticker,
+            "total_gain_eur": round(total_gain_eur, 2),
+            "unrealized_gain_eur": round(pos.unrealized_gain_eur, 2),
+            "realized_gain_eur": round(pos.realized_gain_eur, 2),
+            "contribution_pct": round(contribution_pct, 3),
+            "weight_pct": round(pos.weight_pct, 2),
+            "price_return_eur": round(price_return_eur, 2) if price_return_eur is not None else None,
+            "fx_gain_eur": round(fx_gain_eur, 2) if fx_gain_eur is not None else None,
+            "fx_masks_loss": fx_masks_loss,
+        })
+
+    # Include closed positions that have realized gains
+    for cp in closed_positions:
+        if abs(cp.realized_gain_eur) < 0.01:
+            continue
+        contribution_pct = cp.realized_gain_eur / base * 100
+        items.append({
+            "ticker": cp.ticker + " (closed)",
+            "total_gain_eur": round(cp.realized_gain_eur, 2),
+            "unrealized_gain_eur": 0.0,
+            "realized_gain_eur": round(cp.realized_gain_eur, 2),
+            "contribution_pct": round(contribution_pct, 3),
+            "weight_pct": 0.0,
+            "price_return_eur": None,
+            "fx_gain_eur": None,
+            "fx_masks_loss": False,
+        })
+
+    # Sort by absolute total gain descending
+    items.sort(key=lambda x: abs(x["total_gain_eur"]), reverse=True)
+    return items
+
+
 def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                            per_class: dict | None = None,
                            available_classes: list[str] | None = None,
@@ -1011,6 +1139,72 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
         data["dca_strategy"] = compute_dca_analysis(conn, prices_conn=_pconn)
     except Exception:
         data["dca_strategy"] = None
+
+    # Portfolio Health Score
+    try:
+        from .health_score import compute_health_score, serialize_health_score
+        hs = compute_health_score(
+            positions=data["positions"],
+            analytics_summary=data["summary"],
+            conn=conn,
+            country=country,
+            prices_conn=_pconn,
+        )
+        data["health_score"] = serialize_health_score(hs)
+    except Exception:
+        data["health_score"] = None
+
+    # eDavki filing metadata for the deadline tracker widget
+    if conn is not None:
+        try:
+            last_import_row = conn.execute(
+                "SELECT MAX(imported_at) FROM import_log"
+            ).fetchone()
+            last_import_at = last_import_row[0] if last_import_row else None
+
+            last_price_row = conn.execute(
+                "SELECT MAX(date) FROM daily_prices"
+            ).fetchone()
+            last_sync_date = last_price_row[0] if last_price_row else None
+
+            years_with_tx = [
+                int(r[0]) for r in conn.execute(
+                    "SELECT DISTINCT strftime('%Y', date) FROM transactions "
+                    "WHERE asset_class NOT IN ('realestate') ORDER BY 1"
+                ).fetchall()
+            ]
+
+            filed_row = conn.execute(
+                "SELECT value FROM metadata WHERE key = 'edavki_filed_years'"
+            ).fetchone()
+            import json as _json
+            filed_years = _json.loads(filed_row[0]) if filed_row and filed_row[0] else []
+
+            dismissed_row = conn.execute(
+                "SELECT value FROM metadata WHERE key = 'edavki_widget_dismissed_until'"
+            ).fetchone()
+            dismissed_until = dismissed_row[0] if dismissed_row else None
+
+            data["edavki_meta"] = {
+                "last_import_at": last_import_at,
+                "last_sync_date": last_sync_date,
+                "years_with_transactions": years_with_tx,
+                "filed_years": filed_years,
+                "dismissed_until": dismissed_until,
+            }
+        except Exception:
+            data["edavki_meta"] = None
+    else:
+        data["edavki_meta"] = None
+
+    # Return attribution waterfall with FX decomposition
+    try:
+        data["return_attribution"] = _compute_return_attribution(
+            analytics.positions, analytics.closed_positions,
+            analytics.total_invested_eur, conn, _pconn,
+        )
+    except Exception:
+        data["return_attribution"] = []
 
     return data
 

@@ -2201,3 +2201,68 @@ body {
 .tax-nudge-action { padding: 0.35rem 0.8rem; border-radius: var(--radius-sm); font-size: 0.78rem; font-weight: 600; border: none; cursor: pointer; white-space: nowrap; background: var(--accent); color: #000; }
 .tax-nudge-dismiss { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0.2rem 0.4rem; font-size: 1rem; line-height: 1; flex-shrink: 0; border-radius: var(--radius-sm); }
 .tax-nudge-dismiss:hover { color: var(--text); }
+
+/* ---- eDavki Filing Deadline Widget ---- */
+.edavki-deadline-widget { margin-bottom: 1rem; border: 1px solid rgba(99,102,241,0.35); border-radius: var(--radius); background: linear-gradient(135deg, rgba(99,102,241,0.07), rgba(99,102,241,0.02)); overflow: hidden; }
+.edavki-deadline-header { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem 0.5rem; }
+.edavki-deadline-icon { font-size: 1.3rem; flex-shrink: 0; }
+.edavki-deadline-title { flex: 1; font-size: 0.9rem; font-weight: 600; }
+.edavki-deadline-countdown { font-size: 1.5rem; font-weight: 700; color: rgba(99,102,241,0.9); white-space: nowrap; }
+.edavki-deadline-countdown.urgent { color: var(--danger, #ef4444); }
+.edavki-deadline-dismiss { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0.2rem 0.4rem; font-size: 1rem; line-height: 1; flex-shrink: 0; border-radius: var(--radius-sm); }
+.edavki-deadline-dismiss:hover { color: var(--text); }
+.edavki-deadline-body { padding: 0 1rem 0.75rem; }
+.edavki-checklist { list-style: none; margin: 0 0 0.75rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.edavki-checklist li { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--muted); }
+.edavki-checklist .check-ok { color: #10b981; font-size: 0.85rem; }
+.edavki-checklist .check-warn { color: #f59e0b; font-size: 0.85rem; }
+.edavki-checklist .check-err { color: var(--danger, #ef4444); font-size: 0.85rem; }
+.edavki-checklist strong { color: var(--text); }
+.edavki-deadline-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.edavki-generate-btn { padding: 0.4rem 0.9rem; border-radius: var(--radius-sm); background: rgba(99,102,241,0.9); color: #fff; font-size: 0.78rem; font-weight: 600; border: none; cursor: pointer; white-space: nowrap; }
+.edavki-generate-btn:hover { background: rgba(99,102,241,1); }
+.edavki-filed-btn { padding: 0.4rem 0.9rem; border-radius: var(--radius-sm); background: none; border: 1px solid rgba(99,102,241,0.4); color: rgba(99,102,241,0.9); font-size: 0.78rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.edavki-filed-btn:hover { border-color: rgba(99,102,241,0.7); }
+.edavki-year-select { padding: 0.35rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--card-bg); color: var(--text); font-size: 0.78rem; cursor: pointer; }
+
+/* ---- Portfolio Health Score ---- */
+.health-score-card { padding: 1.25rem 1.5rem; }
+.health-score-header { margin-bottom: 1.25rem; }
+.health-score-title-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.35rem; }
+.health-score-title-row h2 { margin: 0; }
+.health-score-badge { display: flex; align-items: baseline; gap: 0.4rem; }
+.health-score-grade { font-size: 2rem; font-weight: 700; color: var(--hs-color, var(--accent)); line-height: 1; }
+.health-score-num { font-size: 0.85rem; color: var(--muted); }
+.health-score-label { font-size: 0.9rem; color: var(--muted); margin-bottom: 0.75rem; }
+.health-score-bar-wrap { }
+.health-score-bar-track { height: 6px; border-radius: 3px; background: var(--subtle); overflow: hidden; }
+.health-score-bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+
+.health-sub-scores { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem; }
+.health-sub { background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.85rem; }
+.health-sub-header { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.5rem; }
+.health-sub-icon { font-size: 0.9rem; flex-shrink: 0; color: var(--muted); }
+.health-sub-name { flex: 1; font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.health-sub-score { font-size: 1rem; font-weight: 700; min-width: 2rem; text-align: right; }
+.health-sub-lbl { font-size: 0.72rem; font-weight: 600; min-width: 2.5rem; text-align: right; letter-spacing: 0.02em; }
+.health-sub-bar-track { height: 4px; border-radius: 2px; background: var(--subtle); overflow: hidden; margin-bottom: 0.45rem; }
+.health-sub-bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+.health-sub-bar-fill.pos { background: var(--green); }
+.health-sub-bar-fill.warn { background: var(--accent); }
+.health-sub-bar-fill.neg { background: var(--red); }
+.health-sub-score.pos, .health-sub-lbl.pos { color: var(--green); }
+.health-sub-score.warn, .health-sub-lbl.warn { color: var(--accent); }
+.health-sub-score.neg, .health-sub-lbl.neg { color: var(--red); }
+.health-sub-detail { font-size: 0.76rem; color: var(--muted); line-height: 1.4; }
+
+.health-actions { border-top: 1px solid var(--border); padding-top: 1rem; }
+.health-actions-title { font-size: 0.88rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 0.75rem; }
+.health-actions-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.health-action-item { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.85rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 0.84rem; }
+.health-action-item.action-concentration { border-color: rgba(248,113,113,0.35); background: rgba(248,113,113,0.04); }
+.health-action-item.action-diversification { border-color: rgba(96,165,250,0.35); background: rgba(96,165,250,0.04); }
+.health-action-item.action-tax { border-color: rgba(167,139,250,0.35); background: rgba(167,139,250,0.04); }
+.health-action-item.action-risk { border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.04); }
+.action-tag { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.action-title { font-weight: 600; color: var(--text); }
+.action-detail { color: var(--muted); font-size: 0.8rem; line-height: 1.45; }
