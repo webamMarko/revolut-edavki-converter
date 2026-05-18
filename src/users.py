@@ -75,6 +75,15 @@ CREATE TABLE IF NOT EXISTS portfolio_shares (
     access_count    INTEGER NOT NULL DEFAULT 0,
     last_accessed_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS magic_login_tokens (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token       TEXT NOT NULL UNIQUE,
+    expires_at  TEXT NOT NULL,
+    used_at     TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -540,6 +549,75 @@ def delete_share(
         )
         conn.commit()
         return cursor.rowcount > 0
+    finally:
+        if close:
+            conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Magic login tokens (one-click login links in digest emails)
+# ---------------------------------------------------------------------------
+
+MAGIC_TOKEN_TTL_HOURS = 72
+
+
+def create_magic_token(
+    user_id: int,
+    conn: sqlite3.Connection | None = None,
+) -> str:
+    """Create a single-use magic login token. Returns the raw token string."""
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        raw_token = secrets.token_urlsafe(32)
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=MAGIC_TOKEN_TTL_HOURS)).isoformat()
+        conn.execute(
+            "INSERT INTO magic_login_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
+            (user_id, raw_token, expires_at),
+        )
+        conn.commit()
+        return raw_token
+    finally:
+        if close:
+            conn.close()
+
+
+def consume_magic_token(
+    token: str,
+    conn: sqlite3.Connection | None = None,
+) -> User | None:
+    """Validate and consume a magic login token. Returns User or None if invalid/expired/used."""
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM magic_login_tokens WHERE token = ?", (token,)
+        ).fetchone()
+        if not row:
+            return None
+        if row["used_at"]:
+            return None
+        try:
+            expires = datetime.fromisoformat(row["expires_at"])
+            if datetime.now(timezone.utc) > expires:
+                return None
+        except ValueError:
+            return None
+        conn.execute(
+            "UPDATE magic_login_tokens SET used_at = datetime('now') WHERE id = ?",
+            (row["id"],),
+        )
+        conn.commit()
+        user_row = conn.execute("SELECT * FROM users WHERE id = ?", (row["user_id"],)).fetchone()
+        if not user_row:
+            return None
+        conn.execute(
+            "UPDATE users SET last_login = datetime('now') WHERE id = ?", (row["user_id"],)
+        )
+        conn.commit()
+        return _row_to_user(user_row)
     finally:
         if close:
             conn.close()

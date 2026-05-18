@@ -232,6 +232,9 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._serve_login_page()
         elif path == "/logout":
             self._handle_logout()
+        elif path.startswith("/login/magic/"):
+            token = path[len("/login/magic/"):]
+            self._handle_magic_login(token)
         elif path.startswith("/invite/"):
             token = path[len("/invite/"):]
             self._serve_invite_page(token)
@@ -439,6 +442,21 @@ class UploadHandler(BaseHTTPRequestHandler):
         self.send_header(
             "Set-Cookie",
             "session=; HttpOnly; SameSite=Lax; Max-Age=0; Path=/"
+        )
+        self.end_headers()
+
+    def _handle_magic_login(self, token: str):
+        from .users import consume_magic_token
+        user = consume_magic_token(token)
+        if not user:
+            self._html_response(_error_html("This login link is invalid, expired, or has already been used."))
+            return
+        session_token = _create_session(user)
+        self.send_response(302)
+        self.send_header("Location", "/report")
+        self.send_header(
+            "Set-Cookie",
+            f"session={session_token}; HttpOnly; SameSite=Lax; Max-Age={SESSION_TTL}; Path=/"
         )
         self.end_headers()
 
@@ -1632,6 +1650,7 @@ class UploadHandler(BaseHTTPRequestHandler):
             "weekly_enabled": prefs.weekly_enabled,
             "monthly_enabled": prefs.monthly_enabled,
             "alert_enabled": prefs.alert_enabled,
+            "digest_enabled": prefs.digest_enabled,
             "scope": prefs.scope,
             "country": prefs.country,
         })
@@ -1653,6 +1672,7 @@ class UploadHandler(BaseHTTPRequestHandler):
             weekly_enabled=bool(data.get("weekly_enabled", False)),
             monthly_enabled=bool(data.get("monthly_enabled", True)),
             alert_enabled=bool(data.get("alert_enabled", False)),
+            digest_enabled=bool(data.get("digest_enabled", False)),
             scope=data.get("scope", "all"),
             country=data.get("country", "SI"),
         )
@@ -3031,6 +3051,16 @@ def _settings_html(username: str, role: str) -> str:
       </div>
       <div class="toggle-row">
         <div>
+          <div class="toggle-label">Weekly digest</div>
+          <div class="toggle-desc">Portfolio value, week-over-week delta, top movers, tax events &amp; harvest opportunities — every Monday</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="digestToggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div>
           <div class="toggle-label">Event alerts</div>
           <div class="toggle-desc">Position crosses tax bracket, large daily moves, dividends received</div>
         </div>
@@ -3130,6 +3160,7 @@ def _settings_html(username: str, role: str) -> str:
     document.getElementById('weeklyToggle').checked = prefs.weekly_enabled;
     document.getElementById('monthlyToggle').checked = prefs.monthly_enabled;
     document.getElementById('alertToggle').checked = prefs.alert_enabled;
+    document.getElementById('digestToggle').checked = prefs.digest_enabled;
     document.getElementById('scopeSelect').value = prefs.scope || 'all';
     document.getElementById('countrySelect').value = prefs.country || 'SI';
   }}
@@ -3144,6 +3175,7 @@ document.getElementById('saveBtn').addEventListener('click', async () => {{
     weekly_enabled: document.getElementById('weeklyToggle').checked,
     monthly_enabled: document.getElementById('monthlyToggle').checked,
     alert_enabled: document.getElementById('alertToggle').checked,
+    digest_enabled: document.getElementById('digestToggle').checked,
     scope: document.getElementById('scopeSelect').value,
     country: document.getElementById('countrySelect').value,
   }};

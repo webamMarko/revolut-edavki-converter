@@ -847,7 +847,7 @@ Examples:
 
     # --- send-reports ---
     p_send = subparsers.add_parser("send-reports", help="Send scheduled email reports to subscribed users")
-    p_send.add_argument("--type", choices=["weekly", "monthly"], required=True,
+    p_send.add_argument("--type", choices=["weekly", "monthly", "digest"], required=True,
                         help="Report type to send")
     p_send.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_send.set_defaults(func=cmd_send_reports)
