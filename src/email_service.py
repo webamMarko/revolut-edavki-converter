@@ -55,6 +55,38 @@ def send_invite(to_email: str, invite_url: str, username: str) -> None:
     _send(to_email, subject, html_body, text_body)
 
 
+def send_password_reset(to_email: str, reset_url: str) -> None:
+    """Send a password reset email via Resend."""
+    subject = "Reset your WealthEagle password"
+    html_body = f"""
+    <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px">
+      <h2 style="font-size:1.3rem;margin-bottom:1rem">Reset your password</h2>
+      <p>We received a request to reset your WealthEagle password.</p>
+      <p>Click the button below to choose a new password. This link expires in 1 hour.</p>
+      <p style="margin:2rem 0">
+        <a href="{reset_url}"
+           style="background:#f59e0b;color:#000;padding:12px 24px;border-radius:6px;
+                  text-decoration:none;font-weight:700;display:inline-block">
+          Reset password
+        </a>
+      </p>
+      <p style="color:#666;font-size:0.85rem">
+        If you did not request this, you can safely ignore this email. Your password will not change.
+      </p>
+      <p style="color:#999;font-size:0.8rem;margin-top:2rem">
+        {reset_url}
+      </p>
+    </div>
+    """
+    text_body = (
+        f"Reset your WealthEagle password here:\n\n"
+        f"{reset_url}\n\n"
+        f"This link expires in 1 hour.\n"
+        f"If you did not request this, ignore this email.\n"
+    )
+    _send(to_email, subject, html_body, text_body)
+
+
 def _send(to_email: str, subject: str, html: str, text: str) -> None:
     payload = json.dumps({
         "from": _from_address(),

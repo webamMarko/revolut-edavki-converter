@@ -1670,6 +1670,150 @@ class UploadHandler(BaseHTTPRequestHandler):
         html = _pricing_html(username, role)
         self._html_response(html)
 
+    # ------------------------------------------------------------------
+    # Password reset
+    # ------------------------------------------------------------------
+
+    def _serve_reset_password_page(self, error: str = "", success: str = ""):
+        html = _reset_password_request_html(error, success)
+        self._html_response(html)
+
+    def _handle_reset_password_request(self):
+        from .users import create_password_reset_token
+        body = self._read_body()
+        fields = parse_qs(body.decode("utf-8", errors="replace"))
+        email = fields.get("email", [""])[0].strip().lower()
+        if not email:
+            self._serve_reset_password_page(error="Please enter your email address.")
+            return
+        token = create_password_reset_token(email)
+        if token:
+            reset_url = f"{APP_BASE_URL}/reset-password/{token}"
+            try:
+                from .email_service import send_password_reset
+                send_password_reset(email, reset_url)
+            except Exception:
+                pass
+        # Always show success (don't leak whether email exists)
+        self._serve_reset_password_page(
+            success="If that email is registered, you will receive a password reset link shortly."
+        )
+
+    def _serve_reset_password_confirm_page(self, token: str, error: str = ""):
+        from .users import get_users_db
+        import sqlite3
+        conn = get_users_db()
+        try:
+            row = conn.execute(
+                "SELECT * FROM password_reset_tokens WHERE token = ? AND used_at IS NULL",
+                (token,)
+            ).fetchone()
+        finally:
+            conn.close()
+        if not row:
+            self._html_response(_error_html("This password reset link is invalid or has already been used."))
+            return
+        from datetime import datetime, timezone
+        try:
+            from datetime import datetime, timezone
+            expires = datetime.fromisoformat(row["expires_at"])
+            if datetime.now(timezone.utc) > expires:
+                self._html_response(_error_html("This password reset link has expired. Please request a new one."))
+                return
+        except ValueError:
+            pass
+        self._html_response(_reset_password_confirm_html(token, error))
+
+    def _handle_reset_password_confirm(self, token: str):
+        from .users import consume_password_reset_token
+        body = self._read_body()
+        fields = parse_qs(body.decode("utf-8", errors="replace"))
+        password = fields.get("password", [""])[0]
+        confirm = fields.get("confirm", [""])[0]
+        if not password or len(password) < 8:
+            self._serve_reset_password_confirm_page(token, error="Password must be at least 8 characters.")
+            return
+        if password != confirm:
+            self._serve_reset_password_confirm_page(token, error="Passwords do not match.")
+            return
+        user = consume_password_reset_token(token, password)
+        if not user:
+            self._html_response(_error_html("This password reset link is invalid, expired, or already used."))
+            return
+        # Auto-login after reset
+        session_token = _create_session(user)
+        self.send_response(302)
+        self.send_header("Location", "/")
+        self.send_header(
+            "Set-Cookie",
+            f"session={session_token}; HttpOnly; SameSite=Lax; Max-Age={SESSION_TTL}; Path=/"
+        )
+        self.end_headers()
+
+    # ------------------------------------------------------------------
+    # Account settings (change password, delete account)
+    # ------------------------------------------------------------------
+
+    def _serve_account_page(self):
+        session = _get_session(self)
+        if not session:
+            self._redirect("/login")
+            return
+        from .users import get_user_by_id
+        user = get_user_by_id(session["user_id"])
+        html = _account_html(session["username"], session["role"], user)
+        self._html_response(html)
+
+    def _handle_change_password(self):
+        session = _get_session(self)
+        if not session:
+            self._json_response({"error": "Not authenticated"}, 401)
+            return
+        body = self._read_body()
+        fields = parse_qs(body.decode("utf-8", errors="replace"))
+        current_pw = fields.get("current_password", [""])[0]
+        new_pw = fields.get("new_password", [""])[0]
+        confirm_pw = fields.get("confirm_password", [""])[0]
+
+        from .users import get_user_by_id, verify_password, change_password
+        user = get_user_by_id(session["user_id"])
+        if not user:
+            self._json_response({"error": "User not found"}, 400)
+            return
+        if user.password_hash and not verify_password(user.password_hash, current_pw):
+            self._json_response({"error": "Current password is incorrect."}, 400)
+            return
+        if not new_pw or len(new_pw) < 8:
+            self._json_response({"error": "New password must be at least 8 characters."}, 400)
+            return
+        if new_pw != confirm_pw:
+            self._json_response({"error": "Passwords do not match."}, 400)
+            return
+        change_password(session["user_id"], new_pw)
+        self._json_response({"ok": True})
+
+    def _handle_delete_account(self):
+        session = _get_session(self)
+        if not session:
+            self._json_response({"error": "Not authenticated"}, 401)
+            return
+        if session["role"] == "admin":
+            self._json_response({"error": "Admin accounts cannot be self-deleted."}, 403)
+            return
+        from .users import delete_user, delete_session as _db_delete_session
+        # Delete session first
+        token = _get_session_token(self)
+        if token:
+            _db_delete_session(token)
+        delete_user(session["user_id"])
+        self.send_response(302)
+        self.send_header("Location", "/")
+        self.send_header(
+            "Set-Cookie",
+            "session=; HttpOnly; SameSite=Lax; Max-Age=0; Path=/"
+        )
+        self.end_headers()
+
     def _api_get_email_preferences(self):
         session = _get_session(self)
         if not session or session["role"] not in ("premium", "admin"):
@@ -2386,6 +2530,7 @@ def _header_html(username: str = "", role: str = "guest", active_page: str = "")
     if role in ("premium", "admin"):
         nav += _link("/import", "Import Wizard", "import")
         nav += _link("/settings", "Settings", "settings")
+        nav += _link("/account", "Account", "account")
     if role == "admin":
         nav += _link("/admin", "Admin", "admin")
 
@@ -2847,6 +2992,9 @@ def _login_html(error: str = "") -> str:
     <input id="login-password" type="password" name="password" required autocomplete="current-password">
     <button class="btn btn-primary" style="width:100%" type="submit">Log in</button>
   </form>
+  <p style="text-align:center;font-size:0.82rem;margin-top:1rem">
+    <a href="/reset-password" style="color:var(--accent)">Forgot password?</a>
+  </p>
 </div>
 {_COMMON_JS}
 </body>
@@ -2918,6 +3066,177 @@ def _shared_expired_html() -> str:
   <a class="btn btn-primary" href="/">Go home</a>
 </div>
 {_COMMON_JS}
+</body>
+</html>"""
+    )
+
+
+# ---------------------------------------------------------------------------
+# Inline HTML: password reset
+# ---------------------------------------------------------------------------
+
+def _reset_password_request_html(error: str = "", success: str = "") -> str:
+    error_html = f'<p class="auth-error">{error}</p>' if error else ""
+    success_html = f'<p style="color:var(--green);font-size:0.85rem;margin-top:0.5rem;text-align:center">{success}</p>' if success else ""
+    return (
+        _head_html("Reset Password — WealthEagle",
+                   "body{display:flex;align-items:center;justify-content:center;padding:1rem}")
+        + f"""<body>
+<div class="auth-card">
+  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>
+  <div class="auth-card logo"><a href="/" style="text-decoration:none;color:inherit">WealthEagle<span class="brand-accent">.</span></a></div>
+  <h1 style="font-size:1.1rem;font-weight:700;margin-bottom:0.25rem;text-align:center">Forgot your password?</h1>
+  <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:1rem;text-align:center">Enter your email and we'll send you a reset link.</p>
+  {error_html}{success_html}
+  <form method="POST" action="/reset-password">
+    <label>Email</label>
+    <input type="email" name="email" autocomplete="email" required placeholder="you@example.com">
+    <button class="btn btn-primary" type="submit" style="width:100%;margin-top:0.75rem">Send reset link</button>
+  </form>
+  <p style="text-align:center;font-size:0.82rem;margin-top:1rem"><a href="/login" style="color:var(--accent)">Back to log in</a></p>
+</div>
+{_COMMON_JS}
+</body>
+</html>"""
+    )
+
+
+def _reset_password_confirm_html(token: str, error: str = "") -> str:
+    error_html = f'<p class="auth-error">{error}</p>' if error else ""
+    return (
+        _head_html("Set New Password — WealthEagle",
+                   "body{display:flex;align-items:center;justify-content:center;padding:1rem}")
+        + f"""<body>
+<div class="auth-card">
+  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>
+  <div class="auth-card logo"><a href="/" style="text-decoration:none;color:inherit">WealthEagle<span class="brand-accent">.</span></a></div>
+  <h1 style="font-size:1.1rem;font-weight:700;margin-bottom:1rem;text-align:center">Set new password</h1>
+  {error_html}
+  <form method="POST" action="/reset-password/{token}">
+    <label>New password</label>
+    <input type="password" name="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters">
+    <label style="margin-top:0.5rem">Confirm new password</label>
+    <input type="password" name="confirm" autocomplete="new-password" required minlength="8" placeholder="Repeat password">
+    <button class="btn btn-primary" type="submit" style="width:100%;margin-top:0.75rem">Set password</button>
+  </form>
+</div>
+{_COMMON_JS}
+</body>
+</html>"""
+    )
+
+
+# ---------------------------------------------------------------------------
+# Inline HTML: account settings
+# ---------------------------------------------------------------------------
+
+def _account_html(username: str, role: str, user) -> str:
+    email = user.email if user else ""
+    subscription_status = (user.stripe_subscription_status or "—") if user else "—"
+    billing_portal_url = STRIPE_BILLING_PORTAL_URL
+    billing_section = (
+        f'<a class="btn btn-secondary" href="{billing_portal_url}" target="_blank" rel="noopener">Manage subscription &rarr;</a>'
+        if billing_portal_url else
+        '<p style="font-size:0.82rem;color:var(--muted)">Subscription management not configured. Contact support to manage your plan.</p>'
+    )
+
+    extra_css = (
+        ".danger-zone{border:1px solid var(--red);border-radius:8px;padding:1rem;margin-top:1.5rem}"
+        ".danger-zone h2{color:var(--red)}"
+        ".form-row{display:flex;flex-direction:column;gap:0.5rem;max-width:360px}"
+        ".msg{font-size:.82rem;margin-top:.5rem}"
+    )
+
+    return (
+        _head_html("Account — WealthEagle", extra_css, robots="noindex, nofollow")
+        + f"""<body>
+{_header_html(username, role, "settings")}
+<div class="app-main">
+  <h1 style="font-size:1.2rem;font-weight:700">Account Settings</h1>
+
+  <div class="card">
+    <h2>Account info</h2>
+    <p style="font-size:0.9rem"><strong>Username:</strong> {username}</p>
+    <p style="font-size:0.9rem"><strong>Email:</strong> {email}</p>
+    <p style="font-size:0.9rem"><strong>Plan:</strong> {role.capitalize()}</p>
+    <p style="font-size:0.9rem"><strong>Subscription status:</strong> {subscription_status}</p>
+  </div>
+
+  <div class="card" style="margin-top:1.5rem">
+    <h2>Subscription</h2>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem">
+      Manage your Premium plan — update payment method, download invoices, or cancel.
+    </p>
+    {billing_section}
+  </div>
+
+  <div class="card" style="margin-top:1.5rem">
+    <h2>Change password</h2>
+    <div class="form-row">
+      <div>
+        <label>Current password</label>
+        <input type="password" id="curPw" autocomplete="current-password" placeholder="Current password">
+      </div>
+      <div>
+        <label>New password</label>
+        <input type="password" id="newPw" autocomplete="new-password" placeholder="At least 8 characters">
+      </div>
+      <div>
+        <label>Confirm new password</label>
+        <input type="password" id="confirmPw" autocomplete="new-password" placeholder="Repeat new password">
+      </div>
+      <button class="btn btn-primary" id="changePwBtn" style="width:fit-content;margin-top:0.25rem">Update password</button>
+    </div>
+    <p id="pwMsg" class="msg"></p>
+  </div>
+
+  <div class="danger-zone">
+    <h2>Delete account</h2>
+    <p style="font-size:0.85rem;margin-bottom:1rem">
+      Permanently delete your WealthEagle account and all your portfolio data. This cannot be undone.
+    </p>
+    <p style="font-size:0.85rem;margin-bottom:1rem;color:var(--muted)">
+      We recommend <a href="/export/fifo-csv">exporting your data</a> before deleting.
+    </p>
+    <button class="btn btn-danger" id="deleteBtn">Delete my account</button>
+    <p id="deleteMsg" class="msg"></p>
+  </div>
+</div>
+
+{_COMMON_JS}
+<script>
+document.getElementById('changePwBtn').addEventListener('click', async () => {{
+  const cur = document.getElementById('curPw').value;
+  const nw = document.getElementById('newPw').value;
+  const conf = document.getElementById('confirmPw').value;
+  const msg = document.getElementById('pwMsg');
+  const resp = await fetch('/account/change-password', {{
+    method: 'POST',
+    headers: {{'Content-Type': 'application/x-www-form-urlencoded'}},
+    body: new URLSearchParams({{current_password: cur, new_password: nw, confirm_password: conf}})
+  }});
+  const data = await resp.json();
+  if (data.ok) {{
+    msg.style.color = 'var(--green)';
+    msg.textContent = 'Password updated successfully.';
+    document.getElementById('curPw').value = '';
+    document.getElementById('newPw').value = '';
+    document.getElementById('confirmPw').value = '';
+  }} else {{
+    msg.style.color = 'var(--red)';
+    msg.textContent = data.error || 'Failed to update password.';
+  }}
+}});
+
+document.getElementById('deleteBtn').addEventListener('click', async () => {{
+  if (!confirm('Are you sure? This will permanently delete your account and all your portfolio data.')) return;
+  if (!confirm('This action cannot be undone. Confirm deletion?')) return;
+  const resp = await fetch('/account/delete', {{method: 'POST'}});
+  if (resp.ok || resp.redirected) {{
+    window.location.href = '/';
+  }}
+}});
+</script>
 </body>
 </html>"""
     )
