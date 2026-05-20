@@ -461,6 +461,8 @@ function _buildDividendProjection(monthly) {
   ].map(function(row) {
     return '<div class="metric-card"><div class="label">' + row[0] + '</div><div class="value ' + row[2] + '">' + row[1] + '</div></div>';
   }).join('');
+  document.getElementById('divProjectionBandNote').textContent =
+    t('div.projection.band_note', {years: numYears, cagr: fmt(cagr * 100, 1)});
 
   // Chart: historical bars + projected line with confidence band
   var historicalYears = completeYears.slice();
@@ -521,7 +523,9 @@ function _buildDividendProjection(monthly) {
           label: t('div.projection.range'),
           data: bandHigh,
           type: 'line',
-          borderColor: 'transparent',
+          borderColor: 'rgba(99,102,241,0.35)',
+          borderDash: [2, 4],
+          borderWidth: 1,
           backgroundColor: 'rgba(99,102,241,0.08)',
           fill: '+1',
           pointRadius: 0,
@@ -558,14 +562,20 @@ function _buildDividendProjection(monthly) {
         legend: {
           display: true,
           labels: {
-            filter: function(item) { return item.text !== '_low' && item.text !== t('div.projection.range'); },
+            filter: function(item) { return item.text !== '_low'; },
             font: { size: 10 },
           },
         },
         tooltip: {
           callbacks: {
             label: function(c) {
-              if (c.dataset.label === '_low' || c.dataset.label === t('div.projection.range')) return '';
+              if (c.dataset.label === '_low') return '';
+              if (c.dataset.label === t('div.projection.range')) {
+                var lowDs = c.chart.data.datasets.find(function(d) { return d.label === '_low'; });
+                var lowVal = lowDs ? lowDs.data[c.dataIndex] : null;
+                if (lowVal == null || c.parsed.y == null) return '';
+                return t('div.projection.range_tooltip') + ': ' + fmtCcy(lowVal) + ' – ' + fmtCcy(c.parsed.y);
+              }
               return c.dataset.label + ': ' + fmtCcy(c.parsed.y);
             },
           },

@@ -213,7 +213,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "div.projection.year5": "Year 5 Est.",
         "div.projection.historical": "Historical",
         "div.projection.projected": "Projected",
-        "div.projection.range": "Range",
+        "div.projection.range": "Confidence range (×0.5 – ×1.5 CAGR)",
+        "div.projection.band_note": "The shaded band shows a conservative (×0.5 CAGR) to optimistic (×1.5 CAGR, capped at +25%/yr) scenario around the {years}-year CAGR of {cagr}%.",
+        "div.projection.range_tooltip": "Range",
 
         "div.cal.annual_projected": "Projected Annual",
         "div.cal.monthly_avg": "Projected Monthly",
@@ -669,7 +671,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "div.projection.year5": "5. leto oce.",
         "div.projection.historical": "Zgodovinski",
         "div.projection.projected": "Projicirano",
-        "div.projection.range": "Razpon",
+        "div.projection.range": "Interval zaupanja (×0,5 – ×1,5 CAGR)",
+        "div.projection.band_note": "Osenčen pas prikazuje konzervativen (×0,5 CAGR) do optimističen (×1,5 CAGR, omejeno na +25%/leto) scenarij za {years}-letno CAGR {cagr}%.",
+        "div.projection.range_tooltip": "Razpon",
 
         "div.cal.annual_projected": "Letna projekcija",
         "div.cal.monthly_avg": "Mesečna projekcija",
@@ -1123,7 +1127,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "div.projection.year5": "Jahr 5 Schätzung",
         "div.projection.historical": "Historisch",
         "div.projection.projected": "Projiziert",
-        "div.projection.range": "Spanne",
+        "div.projection.range": "Konfidenzband (×0,5 – ×1,5 CAGR)",
+        "div.projection.band_note": "Das schraffierte Band zeigt ein konservatives (×0,5 CAGR) bis optimistisches (×1,5 CAGR, begrenzt auf +25%/Jahr) Szenario für die {years}-jährige CAGR von {cagr}%.",
+        "div.projection.range_tooltip": "Bereich",
 
         # --- Tax ---
         "tax.title": "Steuer",
@@ -1537,7 +1543,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "div.projection.year5": "Estimation an 5",
         "div.projection.historical": "Historique",
         "div.projection.projected": "Projeté",
-        "div.projection.range": "Fourchette",
+        "div.projection.range": "Plage de confiance (×0,5 – ×1,5 TCAC)",
+        "div.projection.band_note": "La bande ombrée montre un scénario conservateur (×0,5 TCAC) à optimiste (×1,5 TCAC, plafonné à +25%/an) autour du TCAC de {cagr}% sur {years} ans.",
+        "div.projection.range_tooltip": "Plage",
 
         # --- Tax ---
         "tax.title": "Impôts",
@@ -1951,7 +1959,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "div.projection.year5": "Stima anno 5",
         "div.projection.historical": "Storico",
         "div.projection.projected": "Proiettato",
-        "div.projection.range": "Intervallo",
+        "div.projection.range": "Intervallo di confidenza (×0,5 – ×1,5 CAGR)",
+        "div.projection.band_note": "La banda ombreggiata mostra uno scenario conservativo (×0,5 CAGR) fino a ottimistico (×1,5 CAGR, limitato a +25%/anno) attorno al CAGR di {cagr}% su {years} anni.",
+        "div.projection.range_tooltip": "Intervallo",
 
         # --- Tax ---
         "tax.title": "Tasse",
@@ -2365,7 +2375,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "div.projection.year5": "Estimación año 5",
         "div.projection.historical": "Histórico",
         "div.projection.projected": "Proyectado",
-        "div.projection.range": "Rango",
+        "div.projection.range": "Rango de confianza (×0,5 – ×1,5 CAGR)",
+        "div.projection.band_note": "La banda sombreada muestra un escenario conservador (×0,5 CAGR) a optimista (×1,5 CAGR, limitado a +25%/año) en torno al CAGR de {cagr}% durante {years} años.",
+        "div.projection.range_tooltip": "Rango",
 
         # --- Tax ---
         "tax.title": "Impuestos",
@@ -2779,7 +2791,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "div.projection.year5": "Jaar 5 schatting",
         "div.projection.historical": "Historisch",
         "div.projection.projected": "Geprojecteerd",
-        "div.projection.range": "Bereik",
+        "div.projection.range": "Betrouwbaarheidsband (×0,5 – ×1,5 CAGR)",
+        "div.projection.band_note": "De gearceerde band toont een conservatief (×0,5 CAGR) tot optimistisch (×1,5 CAGR, max. +25%/jaar) scenario rondom de {years}-jaars CAGR van {cagr}%.",
+        "div.projection.range_tooltip": "Bereik",
 
         # --- Tax ---
         "tax.title": "Belasting",
