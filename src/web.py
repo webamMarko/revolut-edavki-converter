@@ -30,14 +30,12 @@ def _default_data_dir() -> str:
 DATA_DIR = Path(os.environ.get("REVOLUT_DATA_DIR", _default_data_dir()))
 DEMO_DB  = DATA_DIR / "_demo" / "portfolio.db"
 
-APP_BASE_URL           = os.environ.get("APP_BASE_URL", "http://localhost:8080")
-STRIPE_WEBHOOK_SECRET  = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
-STRIPE_CHECKOUT_URL    = os.environ.get("STRIPE_CHECKOUT_URL", "")
+APP_BASE_URL                = os.environ.get("APP_BASE_URL", "http://localhost:8080")
+STRIPE_WEBHOOK_SECRET       = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_CHECKOUT_URL         = os.environ.get("STRIPE_CHECKOUT_URL", "")
+STRIPE_BILLING_PORTAL_URL   = os.environ.get("STRIPE_BILLING_PORTAL_URL", "")
 
-SESSION_TTL = 86400 * 7  # 7 days
-
-# In-process session store: token -> {user_id, username, role, expires}
-_SESSIONS: dict[str, dict] = {}
+SESSION_TTL = 86400 * 7  # 7 days (also used for cookie Max-Age)
 
 # Import wizard staging: token -> {path, dir, filename, expires}
 _IMPORT_STAGING: dict[str, dict] = {}
@@ -155,19 +153,14 @@ def _portfolio_conn(user: dict | None):
 
 
 def _create_session(user) -> str:
-    """Create a session token for a User object and store it."""
-    token = secrets.token_urlsafe(32)
-    _SESSIONS[token] = {
-        "user_id": user.id,
-        "username": user.username,
-        "role": user.role,
-        "expires": time.time() + SESSION_TTL,
-    }
-    return token
+    """Create a persistent DB-backed session token for a User object."""
+    from .users import create_session as _db_create_session
+    return _db_create_session(user)
 
 
 def _get_session(handler) -> dict | None:
-    """Return session dict or None."""
+    """Return session dict {user_id, username, role} or None."""
+    from .users import get_session as _db_get_session
     cookie_header = handler.headers.get("Cookie", "")
     if not cookie_header:
         return None
@@ -176,14 +169,7 @@ def _get_session(handler) -> dict | None:
     morsel = c.get("session")
     if not morsel:
         return None
-    token = morsel.value
-    session = _SESSIONS.get(token)
-    if not session:
-        return None
-    if session["expires"] < time.time():
-        del _SESSIONS[token]
-        return None
-    return session
+    return _db_get_session(morsel.value)
 
 
 # ---------------------------------------------------------------------------
@@ -267,6 +253,13 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._serve_settings_page()
         elif path == "/pricing":
             self._serve_pricing_page()
+        elif path == "/reset-password":
+            self._serve_reset_password_page()
+        elif path.startswith("/reset-password/"):
+            token = path[len("/reset-password/"):]
+            self._serve_reset_password_confirm_page(token)
+        elif path == "/account":
+            self._serve_account_page()
         elif path == "/robots.txt":
             self._serve_robots_txt()
         elif path == "/sitemap.xml":
@@ -345,6 +338,15 @@ class UploadHandler(BaseHTTPRequestHandler):
                 self._handle_admin_set_role(parts[3])
         elif path == "/webhook/stripe":
             self._handle_stripe_webhook()
+        elif path == "/reset-password":
+            self._handle_reset_password_request()
+        elif path.startswith("/reset-password/"):
+            token = path[len("/reset-password/"):]
+            self._handle_reset_password_confirm(token)
+        elif path == "/account/change-password":
+            self._handle_change_password()
+        elif path == "/account/delete":
+            self._handle_delete_account()
         elif path == "/api/notes":
             self._api_create_note()
         elif path == "/import/preview":
@@ -431,12 +433,13 @@ class UploadHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _handle_logout(self):
+        from .users import delete_session as _db_delete_session
         cookie_header = self.headers.get("Cookie", "")
         c = SimpleCookie()
         c.load(cookie_header)
         morsel = c.get("session")
-        if morsel and morsel.value in _SESSIONS:
-            del _SESSIONS[morsel.value]
+        if morsel:
+            _db_delete_session(morsel.value)
         self.send_response(302)
         self.send_header("Location", "/")
         self.send_header(
@@ -1185,8 +1188,11 @@ class UploadHandler(BaseHTTPRequestHandler):
             self.send_error(400, "Invalid JSON")
             return
 
-        if event.get("type") == "checkout.session.completed":
-            obj = event.get("data", {}).get("object", {})
+        event_type = event.get("type", "")
+        obj = event.get("data", {}).get("object", {})
+
+        if event_type == "checkout.session.completed":
+            # New subscription purchase → create premium user + send invite
             email = obj.get("customer_details", {}).get("email") or obj.get("customer_email", "")
             stripe_customer_id = obj.get("customer", "")
             if email:
@@ -1199,6 +1205,31 @@ class UploadHandler(BaseHTTPRequestHandler):
                         send_invite(email, invite_url, user.username)
                     except Exception:
                         pass
+
+        elif event_type in (
+            "customer.subscription.updated",
+            "customer.subscription.deleted",
+        ):
+            # Subscription state change → sync role to subscription status
+            stripe_customer_id = obj.get("customer", "")
+            status = obj.get("status", "canceled")
+            if stripe_customer_id:
+                from .users import update_stripe_subscription_status
+                update_stripe_subscription_status(stripe_customer_id, status)
+
+        elif event_type == "invoice.payment_failed":
+            # Payment failure → downgrade to guest immediately
+            stripe_customer_id = obj.get("customer", "")
+            if stripe_customer_id:
+                from .users import update_stripe_subscription_status
+                update_stripe_subscription_status(stripe_customer_id, "past_due")
+
+        elif event_type == "invoice.payment_succeeded":
+            # Payment recovered → re-activate premium
+            stripe_customer_id = obj.get("customer", "")
+            if stripe_customer_id:
+                from .users import update_stripe_subscription_status
+                update_stripe_subscription_status(stripe_customer_id, "active")
 
         self._json_response({"received": True})
 
@@ -2367,7 +2398,7 @@ def _header_html(username: str = "", role: str = "guest", active_page: str = "")
 
     return (
         '<header class="app-header">\n'
-        f'  <a class="brand" href="/">Portfolio<span class="brand-accent">.</span></a>\n'
+        f'  <a class="brand" href="/">WealthEagle<span class="brand-accent">.</span></a>\n'
         f'  <nav class="app-nav">{nav}</nav>\n'
         f'  <div class="header-right">{right}</div>\n'
         '</header>\n'
@@ -2807,7 +2838,7 @@ def _login_html(error: str = "") -> str:
         + f"""<body>
 <div class="auth-card">
   <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme"><span class="theme-icon"></span></button>
-  <div class="auth-card logo"><a href="/" style="text-decoration:none;color:inherit">Portfolio<span class="brand-accent">.</span></a></div>
+  <div class="auth-card logo"><a href="/" style="text-decoration:none;color:inherit">WealthEagle<span class="brand-accent">.</span></a></div>
   {error_block}
   <form method="POST" action="/login">
     <label for="login-username">Username or email</label>
@@ -2830,7 +2861,7 @@ def _login_html(error: str = "") -> str:
 def _invite_html(token: str, email: str, error: str = "") -> str:
     error_block = f'<p class="auth-error">{error}</p>' if error else ""
     return (
-        _head_html("Set Password — Portfolio",
+        _head_html("Set Password — WealthEagle",
                     "body{display:flex;align-items:center;justify-content:center;padding:1rem}"
                     ".auth-card{max-width:400px}")
         + f"""<body>
@@ -2859,7 +2890,7 @@ def _invite_html(token: str, email: str, error: str = "") -> str:
 
 def _error_html(message: str) -> str:
     return (
-        _head_html("Error — Portfolio",
+        _head_html("Error — WealthEagle",
                     "body{display:flex;align-items:center;justify-content:center;padding:1rem}")
         + f"""<body>
 <div class="auth-card" style="max-width:440px;text-align:center">
@@ -2876,7 +2907,7 @@ def _error_html(message: str) -> str:
 
 def _shared_expired_html() -> str:
     return (
-        _head_html("Link Expired — Portfolio",
+        _head_html("Link Expired — WealthEagle",
                     "body{display:flex;align-items:center;justify-content:center;padding:1rem}")
         + f"""<body>
 <div class="auth-card" style="max-width:440px;text-align:center">
@@ -2925,7 +2956,7 @@ def _admin_html(users, current_username: str) -> str:
     )
 
     return (
-        _head_html("Admin — Portfolio", extra_css, robots="noindex, nofollow")
+        _head_html("Admin — WealthEagle", extra_css, robots="noindex, nofollow")
         + f"""<body>
 {_header_html(current_username, "admin", "admin")}
 <div class="app-main">
@@ -3001,6 +3032,7 @@ document.querySelectorAll('.role-select').forEach(sel => {{
 
 def _settings_html(username: str, role: str) -> str:
     """Email report settings page."""
+    billing_portal_url = STRIPE_BILLING_PORTAL_URL
     extra_css = (
         ".toggle-row{display:flex;align-items:center;justify-content:space-between;padding:0.75rem 0;"
         "border-bottom:1px solid var(--border)}"
@@ -3020,7 +3052,7 @@ def _settings_html(username: str, role: str) -> str:
     )
 
     return (
-        _head_html("Settings — Portfolio", extra_css, robots="noindex, nofollow")
+        _head_html("Settings — WealthEagle", extra_css, robots="noindex, nofollow")
         + f"""<body>
 {_header_html(username, role, "settings")}
 <div class="app-main">
@@ -3148,6 +3180,14 @@ def _settings_html(username: str, role: str) -> str:
       <button class="btn btn-primary" id="createShareBtn">Create share link</button>
     </div>
     <p id="shareMsg" class="settings-footer"></p>
+  </div>
+
+  <div class="card" style="margin-top:1.5rem">
+    <h2>Subscription</h2>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem">
+      Manage your Premium subscription — update payment method, download invoices, or cancel.
+    </p>
+    {'<a class="btn btn-secondary" href="' + billing_portal_url + '" target="_blank" rel="noopener">Manage subscription &rarr;</a>' if billing_portal_url else '<p style="font-size:0.82rem;color:var(--muted)">Subscription management not configured. Contact support to manage your plan.</p>'}
   </div>
 </div>
 
@@ -3781,7 +3821,7 @@ def _import_wizard_html() -> str:
 def _import_wizard_html_with_user(username: str = "", role: str = "premium") -> str:
     extra_css = ".app-main{max-width:780px}"
     return (
-        _head_html("Import Wizard — Portfolio", extra_css, robots="noindex, nofollow")
+        _head_html("Import Wizard — WealthEagle", extra_css, robots="noindex, nofollow")
         + _header_html(username, role, "import")
         + _COMMON_JS
         + r"""

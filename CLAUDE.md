@@ -25,8 +25,11 @@ python -m src.cli tax --year 2025 [--scope stock|cfd|crypto|savings|all] [--incl
 python -m src.cli report [--scope stock|cfd|crypto|savings|all] [--output file.html]
 python -m src.cli status
 
-# Run tests (not yet implemented)
-python -m pytest tests/
+# Run Playwright E2E tests (requires a running server on port 8080)
+pip install -r requirements-test.txt
+playwright install chromium
+python -m pytest tests/e2e/ -v               # all tests (desktop + mobile)
+python -m pytest tests/e2e/test_desktop_auth.py -v  # auth flow only
 ```
 
 ## Database

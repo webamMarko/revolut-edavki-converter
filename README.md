@@ -188,12 +188,34 @@ revolut-edavki-converter/
 ├── scripts/
 │   ├── deploy.sh           # Remote deployment script
 │   └── hash_password.py    # CLI helper for password hashing and user bootstrap
+├── tests/
+│   └── e2e/                # Playwright E2E tests (desktop + mobile flows)
 ├── Dockerfile
 ├── docker-compose.yml
-├── .env.example
-├── examples/               # Sample CSV files
+├── .env.example            # Copy to .env and fill in secrets
 ├── requirements.txt
+├── requirements-test.txt   # Playwright test dependencies
 └── README.md
+```
+
+## Testing
+
+The project has Playwright E2E tests covering desktop and mobile flows (auth, import, report, admin, notes).
+
+```bash
+# Install test dependencies
+pip install -r requirements-test.txt
+playwright install chromium
+
+# Start the server locally first (on port 8080)
+python -m src.cli serve --port 8080
+
+# Run all tests (in a separate terminal)
+python -m pytest tests/e2e/ -v
+
+# Run specific suites
+python -m pytest tests/e2e/test_desktop_auth.py -v
+python -m pytest tests/e2e/test_mobile_report.py -v
 ```
 
 ## Tax Computation Details

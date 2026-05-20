@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS users (
     invite_token       TEXT UNIQUE,
     invite_expires     TEXT,
     stripe_customer_id TEXT UNIQUE,
+    stripe_subscription_status TEXT,
     created_at         TEXT NOT NULL DEFAULT (datetime('now')),
     last_login         TEXT
 );
@@ -84,7 +85,30 @@ CREATE TABLE IF NOT EXISTS magic_login_tokens (
     used_at     TEXT,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token      TEXT PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    username   TEXT NOT NULL,
+    role       TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token      TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    used_at    TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
+
+# Migration: add columns that may not exist in older DBs
+_MIGRATIONS = [
+    "ALTER TABLE users ADD COLUMN stripe_subscription_status TEXT",
+]
 
 
 def get_users_db() -> sqlite3.Connection:
@@ -97,6 +121,13 @@ def get_users_db() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.executescript(_SCHEMA_SQL)
     conn.commit()
+    # Apply additive migrations (ignore errors for already-existing columns)
+    for sql in _MIGRATIONS:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
     return conn
 
 
@@ -618,6 +649,258 @@ def consume_magic_token(
         )
         conn.commit()
         return _row_to_user(user_row)
+    finally:
+        if close:
+            conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Persistent sessions (SQLite-backed, survive restarts)
+# ---------------------------------------------------------------------------
+
+SESSION_TTL_SECONDS = 86400 * 7  # 7 days
+
+
+def create_session(
+    user,
+    conn: sqlite3.Connection | None = None,
+) -> str:
+    """Create a persistent session token for a User. Returns the raw token."""
+    import time
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        token = secrets.token_urlsafe(32)
+        expires_at = (datetime.now(timezone.utc) + timedelta(seconds=SESSION_TTL_SECONDS)).isoformat()
+        conn.execute(
+            "INSERT INTO sessions (token, user_id, username, role, expires_at) VALUES (?, ?, ?, ?, ?)",
+            (token, user.id, user.username, user.role, expires_at),
+        )
+        conn.commit()
+        return token
+    finally:
+        if close:
+            conn.close()
+
+
+def get_session(
+    token: str,
+    conn: sqlite3.Connection | None = None,
+) -> dict | None:
+    """Return session dict {user_id, username, role} or None if missing/expired."""
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        row = conn.execute(
+            "SELECT s.*, u.role AS current_role FROM sessions s "
+            "JOIN users u ON u.id = s.user_id "
+            "WHERE s.token = ?",
+            (token,),
+        ).fetchone()
+        if not row:
+            return None
+        try:
+            expires = datetime.fromisoformat(row["expires_at"])
+            if datetime.now(timezone.utc) > expires:
+                conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+                conn.commit()
+                return None
+        except ValueError:
+            return None
+        # Always return the *current* role from users table (picks up role changes)
+        return {
+            "user_id": row["user_id"],
+            "username": row["username"],
+            "role": row["current_role"],
+        }
+    finally:
+        if close:
+            conn.close()
+
+
+def delete_session(
+    token: str,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Delete a session (logout)."""
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        conn.commit()
+    finally:
+        if close:
+            conn.close()
+
+
+def purge_expired_sessions(conn: sqlite3.Connection | None = None) -> int:
+    """Delete all expired sessions. Returns number of rows deleted."""
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        cursor = conn.execute(
+            "DELETE FROM sessions WHERE expires_at < datetime('now')"
+        )
+        conn.commit()
+        return cursor.rowcount
+    finally:
+        if close:
+            conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Password reset tokens
+# ---------------------------------------------------------------------------
+
+RESET_TOKEN_TTL_HOURS = 1  # Short-lived for security
+
+
+def create_password_reset_token(
+    email: str,
+    conn: sqlite3.Connection | None = None,
+) -> str | None:
+    """Create a password reset token for the given email. Returns raw token or None if user not found."""
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        user_row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        if not user_row:
+            return None
+        raw_token = secrets.token_urlsafe(32)
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=RESET_TOKEN_TTL_HOURS)).isoformat()
+        conn.execute(
+            "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
+            (user_row["id"], raw_token, expires_at),
+        )
+        conn.commit()
+        return raw_token
+    finally:
+        if close:
+            conn.close()
+
+
+def consume_password_reset_token(
+    token: str,
+    new_password: str,
+    conn: sqlite3.Connection | None = None,
+) -> User | None:
+    """Validate reset token, set new password. Returns User on success, None otherwise."""
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM password_reset_tokens WHERE token = ?", (token,)
+        ).fetchone()
+        if not row:
+            return None
+        if row["used_at"]:
+            return None
+        try:
+            expires = datetime.fromisoformat(row["expires_at"])
+            if datetime.now(timezone.utc) > expires:
+                return None
+        except ValueError:
+            return None
+        pw_hash = hash_password(new_password)
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (pw_hash, row["user_id"]),
+        )
+        conn.execute(
+            "UPDATE password_reset_tokens SET used_at = datetime('now') WHERE id = ?",
+            (row["id"],),
+        )
+        conn.commit()
+        user_row = conn.execute("SELECT * FROM users WHERE id = ?", (row["user_id"],)).fetchone()
+        return _row_to_user(user_row) if user_row else None
+    finally:
+        if close:
+            conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Stripe subscription lifecycle helpers
+# ---------------------------------------------------------------------------
+
+def update_stripe_subscription_status(
+    stripe_customer_id: str,
+    status: str,
+    conn: sqlite3.Connection | None = None,
+) -> User | None:
+    """Update stripe_subscription_status and adjust role based on subscription state.
+
+    Active statuses ('active', 'trialing') → premium
+    Inactive statuses ('canceled', 'unpaid', 'past_due') → guest
+    Returns updated User or None if customer not found.
+    """
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM users WHERE stripe_customer_id = ?", (stripe_customer_id,)
+        ).fetchone()
+        if not row:
+            return None
+
+        active_statuses = {"active", "trialing"}
+        new_role = "premium" if status in active_statuses else "guest"
+
+        conn.execute(
+            "UPDATE users SET stripe_subscription_status = ?, role = ? WHERE stripe_customer_id = ?",
+            (status, new_role, stripe_customer_id),
+        )
+        conn.commit()
+        updated = conn.execute(
+            "SELECT * FROM users WHERE stripe_customer_id = ?", (stripe_customer_id,)
+        ).fetchone()
+        return _row_to_user(updated) if updated else None
+    finally:
+        if close:
+            conn.close()
+
+
+def change_password(
+    user_id: int,
+    new_password: str,
+    conn: sqlite3.Connection | None = None,
+) -> bool:
+    """Set a new password for the user. Returns True on success."""
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        pw_hash = hash_password(new_password)
+        cursor = conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (pw_hash, user_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        if close:
+            conn.close()
+
+
+def delete_user(
+    user_id: int,
+    conn: sqlite3.Connection | None = None,
+) -> bool:
+    """Delete user account and all associated data. Returns True on success."""
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        # CASCADE deletes sessions, shares, magic_login_tokens, password_reset_tokens
+        cursor = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+        return cursor.rowcount > 0
     finally:
         if close:
             conn.close()
