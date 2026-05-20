@@ -3,11 +3,31 @@ let _dividendChart = null;
 
 function updateDividends() {
   const div = D.dividends;
-  if (!div || !div.by_ticker || div.by_ticker.length === 0) {
+  const calTickers = D.dividend_calendar && D.dividend_calendar.by_ticker;
+  const hasIncome = div && div.by_ticker && div.by_ticker.length > 0;
+  const hasCalTickers = calTickers && calTickers.length > 0;
+
+  if (!hasIncome && !hasCalTickers) {
     document.getElementById('navDividends').style.display = 'none';
     return;
   }
   document.getElementById('navDividends').style.display = '';
+
+  if (!hasIncome && hasCalTickers) {
+    const tickerList = calTickers.map(function(tk) {
+      return typeof tk === 'string' ? tk : tk.ticker;
+    }).join(', ');
+    document.getElementById('dividendCards').innerHTML =
+      '<div class="empty-state" style="grid-column:1/-1;padding:2rem 1rem;text-align:center;color:var(--muted)">'
+      + '<div style="font-size:1.5rem;margin-bottom:0.5rem">\uD83D\uDCED</div>'
+      + '<p style="margin:0 0 0.5rem;font-weight:600;color:var(--text)">Dividend income will appear here once your imported files include dividend transactions.</p>'
+      + '<p style="margin:0;font-size:0.85rem">Your holdings include dividend-paying tickers: <strong>' + tickerList + '</strong></p>'
+      + '</div>';
+    ['dividendChartSection','dividendGrowthSection','dividendProjectionSection','dividendTableSection']
+      .forEach(function(id) { document.getElementById(id).style.display = 'none'; });
+    _buildDividendCalendar();
+    return;
+  }
 
   // Withholding tax reclaim alert badge
   (function() {
