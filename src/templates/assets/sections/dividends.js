@@ -9,6 +9,37 @@ function updateDividends() {
   }
   document.getElementById('navDividends').style.display = '';
 
+  // Withholding tax reclaim alert badge
+  (function() {
+    var badge = document.getElementById('divReclaimBadge');
+    if (!badge) return;
+    var dtby = D.dividend_tax || {};
+    var years = Object.keys(dtby).map(Number).sort(function(a, b) { return a - b; });
+    if (!years.length) { badge.style.display = 'none'; return; }
+    var yr = years[years.length - 1];
+    var data = dtby[yr];
+    if (!data || !(data.total_reclaimable_eur > 0)) { badge.style.display = 'none'; return; }
+
+    // Find country with highest reclaimable amount
+    var topCountry = '';
+    if (data.by_country) {
+      var entries = Object.entries(data.by_country).filter(function(e) { return e[1].reclaimable_eur > 0.01; });
+      entries.sort(function(a, b) { return b[1].reclaimable_eur - a[1].reclaimable_eur; });
+      if (entries.length > 0) topCountry = entries[0][1].country_name || entries[0][0];
+    }
+
+    var amount = data.total_reclaimable_eur;
+    var severity = amount >= 50 ? 'red' : 'amber';
+    var countryText = topCountry ? ' from ' + topCountry : '';
+    badge.innerHTML = '<span style="margin-right:0.4rem">⚠️</span>'
+      + '<span>€' + amount.toLocaleString(D.locale || 'en', {minimumFractionDigits: 2, maximumFractionDigits: 2})
+      + ' in withholding tax may be reclaimable' + countryText + '.</span>'
+      + ' <a href="#dividendTaxSection" onclick="document.getElementById(\'dividendTaxSection\').scrollIntoView({behavior:\'smooth\'});return false;"'
+      + ' style="color:inherit;font-weight:600;text-decoration:underline">See reclaim guide →</a>';
+    badge.className = 'reclaim-alert-badge reclaim-alert-' + severity;
+    badge.style.display = '';
+  })();
+
   // Summary cards
   const monthly = div.by_month || [];
   const last12 = monthly.slice(-12);
@@ -46,21 +77,24 @@ function updateDividends() {
     + '<th>' + t('div.total') + '</th>'
     + '<th>' + t('div.ttm_income') + '</th>'
     + '<th>' + t('div.ttm_yield_col') + '</th>'
+    + '<th title="Yield on your original purchase cost, ignoring price changes.">' + t('div.yoc_col') + '</th>'
     + '<th>' + t('div.payments') + '</th>'
     + '<th>' + t('div.share') + '</th>'
     + '</tr></thead><tbody>'
     + div.by_ticker.map(t => {
       const share = div.total_eur > 0 ? (t.total_eur / div.total_eur * 100) : 0;
       const ttm = (div.ttm_by_ticker || {})[t.ticker] || 0;
-      // Find position market value for yield calc
       const pos = D.positions.find(p => p.ticker === t.ticker);
       const mv = pos ? pos.market_value_eur : 0;
       const yieldPct = mv > 0 && ttm > 0 ? (ttm / mv * 100) : null;
+      const costBasis = pos ? pos.cost_basis_eur : 0;
+      const yoc = costBasis > 0 && ttm > 0 ? (ttm / costBasis * 100) : null;
       return `<tr>`
         + `<td><strong>${t.ticker}</strong></td>`
         + `<td>${fmtEur(t.total_eur)}</td>`
         + `<td>${fmtEur(ttm)}</td>`
         + `<td>${yieldPct != null ? fmt(yieldPct, 2) + '%' : '—'}</td>`
+        + `<td>${yoc != null ? fmt(yoc, 2) + '%' : '—'}</td>`
         + `<td>${t.count}</td>`
         + `<td>${fmt(share, 1)}%</td>`
         + `</tr>`;

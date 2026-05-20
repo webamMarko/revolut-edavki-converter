@@ -2225,6 +2225,16 @@ body {
 .edavki-filed-btn:hover { border-color: rgba(99,102,241,0.7); }
 .edavki-year-select { padding: 0.35rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--card-bg); color: var(--text); font-size: 0.78rem; cursor: pointer; }
 
+/* ---- Dividend Countdown Nudge Banner ---- */
+.dividend-nudge-banner { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: var(--radius); border: 1px solid rgba(16,185,129,0.35); background: linear-gradient(135deg, rgba(16,185,129,0.07), rgba(16,185,129,0.02)); font-size: 0.85rem; }
+.dividend-nudge-icon { font-size: 1.2rem; flex-shrink: 0; }
+.dividend-nudge-text { flex: 1; line-height: 1.4; }
+.dividend-nudge-text strong { color: var(--text); }
+.dividend-nudge-action { padding: 0.35rem 0.8rem; border-radius: var(--radius-sm); font-size: 0.78rem; font-weight: 600; border: none; cursor: pointer; white-space: nowrap; background: rgba(16,185,129,0.85); color: #fff; }
+.dividend-nudge-action:hover { background: rgba(16,185,129,1); }
+.dividend-nudge-dismiss { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0.2rem 0.4rem; font-size: 1rem; line-height: 1; flex-shrink: 0; border-radius: var(--radius-sm); }
+.dividend-nudge-dismiss:hover { color: var(--text); }
+
 /* ---- Portfolio Health Score ---- */
 .health-score-card { padding: 1.25rem 1.5rem; }
 .health-score-header { margin-bottom: 1.25rem; }
