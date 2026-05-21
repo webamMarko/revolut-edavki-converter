@@ -230,6 +230,25 @@ After reconciling answers:
   3. Ensure Acceptance Criteria Verification is complete
   4. Ensure TDD Task List covers all implementation work
   5. Inform the user the spec is complete
+  6. Proceed to Step 6 (Create Implementation Issue)
+
+### Step 6: Create Implementation Issue
+
+After the spec is complete (confidence >= 90%), create a Paperclip issue for the Full Stack Dev to implement it. Use the `paperclip` skill to create the issue with:
+
+- **Title:** `Implement <epic-name> spec`
+- **Assignee:** FullStackDev agent (`ce166768-111c-48ba-828c-008a9227ceaf`)
+- **Parent:** the current spec-writing issue (if running inside a Paperclip heartbeat)
+- **Project/Goal:** inherited from the parent issue
+- **Status:** `todo`
+- **Priority:** same as the spec issue
+- **Description** should include:
+  - Pointers to the PRD (`specs/<epic-name>-prd.md` or `specs/<epic-name>.md`) and spec (`specs/<epic-name>-spec.md`)
+  - A brief summary of what needs to be implemented
+  - The TDD task list from the spec
+  - The acceptance criteria from the spec
+
+If not running inside a Paperclip heartbeat (no `PAPERCLIP_API_URL` env var), skip this step and inform the user that they should create the implementation issue manually.
 
 ## Confidence Scoring Guide
 

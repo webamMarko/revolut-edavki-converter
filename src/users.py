@@ -41,6 +41,7 @@ class User:
     stripe_customer_id: str | None
     created_at: str
     last_login: str | None
+    onboarding_completed: int     # 0=not completed, 1=completed
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +109,7 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 # Migration: add columns that may not exist in older DBs
 _MIGRATIONS = [
     "ALTER TABLE users ADD COLUMN stripe_subscription_status TEXT",
+    "ALTER TABLE users ADD COLUMN onboarding_completed INTEGER NOT NULL DEFAULT 0",
 ]
 
 
@@ -136,6 +138,11 @@ def _users_db_path() -> Path:
     return _DATA_DIR / "_system" / "users.db"
 
 
+def _user_db_path(username: str) -> Path:
+    """Return path to a user's portfolio.db."""
+    return _DATA_DIR / username / "portfolio.db"
+
+
 def _row_to_user(row: sqlite3.Row) -> User:
     return User(
         id=row["id"],
@@ -148,6 +155,7 @@ def _row_to_user(row: sqlite3.Row) -> User:
         stripe_customer_id=row["stripe_customer_id"],
         created_at=row["created_at"],
         last_login=row["last_login"],
+        onboarding_completed=row.get("onboarding_completed", 0),
     )
 
 
@@ -899,6 +907,93 @@ def delete_user(
     try:
         # CASCADE deletes sessions, shares, magic_login_tokens, password_reset_tokens
         cursor = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        if close:
+            conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Onboarding state management
+# ---------------------------------------------------------------------------
+
+def get_onboarding_status(
+    user_id: int,
+    conn: sqlite3.Connection | None = None,
+) -> dict:
+    """Get onboarding status for a user.
+
+    Returns dict with:
+    - completed: bool — whether onboarding wizard has been completed
+    - hasData: bool — whether user has any portfolio data
+    - hasSynced: bool — whether user has price data
+    """
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        row = conn.execute(
+            "SELECT onboarding_completed FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if not row:
+            return {"completed": False, "hasData": False, "hasSynced": False}
+
+        completed = bool(row["onboarding_completed"])
+
+        # Check if user has portfolio data
+        user = get_user_by_id(user_id, conn=conn)
+        if not user:
+            return {"completed": completed, "hasData": False, "hasSynced": False}
+
+        from .db import get_connection
+        portfolio_db = _user_db_path(user.username)
+
+        has_data = False
+        has_synced = False
+
+        if portfolio_db.exists():
+            try:
+                portfolio_conn = get_connection(db_path=portfolio_db)
+                # Check for transactions
+                tx_count = portfolio_conn.execute(
+                    "SELECT COUNT(*) as c FROM transactions"
+                ).fetchone()
+                has_data = tx_count["c"] > 0 if tx_count else False
+
+                # Check for price data
+                if has_data:
+                    price_count = portfolio_conn.execute(
+                        "SELECT COUNT(*) as c FROM prices"
+                    ).fetchone()
+                    has_synced = price_count["c"] > 0 if price_count else False
+
+                portfolio_conn.close()
+            except Exception:
+                pass
+
+        return {
+            "completed": completed,
+            "hasData": has_data,
+            "hasSynced": has_synced,
+        }
+    finally:
+        if close:
+            conn.close()
+
+
+def set_onboarding_completed(
+    user_id: int,
+    conn: sqlite3.Connection | None = None,
+) -> bool:
+    """Mark onboarding as completed for a user. Returns True on success."""
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        cursor = conn.execute(
+            "UPDATE users SET onboarding_completed = 1 WHERE id = ?", (user_id,)
+        )
         conn.commit()
         return cursor.rowcount > 0
     finally:
