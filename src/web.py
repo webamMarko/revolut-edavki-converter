@@ -37,8 +37,18 @@ STRIPE_BILLING_PORTAL_URL   = os.environ.get("STRIPE_BILLING_PORTAL_URL", "")
 
 SESSION_TTL = 86400 * 7  # 7 days (also used for cookie Max-Age)
 
+FORCE_HTTPS = os.environ.get("FORCE_HTTPS", "").lower() in ("true", "1", "yes")
+
+# Rate limiting: sliding window per IP for login attempts
+RATE_LIMIT_MAX_ATTEMPTS = 5
+RATE_LIMIT_WINDOW_SECONDS = 900  # 15 minutes
+_login_attempts: dict[str, list[float]] = {}  # ip -> [timestamps]
+
 # Import wizard staging: token -> {path, dir, filename, expires}
 _IMPORT_STAGING: dict[str, dict] = {}
+
+# Demo view toggle: session_token -> bool (True = viewing demo data)
+_DEMO_VIEW: dict[str, bool] = {}
 
 
 def _detect_asset_class_from_headers(headers: list) -> str | None:
@@ -99,6 +109,29 @@ def _get_session_token(handler) -> str | None:
     return morsel.value if morsel else None
 
 
+def _get_client_ip(handler) -> str:
+    forwarded = handler.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return handler.client_address[0] if handler.client_address else "unknown"
+
+
+def _check_rate_limit(ip: str) -> int | None:
+    """Return seconds until retry is allowed, or None if not rate-limited."""
+    now = time.time()
+    attempts = _login_attempts.get(ip, [])
+    attempts = [t for t in attempts if now - t < RATE_LIMIT_WINDOW_SECONDS]
+    _login_attempts[ip] = attempts
+    if len(attempts) >= RATE_LIMIT_MAX_ATTEMPTS:
+        oldest = attempts[0]
+        return int(oldest + RATE_LIMIT_WINDOW_SECONDS - now) + 1
+    return None
+
+
+def _record_login_attempt(ip: str) -> None:
+    _login_attempts.setdefault(ip, []).append(time.time())
+
+
 # ---------------------------------------------------------------------------
 # Multipart parser (unchanged from original)
 # ---------------------------------------------------------------------------
@@ -144,9 +177,18 @@ def _user_db_path(username: str) -> Path:
     return DATA_DIR / username / "portfolio.db"
 
 
-def _portfolio_conn(user: dict | None):
-    """Return a DB connection for the given session user (or demo DB if no user)."""
+def _portfolio_conn(user: dict | None, session_token: str | None = None):
+    """Return a DB connection for the given session user (or demo DB if no user).
+
+    If session_token is provided and demo_view is enabled for that session,
+    returns demo DB even for premium/admin users.
+    """
     from .db import get_connection
+
+    # Check if this session has demo view enabled
+    if session_token and _DEMO_VIEW.get(session_token, False):
+        return get_connection(db_path=DEMO_DB)
+
     if user and user["role"] in ("premium", "admin"):
         return get_connection(db_path=_user_db_path(user["username"]))
     return get_connection(db_path=DEMO_DB)
@@ -170,6 +212,13 @@ def _get_session(handler) -> dict | None:
     if not morsel:
         return None
     return _db_get_session(morsel.value)
+
+
+def _get_portfolio_conn(handler):
+    """Get portfolio DB connection respecting session and demo toggle."""
+    session = _get_session(handler)
+    session_token = _get_session_token(handler)
+    return _portfolio_conn(session, session_token)
 
 
 # ---------------------------------------------------------------------------
@@ -202,12 +251,40 @@ class UploadHandler(BaseHTTPRequestHandler):
         if self.verbose:
             super().log_message(format, *args)
 
+    def _enforce_https(self) -> bool:
+        """If FORCE_HTTPS is set and request is HTTP (not localhost), redirect. Returns True if redirected."""
+        if not FORCE_HTTPS:
+            return False
+        host = self.headers.get("Host", "")
+        if host.startswith("localhost") or host.startswith("127."):
+            return False
+        proto = self.headers.get("X-Forwarded-Proto", "http")
+        if proto == "https":
+            return False
+        target = f"https://{host}{self.path}"
+        self.send_response(301)
+        self.send_header("Location", target)
+        self.end_headers()
+        return True
+
+    def _add_security_headers(self):
+        if FORCE_HTTPS:
+            self.send_header("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
+
     # ------------------------------------------------------------------
     # Routing
     # ------------------------------------------------------------------
 
     def do_GET(self):
+        if self._enforce_https():
+            return
         path = urlparse(self.path).path
+        if path == "/admin/audit-log":
+            self._serve_audit_log()
+            return
+        if path == "/api/audit-events":
+            self._api_audit_events()
+            return
         if path == "/":
             self._serve_upload_page()
         elif path == "/status":
@@ -230,6 +307,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._serve_admin_users_json()
         elif path == "/api/notes":
             self._api_list_notes()
+        elif path == "/api/onboarding-status":
+            self._api_onboarding_status()
         elif path == "/import":
             self._serve_import_wizard()
         elif path == "/export/edavki":
@@ -319,6 +398,8 @@ class UploadHandler(BaseHTTPRequestHandler):
         self.wfile.write(body.encode("utf-8"))
 
     def do_POST(self):
+        if self._enforce_https():
+            return
         path = urlparse(self.path).path
         if path == "/upload":
             self._handle_upload()
@@ -349,6 +430,10 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._handle_delete_account()
         elif path == "/api/notes":
             self._api_create_note()
+        elif path == "/api/onboarding-complete":
+            self._api_onboarding_complete()
+        elif path == "/api/demo-toggle":
+            self._api_demo_toggle()
         elif path == "/import/preview":
             self._handle_import_preview()
         elif path == "/import/validate":
@@ -376,6 +461,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_PUT(self):
+        if self._enforce_https():
+            return
         path = urlparse(self.path).path
         parts = path.split("/")
         # /api/notes/<id>
@@ -388,6 +475,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_DELETE(self):
+        if self._enforce_https():
+            return
         path = urlparse(self.path).path
         parts = path.split("/")
         # /api/notes/<id>
@@ -408,6 +497,22 @@ class UploadHandler(BaseHTTPRequestHandler):
         self._html_response(html)
 
     def _handle_login(self):
+        from .audit import log_event
+        ip = _get_client_ip(self)
+
+        retry_after = _check_rate_limit(ip)
+        if retry_after is not None:
+            self.send_response(429)
+            self.send_header("Retry-After", str(retry_after))
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self._add_security_headers()
+            self.end_headers()
+            self.wfile.write(
+                _login_html(f"Too many login attempts. Please try again in {retry_after // 60 + 1} minutes.").encode("utf-8")
+            )
+            log_event("login_rate_limited", ip_address=ip)
+            return
+
         body = self._read_body()
         fields = parse_qs(body.decode("utf-8", errors="replace"))
         username_or_email = fields.get("username", [""])[0].strip()
@@ -420,9 +525,13 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._serve_login_page(error="Login service unavailable. Please try again later.")
             return
         if not user:
+            _record_login_attempt(ip)
+            log_event("login_failed", username=username_or_email, ip_address=ip, success=False)
             self._serve_login_page(error="Invalid username or password.")
             return
 
+        _login_attempts.pop(ip, None)
+        log_event("login_success", username=user.username, ip_address=ip)
         token = _create_session(user)
         self.send_response(302)
         self.send_header("Location", "/")
@@ -433,7 +542,11 @@ class UploadHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _handle_logout(self):
+        from .audit import log_event
         from .users import delete_session as _db_delete_session
+        session = _get_session(self)
+        if session:
+            log_event("logout", username=session["username"], ip_address=_get_client_ip(self))
         cookie_header = self.headers.get("Cookie", "")
         c = SimpleCookie()
         c.load(cookie_header)
@@ -523,8 +636,15 @@ class UploadHandler(BaseHTTPRequestHandler):
 
     def _serve_status(self):
         session = _get_session(self)
-        conn = _portfolio_conn(session)
-        db_path = _user_db_path(session["username"]) if session and session["role"] in ("premium", "admin") else DEMO_DB
+        session_token = _get_session_token(self)
+        conn = _portfolio_conn(session, session_token)
+        # Determine actual DB path being used (respects demo toggle)
+        if session_token and _DEMO_VIEW.get(session_token, False):
+            db_path = DEMO_DB
+        elif session and session["role"] in ("premium", "admin"):
+            db_path = _user_db_path(session["username"])
+        else:
+            db_path = DEMO_DB
         data = {"has_data": False, "db_path": str(db_path)}
         try:
             row_count = conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
@@ -613,6 +733,12 @@ class UploadHandler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+        from .audit import log_event
+        for r in results:
+            if "error" not in r:
+                log_event("data_import", username=session["username"],
+                          ip_address=_get_client_ip(self),
+                          detail=f"{r['filename']}: {r.get('new',0)} new rows")
         self._json_response({"results": results})
 
     # ------------------------------------------------------------------
@@ -1086,6 +1212,28 @@ class UploadHandler(BaseHTTPRequestHandler):
         users = list_users()
         self._html_response(_admin_html(users, session["username"]))
 
+    def _serve_audit_log(self):
+        session = _get_session(self)
+        if not session or session["role"] != "admin":
+            self._redirect("/login")
+            return
+        self._html_response(_audit_log_html(session["username"], session["role"]))
+
+    def _api_audit_events(self):
+        session = _get_session(self)
+        if not session or session["role"] != "admin":
+            self._json_response({"error": "Forbidden"}, status=403)
+            return
+        from .audit import query_events, get_event_types
+        qs = parse_qs(urlparse(self.path).query)
+        event_type = qs.get("type", [None])[0]
+        username = qs.get("username", [None])[0]
+        limit = min(int(qs.get("limit", ["200"])[0]), 1000)
+        offset = int(qs.get("offset", ["0"])[0])
+        events = query_events(event_type=event_type, username=username, limit=limit, offset=offset)
+        types = get_event_types()
+        self._json_response({"events": events, "event_types": types})
+
     def _serve_admin_users_json(self):
         session = _get_session(self)
         if not session or session["role"] != "admin":
@@ -1139,6 +1287,10 @@ class UploadHandler(BaseHTTPRequestHandler):
         except Exception as e:
             pass  # Don't fail the creation if email fails
 
+        from .audit import log_event
+        log_event("admin_create_user", username=session["username"],
+                  ip_address=_get_client_ip(self), detail=f"created {user.username} ({email}) role={role}")
+
         self._json_response({
             "ok": True,
             "username": user.username,
@@ -1168,6 +1320,10 @@ class UploadHandler(BaseHTTPRequestHandler):
 
         from .users import set_role
         ok = set_role(user_id, role)
+        if ok:
+            from .audit import log_event
+            log_event("role_change", username=session["username"],
+                      ip_address=_get_client_ip(self), detail=f"user_id={user_id} new_role={role}")
         self._json_response({"ok": ok})
 
     # ------------------------------------------------------------------
@@ -1319,6 +1475,52 @@ class UploadHandler(BaseHTTPRequestHandler):
                 self._json_response({"error": "not found"}, 404)
         finally:
             conn.close()
+
+    # ------------------------------------------------------------------
+    # Onboarding API
+    # ------------------------------------------------------------------
+
+    def _api_onboarding_status(self):
+        """GET /api/onboarding-status — returns {completed, hasData, hasSynced}"""
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return
+
+        from .users import get_onboarding_status
+        status = get_onboarding_status(session["user_id"])
+        self._json_response(status)
+
+    def _api_onboarding_complete(self):
+        """POST /api/onboarding-complete — marks onboarding as completed"""
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return
+
+        from .users import set_onboarding_completed
+        ok = set_onboarding_completed(session["user_id"])
+        self._json_response({"ok": ok})
+
+    def _api_demo_toggle(self):
+        """POST /api/demo-toggle — toggles demo view for premium/admin users"""
+        session = _get_session(self)
+        if not session or session["role"] not in ("premium", "admin"):
+            self._json_response({"error": "Login required."}, status=403)
+            return
+
+        try:
+            data = json.loads(self._read_body())
+            demo_enabled = bool(data.get("demo", False))
+
+            # Get session token from cookie
+            session_token = _get_session_token(self)
+            if session_token:
+                _DEMO_VIEW[session_token] = demo_enabled
+
+            self._json_response({"ok": True, "demo": demo_enabled})
+        except (json.JSONDecodeError, KeyError) as e:
+            self._json_response({"error": str(e)}, 400)
 
     # ------------------------------------------------------------------
     # Goals API
@@ -1740,7 +1942,8 @@ class UploadHandler(BaseHTTPRequestHandler):
         if not user:
             self._html_response(_error_html("This password reset link is invalid, expired, or already used."))
             return
-        # Auto-login after reset
+        from .audit import log_event
+        log_event("password_reset", username=user.username, ip_address=_get_client_ip(self))
         session_token = _create_session(user)
         self.send_response(302)
         self.send_header("Location", "/")
@@ -1790,6 +1993,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._json_response({"error": "Passwords do not match."}, 400)
             return
         change_password(session["user_id"], new_pw)
+        from .audit import log_event
+        log_event("password_change", username=session["username"], ip_address=_get_client_ip(self))
         self._json_response({"ok": True})
 
     def _handle_delete_account(self):
@@ -2056,6 +2261,7 @@ class UploadHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(encoded)))
+        self._add_security_headers()
         self.end_headers()
         self.wfile.write(encoded)
 
@@ -2064,6 +2270,7 @@ class UploadHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        self._add_security_headers()
         self.end_headers()
         self.wfile.write(body)
 
@@ -2478,6 +2685,396 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
   .app-main{padding:1.25rem 0.75rem}
   .card{padding:1.25rem}
   .import-preview-card{padding:1.25rem}
+}
+
+/* ---- Toast notifications ---- */
+.toast-container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  transform: translateX(100%);
+  transition: all 0.3s ease;
+  max-width: 400px;
+  pointer-events: auto;
+}
+
+.toast-show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.toast-icon {
+  font-size: 1.25rem;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.toast-message {
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.toast-success {
+  border-left: 3px solid var(--green);
+}
+
+.toast-success .toast-icon {
+  color: var(--green);
+}
+
+.toast-error {
+  border-left: 3px solid var(--red);
+}
+
+.toast-error .toast-icon {
+  color: var(--red);
+}
+
+.toast-info {
+  border-left: 3px solid var(--blue);
+}
+
+.toast-info .toast-icon {
+  color: var(--blue);
+}
+
+.toast-warning {
+  border-left: 3px solid var(--accent);
+}
+
+.toast-warning .toast-icon {
+  color: var(--accent);
+}
+
+/* ---- Confetti canvas ---- */
+.confetti-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ---- Empty states ---- */
+.empty-state-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3rem 2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  margin: 2rem auto;
+  max-width: 500px;
+}
+
+.empty-state-icon {
+  font-size: 3rem;
+  opacity: 0.7;
+}
+
+.empty-state-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.empty-state-message {
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 400px;
+}
+
+.empty-state-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.btn-primary, .btn-secondary {
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #111827;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--subtle);
+}
+
+.btn-text {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.875rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.btn-text:hover {
+  color: var(--text);
+}
+
+/* ---- Welcome wizard ---- */
+.wizard-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.wizard-modal {
+  background: var(--surface);
+  border-radius: var(--radius);
+  max-width: 600px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: wizardSlideIn 0.3s ease;
+}
+
+@keyframes wizardSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.wizard-step {
+  display: flex;
+  flex-direction: column;
+}
+
+.wizard-progress {
+  height: 4px;
+  background: var(--subtle);
+  border-radius: var(--radius) var(--radius) 0 0;
+  overflow: hidden;
+}
+
+.wizard-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--blue));
+  transition: width 0.3s ease;
+}
+
+.wizard-content {
+  padding: 3rem 2.5rem;
+  text-align: center;
+}
+
+.wizard-icon {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+}
+
+.wizard-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+.wizard-description {
+  font-size: 1rem;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+.wizard-features {
+  list-style: none;
+  text-align: left;
+  display: inline-block;
+  margin: 1.5rem 0;
+}
+
+.wizard-features li {
+  padding: 0.5rem 0;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.wizard-info-box {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1.25rem;
+  margin: 1.5rem 0;
+  text-align: left;
+}
+
+.wizard-info-box strong {
+  display: block;
+  margin-bottom: 0.75rem;
+  color: var(--text);
+}
+
+.wizard-info-box ul {
+  list-style: none;
+  margin: 0;
+}
+
+.wizard-info-box li {
+  padding: 0.25rem 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.wizard-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--subtle);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 2rem auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.wizard-highlights {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.wizard-highlight-card {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1.5rem;
+}
+
+.wizard-highlight-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+.wizard-highlight-label {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.wizard-actions {
+  padding: 0 2.5rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.wizard-btn-large {
+  padding: 0.875rem 1.5rem;
+  font-size: 1rem;
+}
+
+@media (max-width: 768px) {
+  .toast-container {
+    top: 0.5rem;
+    right: 0.5rem;
+    left: 0.5rem;
+  }
+  .toast {
+    max-width: 100%;
+  }
+  .empty-state-card {
+    padding: 2rem 1.5rem;
+  }
+  .empty-state-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .btn-primary, .btn-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+  .wizard-modal {
+    margin: 0;
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+  .wizard-content {
+    padding: 2rem 1.5rem;
+  }
+  .wizard-icon {
+    font-size: 3rem;
+  }
+  .wizard-title {
+    font-size: 1.5rem;
+  }
+  .wizard-actions {
+    padding: 0 1.5rem 1.5rem;
+  }
+  .wizard-highlights {
+    grid-template-columns: 1fr;
+  }
 }
 """
 
@@ -3279,7 +3876,10 @@ def _admin_html(users, current_username: str) -> str:
         + f"""<body>
 {_header_html(current_username, "admin", "admin")}
 <div class="app-main">
-  <h1 style="font-size:1.2rem;font-weight:700">User Management</h1>
+  <div style="display:flex;align-items:center;gap:1rem;margin-bottom:.5rem">
+    <h1 style="font-size:1.2rem;font-weight:700;margin:0">User Management</h1>
+    <a href="/admin/audit-log" class="btn btn-secondary btn-sm">Audit Log</a>
+  </div>
 
   <div class="card">
     <h2>Create user &amp; send invite</h2>
@@ -3344,6 +3944,78 @@ document.querySelectorAll('.role-select').forEach(sel => {{
 }});
 </script>
 {_global_drop_import_html()}
+</body>
+</html>"""
+    )
+
+
+def _audit_log_html(username: str, role: str) -> str:
+    extra_css = (
+        "#filters{display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap}"
+        "#filters select,#filters input{margin-bottom:0}"
+        ".ev-ok{color:var(--green)}.ev-fail{color:var(--red)}"
+        ".audit-tbl td,.audit-tbl th{font-size:.82rem;padding:.35rem .5rem}"
+    )
+    return (
+        _head_html("Audit Log — WealthEagle", extra_css, robots="noindex, nofollow")
+        + f"""<body>
+{_header_html(username, role, "admin")}
+<div class="app-main">
+  <h1 style="font-size:1.2rem;font-weight:700">Audit Log</h1>
+  <div class="card">
+    <div id="filters">
+      <select id="fType"><option value="">All event types</option></select>
+      <input id="fUser" type="text" placeholder="Filter by username" style="max-width:180px">
+      <button class="btn btn-primary btn-sm" id="filterBtn">Filter</button>
+    </div>
+    <table class="data-table audit-tbl">
+      <thead><tr><th>Time</th><th>Event</th><th>User</th><th>IP</th><th>Detail</th><th>OK</th></tr></thead>
+      <tbody id="auditBody"></tbody>
+    </table>
+    <div style="margin-top:.75rem;display:flex;gap:.5rem">
+      <button class="btn btn-secondary btn-sm" id="prevBtn" disabled>Previous</button>
+      <button class="btn btn-secondary btn-sm" id="nextBtn">Next</button>
+    </div>
+  </div>
+</div>
+{_COMMON_JS}
+<script>
+let _offset = 0;
+const _limit = 100;
+async function loadEvents() {{
+  const type = document.getElementById('fType').value;
+  const user = document.getElementById('fUser').value.trim();
+  let url = '/api/audit-events?limit=' + _limit + '&offset=' + _offset;
+  if (type) url += '&type=' + encodeURIComponent(type);
+  if (user) url += '&username=' + encodeURIComponent(user);
+  const resp = await fetch(url);
+  const data = await resp.json();
+  const tbody = document.getElementById('auditBody');
+  tbody.innerHTML = '';
+  (data.events || []).forEach(e => {{
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + (e.timestamp||'') + '</td><td>' + (e.event_type||'') + '</td>'
+      + '<td>' + (e.username||'') + '</td><td>' + (e.ip_address||'') + '</td>'
+      + '<td>' + (e.detail||'') + '</td>'
+      + '<td class="' + (e.success ? 'ev-ok' : 'ev-fail') + '">' + (e.success ? '&#10003;' : '&#10007;') + '</td>';
+    tbody.appendChild(tr);
+  }});
+  const sel = document.getElementById('fType');
+  if (sel.options.length <= 1 && data.event_types) {{
+    data.event_types.forEach(t => {{
+      const o = document.createElement('option');
+      o.value = t; o.textContent = t;
+      sel.appendChild(o);
+    }});
+  }}
+  document.getElementById('prevBtn').disabled = _offset === 0;
+  document.getElementById('nextBtn').disabled = (data.events||[]).length < _limit;
+}}
+document.getElementById('filterBtn').addEventListener('click', () => {{ _offset = 0; loadEvents(); }});
+document.getElementById('prevBtn').addEventListener('click', () => {{ _offset = Math.max(0, _offset - _limit); loadEvents(); }});
+document.getElementById('nextBtn').addEventListener('click', () => {{ _offset += _limit; loadEvents(); }});
+loadEvents();
+</script>
 </body>
 </html>"""
     )
@@ -4119,6 +4791,287 @@ def _upload_html(user_json: str) -> str:
   }});
 }})();
 </script>
+
+<!-- Onboarding utilities -->
+<script>
+// Toast notifications
+(function(window) {{
+    'use strict';
+    let toastContainer = null;
+    function initToastContainer() {{
+        if (toastContainer) return;
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container';
+        document.body.appendChild(toastContainer);
+    }}
+    function showToast(message, type = 'info', duration = 3000) {{
+        initToastContainer();
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${{type}}`;
+        const icons = {{ success: '✓', error: '✕', info: 'ℹ', warning: '⚠' }};
+        toast.innerHTML = `<span class="toast-icon">${{icons[type] || icons.info}}</span><span class="toast-message">${{escapeHtml(message)}}</span>`;
+        toastContainer.appendChild(toast);
+        setTimeout(() => toast.classList.add('toast-show'), 10);
+        setTimeout(() => {{
+            toast.classList.remove('toast-show');
+            setTimeout(() => {{ if (toast.parentNode) toast.parentNode.removeChild(toast); }}, 300);
+        }}, duration);
+    }}
+    function escapeHtml(text) {{
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }}
+    window.showToast = showToast;
+}})(window);
+
+// Confetti
+(function(window) {{
+    'use strict';
+    function launchConfetti(duration = 2000) {{
+        const canvas = document.createElement('canvas');
+        canvas.className = 'confetti-canvas';
+        canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999';
+        document.body.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const particles = [];
+        const colors = ['#0EA5E9', '#8B5CF6', '#EF4444', '#F59E0B', '#10B981', '#EC4899'];
+        for (let i = 0; i < 150; i++) {{
+            particles.push({{
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height - canvas.height,
+                r: Math.random() * 6 + 2,
+                d: Math.random() * 150,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                tilt: Math.random() * 10 - 10,
+                tiltAngleIncremental: Math.random() * 0.07 + 0.05,
+                tiltAngle: 0
+            }});
+        }}
+        const startTime = Date.now();
+        function draw() {{
+            const elapsed = Date.now() - startTime;
+            if (elapsed > duration) {{
+                document.body.removeChild(canvas);
+                return;
+            }}
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach((p, i) => {{
+                ctx.beginPath();
+                ctx.lineWidth = p.r / 2;
+                ctx.strokeStyle = p.color;
+                ctx.moveTo(p.x + p.tilt + p.r, p.y);
+                ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r);
+                ctx.stroke();
+                p.tiltAngle += p.tiltAngleIncremental;
+                p.y += (Math.cos(p.d) + 3 + p.r / 2) / 2;
+                p.tilt = Math.sin(p.tiltAngle - i / 3) * 15;
+                if (p.y > canvas.height) {{
+                    p.y = -10;
+                    p.x = Math.random() * canvas.width;
+                }}
+            }});
+            requestAnimationFrame(draw);
+        }}
+        draw();
+    }}
+    window.launchConfetti = launchConfetti;
+}})(window);
+
+// Empty states
+(function(window) {{
+    'use strict';
+    const sectionConfig = {{
+        summary: {{ icon: '📊', title: 'No Portfolio Data', message: 'Import your transaction history to see portfolio summary and analytics.' }},
+        tax: {{ icon: '📄', title: 'No Tax Data', message: 'Import your trades to calculate capital gains and generate tax reports.' }},
+        analytics: {{ icon: '📈', title: 'No Analytics Data', message: 'Import transactions and sync prices to view performance analytics.' }},
+        charts: {{ icon: '📉', title: 'No Chart Data', message: 'Import your portfolio to visualize performance over time.' }},
+        projections: {{ icon: '🎯', title: 'No Projection Data', message: 'Import holdings and set goals to see portfolio projections.' }},
+        dividends: {{ icon: '💰', title: 'No Dividend Data', message: 'Import transactions to track dividend income and projections.' }},
+        report: {{ icon: '📋', title: 'No Report Data', message: 'Import your portfolio to generate comprehensive reports.' }},
+        holdings: {{ icon: '💼', title: 'No Holdings', message: 'Import transactions to see your current positions.' }},
+        default: {{ icon: '📦', title: 'No Data', message: 'Import your transaction history to get started.' }}
+    }};
+    function renderEmptyState(containerId, sectionName, customMessage) {{
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        const config = sectionConfig[sectionName] || sectionConfig.default;
+        const message = customMessage || config.message;
+        const role = window.ROLE || 'guest';
+        container.innerHTML = `
+            <div class="empty-state-card">
+                <div class="empty-state-icon">${{config.icon}}</div>
+                <h3 class="empty-state-title">${{config.title}}</h3>
+                <p class="empty-state-message">${{message}}</p>
+                <div class="empty-state-actions">
+                    <a href="/import" class="btn-primary"><span>📥</span> Import CSV</a>
+                    ${{role !== 'guest' ? '<button class="btn-secondary" onclick="toggleDemoData()"><span>👁️</span> Try Demo Data</button>' : ''}}
+                </div>
+            </div>
+        `;
+    }}
+    window.toggleDemoData = function() {{
+        fetch('/api/demo-toggle', {{ method: 'POST', headers: {{ 'Content-Type': 'application/json' }}, body: JSON.stringify({{ demo: true }}) }})
+        .then(res => res.json())
+        .then(data => {{
+            if (data.ok) {{
+                showToast('Switched to demo data. Refresh to see demo portfolio.', 'success');
+                setTimeout(() => window.location.reload(), 1000);
+            }}
+        }})
+        .catch(err => {{
+            console.error('Demo toggle error:', err);
+            showToast('Failed to toggle demo data.', 'error');
+        }});
+    }};
+    window.switchToMyPortfolio = function() {{
+        fetch('/api/demo-toggle', {{ method: 'POST', headers: {{ 'Content-Type': 'application/json' }}, body: JSON.stringify({{ demo: false }}) }})
+        .then(res => res.json())
+        .then(data => {{
+            if (data.ok) {{
+                showToast('Switched to your portfolio.', 'success');
+                setTimeout(() => window.location.reload(), 1000);
+            }}
+        }})
+        .catch(err => {{
+            console.error('Demo toggle error:', err);
+            showToast('Failed to switch portfolio.', 'error');
+        }});
+    }};
+    window.renderEmptyState = renderEmptyState;
+}})(window);
+
+// Welcome wizard
+window.ROLE = '{role}';
+(function(window) {{
+    'use strict';
+    let currentStep = 1;
+    let wizardContainer = null;
+
+    function showWelcomeWizard() {{
+        fetch('/api/onboarding-status')
+            .then(res => res.json())
+            .then(status => {{
+                if (status.hasData && !status.completed) {{
+                    markOnboardingComplete();
+                    return;
+                }}
+                if (!status.completed) {{
+                    const savedStep = localStorage.getItem('wizard_step');
+                    if (savedStep) {{
+                        currentStep = parseInt(savedStep, 10);
+                        localStorage.removeItem('wizard_step');
+                    }}
+                    createWizard();
+                    renderStep(currentStep);
+                }}
+            }})
+            .catch(err => console.error('Failed to check onboarding status:', err));
+    }}
+
+    function createWizard() {{
+        if (wizardContainer) return;
+        const overlay = document.createElement('div');
+        overlay.className = 'wizard-overlay';
+        overlay.id = 'welcomeWizard';
+        wizardContainer = document.createElement('div');
+        wizardContainer.className = 'wizard-modal';
+        overlay.appendChild(wizardContainer);
+        document.body.appendChild(overlay);
+        document.body.style.overflow = 'hidden';
+    }}
+
+    function renderStep(step) {{
+        if (!wizardContainer) return;
+        currentStep = step;
+        const steps = {{ 1: renderWelcomeStep, 2: renderImportStep, 3: renderSyncStep, 4: renderCelebrationStep }};
+        const renderFn = steps[step];
+        if (renderFn) renderFn();
+    }}
+
+    function renderWelcomeStep() {{
+        wizardContainer.innerHTML = `<div class="wizard-step"><div class="wizard-progress"><div class="wizard-progress-bar" style="width: 25%"></div></div><div class="wizard-content"><div class="wizard-icon">🎉</div><h2 class="wizard-title">Welcome to WealthEagle!</h2><p class="wizard-description">Your personal portfolio analytics platform. Track stocks, CFDs, crypto, and savings with daily granularity and powerful insights.</p><ul class="wizard-features"><li>📊 Real-time portfolio analytics</li><li>📈 Performance tracking & projections</li><li>💰 Dividend monitoring</li><li>📄 Slovenian tax reports (eDavki)</li></ul></div><div class="wizard-actions"><button class="btn-primary wizard-btn-large" onclick="window.welcomeWizard.nextStep()">Get Started →</button><button class="btn-secondary" onclick="window.welcomeWizard.dismiss()">Skip for now</button></div></div>`;
+    }}
+
+    function renderImportStep() {{
+        wizardContainer.innerHTML = `<div class="wizard-step"><div class="wizard-progress"><div class="wizard-progress-bar" style="width: 50%"></div></div><div class="wizard-content"><div class="wizard-icon">📥</div><h2 class="wizard-title">Import Your Data</h2><p class="wizard-description">Upload your Revolut trading CSV to get started. We support stocks, CFDs, crypto, and savings accounts.</p><div class="wizard-info-box"><strong>Supported formats:</strong><ul><li>Revolut Stocks & CFDs</li><li>Revolut Crypto</li><li>Revolut Savings</li></ul></div></div><div class="wizard-actions"><button class="btn-primary wizard-btn-large" onclick="window.welcomeWizard.goToImport()">Import CSV →</button><button class="btn-secondary" onclick="window.welcomeWizard.tryDemo()">Try Demo Data</button><button class="btn-text" onclick="window.welcomeWizard.dismiss()">Skip</button></div></div>`;
+    }}
+
+    function renderSyncStep() {{
+        wizardContainer.innerHTML = `<div class="wizard-step"><div class="wizard-progress"><div class="wizard-progress-bar" style="width: 75%"></div></div><div class="wizard-content"><div class="wizard-icon">🔄</div><h2 class="wizard-title">Sync Prices</h2><p class="wizard-description">Fetching latest prices from Yahoo Finance for your holdings...</p><div class="wizard-spinner"></div></div></div>`;
+        showToast('Syncing prices...', 'info', 5000);
+        fetch('/sync', {{ method: 'POST' }})
+            .then(res => res.json())
+            .then(() => {{
+                showToast('Prices synced successfully!', 'success');
+                setTimeout(() => renderStep(4), 1000);
+            }})
+            .catch(err => {{
+                console.error('Sync failed:', err);
+                showToast('Sync failed. You can retry from the dashboard.', 'warning');
+                setTimeout(() => renderStep(4), 2000);
+            }});
+    }}
+
+    function renderCelebrationStep() {{
+        if (window.launchConfetti) launchConfetti(2500);
+        fetch('/status')
+            .then(res => res.json())
+            .then(data => {{
+                const hasData = data.has_data || false;
+                const txCount = data.transaction_count || 0;
+                const tickerCount = data.ticker_count || 0;
+                wizardContainer.innerHTML = `<div class="wizard-step"><div class="wizard-progress"><div class="wizard-progress-bar" style="width: 100%"></div></div><div class="wizard-content"><div class="wizard-icon">🎊</div><h2 class="wizard-title">You're All Set!</h2><p class="wizard-description">Your portfolio is ready to explore.</p>${{hasData ? `<div class="wizard-highlights"><div class="wizard-highlight-card"><div class="wizard-highlight-value">${{txCount}}</div><div class="wizard-highlight-label">Transactions</div></div><div class="wizard-highlight-card"><div class="wizard-highlight-value">${{tickerCount}}</div><div class="wizard-highlight-label">Assets</div></div></div>` : ''}}</div><div class="wizard-actions"><button class="btn-primary wizard-btn-large" onclick="window.welcomeWizard.complete()">View Dashboard →</button></div></div>`;
+            }})
+            .catch(() => {{
+                wizardContainer.innerHTML = `<div class="wizard-step"><div class="wizard-progress"><div class="wizard-progress-bar" style="width: 100%"></div></div><div class="wizard-content"><div class="wizard-icon">🎊</div><h2 class="wizard-title">You're All Set!</h2><p class="wizard-description">Welcome to WealthEagle! Explore your dashboard to see analytics and insights.</p></div><div class="wizard-actions"><button class="btn-primary wizard-btn-large" onclick="window.welcomeWizard.complete()">View Dashboard →</button></div></div>`;
+            }});
+    }}
+
+    function nextStep() {{ if (currentStep < 4) renderStep(currentStep + 1); }}
+    function goToImport() {{
+        localStorage.setItem('wizard_step', '3');
+        window.location.href = '/import?onboarding=1';
+    }}
+    function tryDemo() {{
+        if (window.toggleDemoData) toggleDemoData();
+        dismiss();
+    }}
+    function complete() {{
+        markOnboardingComplete();
+        closeWizard();
+        window.location.reload();
+    }}
+    function dismiss() {{
+        markOnboardingComplete();
+        closeWizard();
+    }}
+    function closeWizard() {{
+        const overlay = document.getElementById('welcomeWizard');
+        if (overlay) overlay.remove();
+        wizardContainer = null;
+        document.body.style.overflow = '';
+    }}
+    function markOnboardingComplete() {{
+        fetch('/api/onboarding-complete', {{ method: 'POST', headers: {{ 'Content-Type': 'application/json' }} }})
+        .catch(err => console.error('Failed to mark onboarding complete:', err));
+    }}
+    function replayWizard() {{
+        currentStep = 1;
+        createWizard();
+        renderStep(1);
+    }}
+
+    window.welcomeWizard = {{ show: showWelcomeWizard, replay: replayWizard, nextStep, goToImport, tryDemo, complete, dismiss }};
+
+    if (window.location.pathname === '/' && window.ROLE && window.ROLE !== 'guest') {{
+        document.addEventListener('DOMContentLoaded', showWelcomeWizard);
+    }}
+}})(window);
+</script>
+
 {_global_drop_import_html() if is_premium else ''}
 </body>
 </html>"""
