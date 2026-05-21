@@ -111,7 +111,10 @@
                     <button class="btn-primary wizard-btn-large" onclick="window.welcomeWizard.nextStep()">
                         Get Started →
                     </button>
-                    <button class="btn-secondary" onclick="window.welcomeWizard.dismiss()">
+                    <button class="btn-secondary" onclick="window.welcomeWizard.tryDemo()">
+                        👁️ Try with Demo Data
+                    </button>
+                    <button class="btn-text" onclick="window.welcomeWizard.dismiss()">
                         Skip for now
                     </button>
                 </div>

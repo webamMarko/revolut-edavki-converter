@@ -622,10 +622,12 @@ class UploadHandler(BaseHTTPRequestHandler):
 
     def _serve_upload_page(self):
         session = _get_session(self)
-        # Inject user info into the page for the JS to use
+        session_token = _get_session_token(self)
+        is_demo_view = bool(session_token and _DEMO_VIEW.get(session_token, False))
         user_json = json.dumps({
             "username": session["username"] if session else None,
             "role": session["role"] if session else "guest",
+            "demo_view": is_demo_view,
         })
         html = _upload_html(user_json)
         self._html_response(html)
@@ -795,8 +797,9 @@ class UploadHandler(BaseHTTPRequestHandler):
 
         from .prices_db import get_prices_conn_or_none
 
+        session_token = _get_session_token(self)
         username = session["username"] if session else "_demo"
-        conn = _portfolio_conn(session)
+        conn = _portfolio_conn(session, session_token)
         prices_conn = get_prices_conn_or_none()
         try:
             data_hash = compute_data_hash(conn, prices_conn)
@@ -2562,6 +2565,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 /* ---- Guest banner ---- */
 .guest-banner{background:var(--accent-dim);border:1px solid var(--accent);
               border-radius:var(--radius);padding:1rem 1.25rem;font-size:0.9rem}
+.demo-banner{background:#2a1f0a;border:1px solid #d4a017;
+             border-radius:var(--radius);padding:1rem 1.25rem;font-size:0.9rem;margin-bottom:1rem}
 
 /* ---- Centered auth layout ---- */
 .auth-layout{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1rem}
@@ -4498,6 +4503,8 @@ def _upload_html(user_json: str) -> str:
     role = user.get("role") or "guest"
     is_premium = role in ("premium", "admin")
 
+    is_demo_view = user.get("demo_view", False)
+
     guest_banner = "" if is_premium else (
         '<div class="guest-banner">'
         '&#128275; You\'re viewing the <strong>demo portfolio</strong>. '
@@ -4505,6 +4512,18 @@ def _upload_html(user_json: str) -> str:
         ' or <a href="/pricing" style="color:var(--accent);font-weight:700">see pricing &rarr;</a>'
         '</div>'
     )
+
+    demo_banner = ""
+    if is_premium and is_demo_view:
+        demo_banner = (
+            '<div class="demo-banner">'
+            '&#128270; You\'re viewing <strong>demo data</strong>. '
+            '<button onclick="switchToMyPortfolio()" style="background:none;border:none;color:var(--accent);'
+            'font-weight:700;cursor:pointer;text-decoration:underline;padding:0;font-size:inherit">'
+            'Switch to my portfolio</button>'
+            '</div>'
+        )
+
     upload_display = '' if is_premium else ' style="display:none"'
 
     landing_css = "" if is_premium else r"""
@@ -4630,6 +4649,8 @@ def _upload_html(user_json: str) -> str:
         + f"""<body>
 {_header_html(username, role, "home")}
 {'<div class="app-main">' if is_premium else ''}
+{demo_banner}
+{guest_banner}
 {'<div id="statusBar" class="status-bar" style="display:none"></div>' if is_premium else ''}
 {landing_html}
 
