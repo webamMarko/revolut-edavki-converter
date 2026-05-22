@@ -1,7 +1,5 @@
 """Portfolio operations: import, sync, reports, exports."""
 
-import csv as _csv
-import io as _io
 import json
 import os
 import tempfile
@@ -49,7 +47,7 @@ def cleanup_staging(token: str):
         pass
 
 
-def detect_asset_class_from_headers(headers: list) -> Optional[str]: 
+def detect_asset_class_from_headers(headers: list) -> Optional[str]:
     """Detect asset class from CSV header list."""
     cols = {h.strip() for h in headers}
     # IBKR Activity Statement

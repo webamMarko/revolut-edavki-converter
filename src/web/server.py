@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
-from .templates import TEMPLATES_DIR, html_response, json_response
+from .templates import TEMPLATES_DIR
 from . import auth, admin, portfolio, api, exports, import_wizard
 
 FORCE_HTTPS = os.environ.get("FORCE_HTTPS", "").lower() in ("true", "1", "yes")

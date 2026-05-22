@@ -1,7 +1,6 @@
 """Shared server utility functions."""
 
 from multipart.multipart import parse_options_header
-from io import BytesIO
 
 
 def parse_multipart(headers, body):
@@ -28,7 +27,6 @@ def parse_multipart(headers, body):
         return {}, []
 
     # Use python-multipart to parse the request
-    from multipart.multipart import MultipartParser
 
     fields = {}
     files = []

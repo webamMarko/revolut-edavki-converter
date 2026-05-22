@@ -3,7 +3,6 @@
 import os
 import time
 from http.cookies import SimpleCookie
-from pathlib import Path
 from typing import Optional
 from urllib.parse import parse_qs
 
