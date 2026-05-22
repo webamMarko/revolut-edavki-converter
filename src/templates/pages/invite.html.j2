@@ -1,0 +1,25 @@
+{% extends "base.html.j2" %}
+
+{% block title %}Set Password — WealthEagle{% endblock %}
+
+{% block extra_css %}
+<style>body{display:flex;align-items:center;justify-content:center;padding:1rem}.auth-card{max-width:400px}</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-card">
+  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme"><span class="theme-icon"></span></button>
+  <h1 style="font-size:1.2rem;font-weight:700;margin-bottom:0.5rem;text-align:center">Set your password</h1>
+  <p class="auth-sub">Account: <strong>{{ email }}</strong></p>
+  {% if error %}
+    <p class="auth-error">{{ error }}</p>
+  {% endif %}
+  <form method="POST" action="/invite/{{ token }}">
+    <label for="invite-password">Password</label>
+    <input id="invite-password" type="password" name="password" required minlength="8" autocomplete="new-password">
+    <label for="invite-confirm">Confirm password</label>
+    <input id="invite-confirm" type="password" name="confirm" required minlength="8" autocomplete="new-password">
+    <button class="btn btn-primary" style="width:100%" type="submit">Set password &amp; log in</button>
+  </form>
+</div>
+{% endblock %}

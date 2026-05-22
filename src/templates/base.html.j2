@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% block meta %}{% endblock %}
+  {{ fouc_script|safe }}
+  <title>{% block title %}WealthEagle{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/common.css">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  {% block header %}
+    {% if show_header %}
+      {% include "partials/nav.html.j2" %}
+    {% endif %}
+  {% endblock %}
+
+  {% block content %}{% endblock %}
+
+  {% if show_drop_import %}
+    {% include "partials/drop_import.html.j2" %}
+  {% endif %}
+
+  {{ common_js|safe }}
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

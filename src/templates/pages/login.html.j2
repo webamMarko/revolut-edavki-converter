@@ -1,0 +1,43 @@
+{% extends "base.html.j2" %}
+
+{% block meta %}
+<meta name="description" content="Log in to your WealthEagle account to access portfolio analytics and tax reports.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="{{ app_base_url }}/login">
+<meta property="og:title" content="Log In — WealthEagle">
+<meta property="og:description" content="Log in to your WealthEagle account to access portfolio analytics and tax reports.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ app_base_url }}/login">
+<meta property="og:image" content="{{ app_base_url }}/static/og-card.png">
+<meta property="og:site_name" content="WealthEagle">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Log In — WealthEagle">
+<meta name="twitter:description" content="Log in to your WealthEagle account to access portfolio analytics and tax reports.">
+<meta name="twitter:image" content="{{ app_base_url }}/static/og-card.png">
+{% endblock %}
+
+{% block title %}Log In — WealthEagle{% endblock %}
+
+{% block extra_css %}
+<style>body{display:flex;align-items:center;justify-content:center;padding:1rem}</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-card">
+  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme"><span class="theme-icon"></span></button>
+  <div class="auth-card logo"><a href="/" style="text-decoration:none;color:inherit">WealthEagle<span class="brand-accent">.</span></a></div>
+  {% if error %}
+    <p class="auth-error">{{ error }}</p>
+  {% endif %}
+  <form method="POST" action="/login">
+    <label for="login-username">Username or email</label>
+    <input id="login-username" type="text" name="username" required autofocus autocomplete="username">
+    <label for="login-password">Password</label>
+    <input id="login-password" type="password" name="password" required autocomplete="current-password">
+    <button class="btn btn-primary" style="width:100%" type="submit">Log in</button>
+  </form>
+  <p style="text-align:center;font-size:0.82rem;margin-top:1rem">
+    <a href="/reset-password" style="color:var(--accent)">Forgot password?</a>
+  </p>
+</div>
+{% endblock %}
