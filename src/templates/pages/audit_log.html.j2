@@ -1,0 +1,77 @@
+{% extends "base.html.j2" %}
+
+{% block meta %}
+<meta name="robots" content="noindex, nofollow">
+{% endblock %}
+
+{% block title %}Audit Log — WealthEagle{% endblock %}
+
+{% block extra_css %}
+<style>
+#filters{display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap}
+#filters select,#filters input{margin-bottom:0}
+.ev-ok{color:var(--green)}.ev-fail{color:var(--red)}
+.audit-tbl td,.audit-tbl th{font-size:.82rem;padding:.35rem .5rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="app-main">
+  <h1 style="font-size:1.2rem;font-weight:700">Audit Log</h1>
+  <div class="card">
+    <div id="filters">
+      <select id="fType"><option value="">All event types</option></select>
+      <input id="fUser" type="text" placeholder="Filter by username" style="max-width:180px">
+      <button class="btn btn-primary btn-sm" id="filterBtn">Filter</button>
+    </div>
+    <table class="data-table audit-tbl">
+      <thead><tr><th>Time</th><th>Event</th><th>User</th><th>IP</th><th>Detail</th><th>OK</th></tr></thead>
+      <tbody id="auditBody"></tbody>
+    </table>
+    <div style="margin-top:.75rem;display:flex;gap:.5rem">
+      <button class="btn btn-secondary btn-sm" id="prevBtn" disabled>Previous</button>
+      <button class="btn btn-secondary btn-sm" id="nextBtn">Next</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let _offset = 0;
+const _limit = 100;
+async function loadEvents() {
+  const type = document.getElementById('fType').value;
+  const user = document.getElementById('fUser').value.trim();
+  let url = '/api/audit-events?limit=' + _limit + '&offset=' + _offset;
+  if (type) url += '&type=' + encodeURIComponent(type);
+  if (user) url += '&username=' + encodeURIComponent(user);
+  const resp = await fetch(url);
+  const data = await resp.json();
+  const tbody = document.getElementById('auditBody');
+  tbody.innerHTML = '';
+  (data.events || []).forEach(e => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + (e.timestamp||'') + '</td><td>' + (e.event_type||'') + '</td>'
+      + '<td>' + (e.username||'') + '</td><td>' + (e.ip_address||'') + '</td>'
+      + '<td>' + (e.detail||'') + '</td>'
+      + '<td class="' + (e.success ? 'ev-ok' : 'ev-fail') + '">' + (e.success ? '&#10003;' : '&#10007;') + '</td>';
+    tbody.appendChild(tr);
+  });
+  const sel = document.getElementById('fType');
+  if (sel.options.length <= 1 && data.event_types) {
+    data.event_types.forEach(t => {
+      const o = document.createElement('option');
+      o.value = t; o.textContent = t;
+      sel.appendChild(o);
+    });
+  }
+  document.getElementById('prevBtn').disabled = _offset === 0;
+  document.getElementById('nextBtn').disabled = (data.events||[]).length < _limit;
+}
+document.getElementById('filterBtn').addEventListener('click', () => { _offset = 0; loadEvents(); });
+document.getElementById('prevBtn').addEventListener('click', () => { _offset = Math.max(0, _offset - _limit); loadEvents(); });
+document.getElementById('nextBtn').addEventListener('click', () => { _offset += _limit; loadEvents(); });
+loadEvents();
+</script>
+{% endblock %}

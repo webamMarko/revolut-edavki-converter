@@ -1,0 +1,17 @@
+{% extends "base.html.j2" %}
+
+{% block title %}Link Expired — WealthEagle{% endblock %}
+
+{% block extra_css %}
+<style>body{display:flex;align-items:center;justify-content:center;padding:1rem}</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-card" style="max-width:440px;text-align:center">
+  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>
+  <div style="font-size:2.5rem;margin-bottom:1rem">&#128279;</div>
+  <h2 style="font-size:1.1rem;font-weight:600;margin-bottom:0.5rem">Share link expired or invalid</h2>
+  <p style="color:var(--text-secondary);margin-bottom:1.25rem">This portfolio snapshot is no longer available.</p>
+  <a class="btn btn-primary" href="/">Go home</a>
+</div>
+{% endblock %}
