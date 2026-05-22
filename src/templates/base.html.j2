@@ -26,6 +26,23 @@
   {% block extra_css %}{% endblock %}
 </head>
 <body>
+  {# Offline Detection Banner #}
+  <div id="offline-banner" class="offline-banner" style="display: none;">
+    <div class="offline-banner-content">
+      <svg class="offline-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="1" y1="1" x2="23" y2="23"></line>
+        <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
+        <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
+        <path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path>
+        <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path>
+        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+        <line x1="12" y1="20" x2="12.01" y2="20"></line>
+      </svg>
+      <span class="offline-text">You're offline. Some features may be unavailable.</span>
+    </div>
+    <button class="offline-dismiss" onclick="dismissOfflineBanner()">×</button>
+  </div>
+
   {% block header %}
     {% if show_header %}
       {% include "partials/nav.html.j2" %}
@@ -51,6 +68,49 @@
         .catch(function(error) {
           console.error('Service Worker registration failed:', error);
         });
+    }
+  </script>
+
+  {# Offline Detection Banner #}
+  <script>
+    let offlineBannerDismissed = false;
+
+    function showOfflineBanner() {
+      if (!offlineBannerDismissed) {
+        const banner = document.getElementById('offline-banner');
+        if (banner) {
+          banner.style.display = 'flex';
+        }
+      }
+    }
+
+    function hideOfflineBanner() {
+      const banner = document.getElementById('offline-banner');
+      if (banner) {
+        banner.style.display = 'none';
+      }
+      offlineBannerDismissed = false; // Reset for next offline event
+    }
+
+    function dismissOfflineBanner() {
+      offlineBannerDismissed = true;
+      hideOfflineBanner();
+    }
+
+    // Listen for online/offline events
+    window.addEventListener('online', function() {
+      console.log('[PWA] Network connection restored');
+      hideOfflineBanner();
+    });
+
+    window.addEventListener('offline', function() {
+      console.log('[PWA] Network connection lost');
+      showOfflineBanner();
+    });
+
+    // Check initial state on page load
+    if (!navigator.onLine) {
+      showOfflineBanner();
     }
   </script>
 </body>
