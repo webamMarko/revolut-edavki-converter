@@ -154,6 +154,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._serve_static_css()
         elif path == "/manifest.json":
             self._serve_manifest()
+        elif path == "/sw.js":
+            self._serve_service_worker()
         elif path.startswith("/static/icons/"):
             icon_name = path[len("/static/icons/"):]
             self._serve_icon(icon_name)
@@ -292,6 +294,21 @@ class UploadHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/manifest+json; charset=utf-8")
             self.send_header("Cache-Control", "public, max-age=3600")
+            self.end_headers()
+            self.wfile.write(content)
+        except FileNotFoundError:
+            self.send_error(404)
+
+    def _serve_service_worker(self):
+        """Serve PWA service worker (sw.js)."""
+        sw_path = TEMPLATES_DIR / "assets" / "sw.js"
+        try:
+            with open(sw_path, "rb") as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/javascript; charset=utf-8")
+            # Service workers should not be cached aggressively to allow quick updates
+            self.send_header("Cache-Control", "no-cache, must-revalidate")
             self.end_headers()
             self.wfile.write(content)
         except FileNotFoundError:
