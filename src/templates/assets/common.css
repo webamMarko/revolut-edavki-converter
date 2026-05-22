@@ -663,3 +663,78 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- PWA Offline Banner ---- */
+.offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  color: #ffffff;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.offline-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.offline-icon {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.offline-text {
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.offline-dismiss {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 1.75rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.5rem;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.offline-dismiss:hover {
+  opacity: 1;
+}
+
+@media (max-width: 768px) {
+  .offline-banner {
+    padding: 0.625rem 0.75rem;
+  }
+  .offline-text {
+    font-size: 0.8125rem;
+  }
+  .offline-dismiss {
+    font-size: 1.5rem;
+  }
+}
