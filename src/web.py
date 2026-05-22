@@ -8,14 +8,16 @@ import hashlib
 import hmac
 import json
 import os
-import re
 import secrets
 import tempfile
 import time
 from http.cookies import SimpleCookie
-from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+
+from jinja2 import Environment, FileSystemLoader
+from src.i18n import get_translations
 
 # ---------------------------------------------------------------------------
 # Environment / constants
@@ -362,7 +364,23 @@ class UploadHandler(BaseHTTPRequestHandler):
         elif path.startswith("/s/"):
             token = path[3:]
             self._serve_shared_portfolio(token)
+        elif path == "/static/common.css":
+            self._serve_static_css()
         else:
+            self.send_error(404)
+
+    def _serve_static_css(self):
+        """Serve common.css with caching headers."""
+        css_path = _TEMPLATES_DIR / "assets" / "common.css"
+        try:
+            with open(css_path, "rb") as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/css; charset=utf-8")
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.end_headers()
+            self.wfile.write(content)
+        except FileNotFoundError:
             self.send_error(404)
 
     def _serve_robots_txt(self):
@@ -493,7 +511,15 @@ class UploadHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     def _serve_login_page(self, error: str = ""):
-        html = _login_html(error)
+        template = _page_env.get_template("pages/login.html.j2")
+        html = template.render(
+            error=error,
+            app_base_url=APP_BASE_URL.rstrip("/"),
+            fouc_script=_FOUC_SCRIPT,
+            common_js=_COMMON_JS,
+            show_header=False,
+            show_drop_import=False
+        )
         self._html_response(html)
 
     def _handle_login(self):
@@ -507,9 +533,16 @@ class UploadHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self._add_security_headers()
             self.end_headers()
-            self.wfile.write(
-                _login_html(f"Too many login attempts. Please try again in {retry_after // 60 + 1} minutes.").encode("utf-8")
+            template = _page_env.get_template("pages/login.html.j2")
+            html = template.render(
+                error=f"Too many login attempts. Please try again in {retry_after // 60 + 1} minutes.",
+                app_base_url=APP_BASE_URL.rstrip("/"),
+                fouc_script=_FOUC_SCRIPT,
+                common_js=_COMMON_JS,
+                show_header=False,
+                show_drop_import=False
             )
+            self.wfile.write(html.encode("utf-8"))
             log_event("login_rate_limited", ip_address=ip)
             return
 
@@ -586,7 +619,17 @@ class UploadHandler(BaseHTTPRequestHandler):
         if not user:
             self._html_response(_error_html("This invite link is invalid or has expired."))
             return
-        self._html_response(_invite_html(token, user.email, error))
+        template = _page_env.get_template("pages/invite.html.j2")
+        html = template.render(
+            token=token,
+            email=user.email,
+            error=error,
+            fouc_script=_FOUC_SCRIPT,
+            common_js=_COMMON_JS,
+            show_header=False,
+            show_drop_import=False
+        )
+        self._html_response(html)
 
     def _handle_invite_accept(self, token: str):
         body = self._read_body()
@@ -873,7 +916,7 @@ class UploadHandler(BaseHTTPRequestHandler):
             }) if session else "null"
             html = html.replace(
                 "<script>const D=",
-                f"<script>const D=",
+                "<script>const D=",
                 1,
             )
             # Find the </script> that closes the D= block and inject before it
@@ -1287,7 +1330,7 @@ class UploadHandler(BaseHTTPRequestHandler):
             from .email_service import send_invite
             send_invite(email, invite_url, user.username)
             sent = True
-        except Exception as e:
+        except Exception:
             pass  # Don't fail the creation if email fails
 
         from .audit import log_event
@@ -1425,7 +1468,7 @@ class UploadHandler(BaseHTTPRequestHandler):
             return
         try:
             data = json.loads(self._read_body())
-            from .notes import add_note, get_note
+            from .notes import add_note
             note_id = add_note(
                 conn,
                 title=str(data.get("title", "")).strip(),
@@ -1880,7 +1923,15 @@ class UploadHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     def _serve_reset_password_page(self, error: str = "", success: str = ""):
-        html = _reset_password_request_html(error, success)
+        template = _page_env.get_template("pages/reset_password_request.html.j2")
+        html = template.render(
+            error=error,
+            success=success,
+            fouc_script=_FOUC_SCRIPT,
+            common_js=_COMMON_JS,
+            show_header=False,
+            show_drop_import=False
+        )
         self._html_response(html)
 
     def _handle_reset_password_request(self):
@@ -1906,7 +1957,6 @@ class UploadHandler(BaseHTTPRequestHandler):
 
     def _serve_reset_password_confirm_page(self, token: str, error: str = ""):
         from .users import get_users_db
-        import sqlite3
         conn = get_users_db()
         try:
             row = conn.execute(
@@ -1927,7 +1977,16 @@ class UploadHandler(BaseHTTPRequestHandler):
                 return
         except ValueError:
             pass
-        self._html_response(_reset_password_confirm_html(token, error))
+        template = _page_env.get_template("pages/reset_password_confirm.html.j2")
+        html = template.render(
+            token=token,
+            error=error,
+            fouc_script=_FOUC_SCRIPT,
+            common_js=_COMMON_JS,
+            show_header=False,
+            show_drop_import=False
+        )
+        self._html_response(html)
 
     def _handle_reset_password_confirm(self, token: str):
         from .users import consume_password_reset_token
@@ -2389,6 +2448,14 @@ def _run_with_reloader(host, port, verbose):
 # ---------------------------------------------------------------------------
 # Shared design system for all non-report pages
 # ---------------------------------------------------------------------------
+
+# Jinja2 Environment for page templates
+_TEMPLATES_DIR = Path(__file__).parent / "templates"
+_page_env = Environment(
+    loader=FileSystemLoader(str(_TEMPLATES_DIR)),
+    autoescape=True,
+)
+_page_env.globals["t"] = lambda key, lang="en": get_translations(lang).get(key, key)
 
 # Prevent flash of unstyled content — runs before paint
 _FOUC_SCRIPT = (
@@ -3571,70 +3638,6 @@ def _global_drop_import_html() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Inline HTML: login page
-# ---------------------------------------------------------------------------
-
-def _login_html(error: str = "") -> str:
-    error_block = f'<p class="auth-error">{error}</p>' if error else ""
-    return (
-        _head_html("Log In — WealthEagle",
-                   "body{display:flex;align-items:center;justify-content:center;padding:1rem}",
-                   description="Log in to your WealthEagle account to access portfolio analytics and tax reports.",
-                   canonical_path="/login",
-                   robots="index, follow")
-        + f"""<body>
-<div class="auth-card">
-  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme"><span class="theme-icon"></span></button>
-  <div class="auth-card logo"><a href="/" style="text-decoration:none;color:inherit">WealthEagle<span class="brand-accent">.</span></a></div>
-  {error_block}
-  <form method="POST" action="/login">
-    <label for="login-username">Username or email</label>
-    <input id="login-username" type="text" name="username" required autofocus autocomplete="username">
-    <label for="login-password">Password</label>
-    <input id="login-password" type="password" name="password" required autocomplete="current-password">
-    <button class="btn btn-primary" style="width:100%" type="submit">Log in</button>
-  </form>
-  <p style="text-align:center;font-size:0.82rem;margin-top:1rem">
-    <a href="/reset-password" style="color:var(--accent)">Forgot password?</a>
-  </p>
-</div>
-{_COMMON_JS}
-</body>
-</html>"""
-    )
-
-
-# ---------------------------------------------------------------------------
-# Inline HTML: invite / set-password page
-# ---------------------------------------------------------------------------
-
-def _invite_html(token: str, email: str, error: str = "") -> str:
-    error_block = f'<p class="auth-error">{error}</p>' if error else ""
-    return (
-        _head_html("Set Password — WealthEagle",
-                    "body{display:flex;align-items:center;justify-content:center;padding:1rem}"
-                    ".auth-card{max-width:400px}")
-        + f"""<body>
-<div class="auth-card">
-  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme"><span class="theme-icon"></span></button>
-  <h1 style="font-size:1.2rem;font-weight:700;margin-bottom:0.5rem;text-align:center">Set your password</h1>
-  <p class="auth-sub">Account: <strong>{email}</strong></p>
-  {error_block}
-  <form method="POST" action="/invite/{token}">
-    <label for="invite-password">Password</label>
-    <input id="invite-password" type="password" name="password" required minlength="8" autocomplete="new-password">
-    <label for="invite-confirm">Confirm password</label>
-    <input id="invite-confirm" type="password" name="confirm" required minlength="8" autocomplete="new-password">
-    <button class="btn btn-primary" style="width:100%" type="submit">Set password &amp; log in</button>
-  </form>
-</div>
-{_COMMON_JS}
-</body>
-</html>"""
-    )
-
-
-# ---------------------------------------------------------------------------
 # Inline HTML: generic error page
 # ---------------------------------------------------------------------------
 
@@ -3666,61 +3669,6 @@ def _shared_expired_html() -> str:
   <h2 style="font-size:1.1rem;font-weight:600;margin-bottom:0.5rem">Share link expired or invalid</h2>
   <p style="color:var(--text-secondary);margin-bottom:1.25rem">This portfolio snapshot is no longer available.</p>
   <a class="btn btn-primary" href="/">Go home</a>
-</div>
-{_COMMON_JS}
-</body>
-</html>"""
-    )
-
-
-# ---------------------------------------------------------------------------
-# Inline HTML: password reset
-# ---------------------------------------------------------------------------
-
-def _reset_password_request_html(error: str = "", success: str = "") -> str:
-    error_html = f'<p class="auth-error">{error}</p>' if error else ""
-    success_html = f'<p style="color:var(--green);font-size:0.85rem;margin-top:0.5rem;text-align:center">{success}</p>' if success else ""
-    return (
-        _head_html("Reset Password — WealthEagle",
-                   "body{display:flex;align-items:center;justify-content:center;padding:1rem}")
-        + f"""<body>
-<div class="auth-card">
-  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>
-  <div class="auth-card logo"><a href="/" style="text-decoration:none;color:inherit">WealthEagle<span class="brand-accent">.</span></a></div>
-  <h1 style="font-size:1.1rem;font-weight:700;margin-bottom:0.25rem;text-align:center">Forgot your password?</h1>
-  <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:1rem;text-align:center">Enter your email and we'll send you a reset link.</p>
-  {error_html}{success_html}
-  <form method="POST" action="/reset-password">
-    <label>Email</label>
-    <input type="email" name="email" autocomplete="email" required placeholder="you@example.com">
-    <button class="btn btn-primary" type="submit" style="width:100%;margin-top:0.75rem">Send reset link</button>
-  </form>
-  <p style="text-align:center;font-size:0.82rem;margin-top:1rem"><a href="/login" style="color:var(--accent)">Back to log in</a></p>
-</div>
-{_COMMON_JS}
-</body>
-</html>"""
-    )
-
-
-def _reset_password_confirm_html(token: str, error: str = "") -> str:
-    error_html = f'<p class="auth-error">{error}</p>' if error else ""
-    return (
-        _head_html("Set New Password — WealthEagle",
-                   "body{display:flex;align-items:center;justify-content:center;padding:1rem}")
-        + f"""<body>
-<div class="auth-card">
-  <button class="theme-toggle auth-theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>
-  <div class="auth-card logo"><a href="/" style="text-decoration:none;color:inherit">WealthEagle<span class="brand-accent">.</span></a></div>
-  <h1 style="font-size:1.1rem;font-weight:700;margin-bottom:1rem;text-align:center">Set new password</h1>
-  {error_html}
-  <form method="POST" action="/reset-password/{token}">
-    <label>New password</label>
-    <input type="password" name="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters">
-    <label style="margin-top:0.5rem">Confirm new password</label>
-    <input type="password" name="confirm" autocomplete="new-password" required minlength="8" placeholder="Repeat password">
-    <button class="btn btn-primary" type="submit" style="width:100%;margin-top:0.75rem">Set password</button>
-  </form>
 </div>
 {_COMMON_JS}
 </body>
