@@ -1,0 +1,35 @@
+{
+  "name": "WealthEagle - Portfolio Analytics",
+  "short_name": "WealthEagle",
+  "description": "Stock portfolio analytics and tax reporting for Slovenian investors",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "business"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "View Portfolio",
+      "short_name": "Portfolio",
+      "description": "View your portfolio analytics",
+      "url": "/",
+      "icons": []
+    }
+  ]
+}

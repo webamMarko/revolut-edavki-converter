@@ -152,6 +152,11 @@ class UploadHandler(BaseHTTPRequestHandler):
         # Static files
         elif path == "/static/common.css":
             self._serve_static_css()
+        elif path == "/manifest.json":
+            self._serve_manifest()
+        elif path.startswith("/static/icons/"):
+            icon_name = path[len("/static/icons/"):]
+            self._serve_icon(icon_name)
         elif path == "/robots.txt":
             self._serve_robots_txt()
         elif path == "/sitemap.xml":
@@ -273,6 +278,46 @@ class UploadHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/css; charset=utf-8")
             self.send_header("Cache-Control", "public, max-age=3600")
+            self.end_headers()
+            self.wfile.write(content)
+        except FileNotFoundError:
+            self.send_error(404)
+
+    def _serve_manifest(self):
+        """Serve PWA manifest.json."""
+        manifest_path = TEMPLATES_DIR / "assets" / "manifest.json"
+        try:
+            with open(manifest_path, "rb") as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/manifest+json; charset=utf-8")
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.end_headers()
+            self.wfile.write(content)
+        except FileNotFoundError:
+            self.send_error(404)
+
+    def _serve_icon(self, icon_name):
+        """Serve PWA icon files."""
+        # Validate icon name to prevent directory traversal
+        allowed_icons = {
+            "icon-192.png",
+            "icon-512.png",
+            "apple-touch-icon.png",
+            "favicon-32.png",
+            "favicon-16.png",
+        }
+        if icon_name not in allowed_icons:
+            self.send_error(404)
+            return
+
+        icon_path = TEMPLATES_DIR / "assets" / "icons" / icon_name
+        try:
+            with open(icon_path, "rb") as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Cache-Control", "public, max-age=86400")  # 24 hours
             self.end_headers()
             self.wfile.write(content)
         except FileNotFoundError:
