@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Command-line interface for Revolut to eDavki converter and portfolio analytics."""
 
+from __future__ import annotations
+
 import argparse
 import os
 import sys
@@ -232,7 +234,7 @@ def cmd_dividend(args):
         print(f"{'='*60}")
 
         if args.verbose:
-            print(f"\n By Country:")
+            print("\n By Country:")
             print(f" {'Country':<20} {'Gross':>10} {'WHT':>10} {'Credit':>10} {'Reclaim':>10}")
             print(f" {'-'*20} {'-'*10} {'-'*10} {'-'*10} {'-'*10}")
             for country, data in sorted(summary.by_country.items()):
@@ -242,7 +244,7 @@ def cmd_dividend(args):
                       f"{data['credit_eur']:>10.2f} "
                       f"{data['reclaimable_eur']:>10.2f}")
 
-            print(f"\n Reclaim Guidance:")
+            print("\n Reclaim Guidance:")
             for country, data in sorted(summary.by_country.items()):
                 if data["reclaimable_eur"] > 0.01:
                     print(f"  • {data['country_name']}: reclaim {data['reclaimable_eur']:.2f} EUR"
@@ -359,8 +361,7 @@ def cmd_fire(args):
             conn.commit()
             net = args.annual_expenses - args.annual_income
             target = net / (args.withdrawal_rate / 100)
-            real_return = (1 + args.withdrawal_rate / 100) / (1 + args.inflation / 100) - 1
-            print(f"FIRE config saved.")
+            print("FIRE config saved.")
             print(f"  Annual expenses:  €{args.annual_expenses:,.0f}")
             print(f"  Guaranteed income:€{args.annual_income:,.0f}")
             print(f"  Net annual need:  €{net:,.0f}")
@@ -375,7 +376,7 @@ def cmd_fire(args):
                 print("No FIRE config set. Use: fire set --annual-expenses X --annual-income X")
                 return
             net = cfg["annual_expenses"] - cfg["annual_income"]
-            print(f"FIRE configuration:")
+            print("FIRE configuration:")
             print(f"  Annual expenses:  €{cfg['annual_expenses']:,.0f}")
             print(f"  Guaranteed income:€{cfg['annual_income']:,.0f}")
             print(f"  Net annual need:  €{net:,.0f}")

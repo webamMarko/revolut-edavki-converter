@@ -8,9 +8,11 @@ Sub-scores:
   - Volatility Health      (0-100): max-drawdown penalty + drawdown warning
 """
 
+from __future__ import annotations
+
 import sqlite3
-from dataclasses import dataclass, field
-from datetime import datetime, date, timedelta
+from dataclasses import dataclass
+from datetime import date
 
 from .tax_regimes import get_regime, DEFAULT_REGIME, get_tax_rate
 

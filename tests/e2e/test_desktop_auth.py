@@ -1,6 +1,5 @@
 """Desktop authentication and access control tests."""
 
-import pytest
 from conftest import _login
 
 

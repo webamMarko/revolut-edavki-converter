@@ -1,9 +1,11 @@
 """DCA Strategy Tracker — detects dollar-cost-averaging patterns and compares vs lump-sum."""
 
+from __future__ import annotations
+
 import sqlite3
 from collections import defaultdict
-from datetime import datetime, timedelta
-from statistics import median, stdev
+from datetime import datetime
+from statistics import median
 
 
 def compute_dca_analysis(conn: sqlite3.Connection,

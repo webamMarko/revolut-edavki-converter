@@ -1,7 +1,8 @@
 """Output formatting for analytics and tax reports."""
 
+from __future__ import annotations
+
 import json
-import sys
 from tabulate import tabulate
 
 
@@ -244,7 +245,6 @@ def format_tax(report, verbose: bool = False):
 
 def format_harvest(report, verbose: bool = False):
     """Format and print tax-loss harvesting suggestions."""
-    from .harvest import HarvestReport
 
     print(f"\n{'=' * 60}")
     print(f"TAX-LOSS HARVESTING SUGGESTIONS  |  {report.year}")
@@ -266,7 +266,7 @@ def format_harvest(report, verbose: bool = False):
         print()
         return
 
-    print(f"\n--- Suggestions (ranked by net benefit) ---\n")
+    print("\n--- Suggestions (ranked by net benefit) ---\n")
 
     rows = []
     for s in report.suggestions:

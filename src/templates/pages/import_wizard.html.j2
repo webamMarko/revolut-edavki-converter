@@ -1,0 +1,544 @@
+{% extends "base.html.j2" %}
+
+{% block meta %}
+<meta name="robots" content="noindex, nofollow">
+{% endblock %}
+
+{% block title %}Import Wizard — WealthEagle{% endblock %}
+
+{% block extra_css %}
+<style>.app-main{max-width:780px}</style>
+{% endblock %}
+
+{% block content %}
+<div class="app-main">
+  <!-- Progress bar -->
+  <div class="steps" id="steps">
+    <div class="step active" id="s1"><span class="step-num">1</span><span>Upload</span></div>
+    <div class="step-sep"></div>
+    <div class="step" id="s2"><span class="step-num">2</span><span>Map Columns</span></div>
+    <div class="step-sep"></div>
+    <div class="step" id="s3"><span class="step-num">3</span><span>Validate</span></div>
+    <div class="step-sep"></div>
+    <div class="step" id="s4"><span class="step-num">4</span><span>Import</span></div>
+  </div>
+
+  <!-- Import History Card -->
+  <div class="card" id="historyCard" style="display:none;margin-bottom:1rem;padding:.75rem 1rem;background:var(--bg-alt,#f8f9fa);border:1px solid var(--border,#e0e0e0)">
+    <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem">Portfolio Summary</div>
+    <div id="historyContent"></div>
+  </div>
+
+  <!-- Step 1: Upload -->
+  <div class="card" id="step1">
+    <h2>Upload CSV file</h2>
+    <div class="drop-zone" id="dropZone">
+      <div class="icon">&#128196;</div>
+      <div class="lbl">Drop CSV here or <strong>browse</strong></div>
+      <div class="hint">CSV only &mdash; comma or semicolon separated</div>
+      <input type="file" id="fileInput" accept=".csv">
+    </div>
+    <div class="chosen-file" id="chosenFile"></div>
+    <div class="error-msg" id="step1Err"></div>
+    <div class="btn-group">
+      <button class="btn btn-primary" id="previewBtn" disabled>Next: Map Columns</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Map Columns (hidden initially) -->
+  <div class="card" id="step2" style="display:none">
+    <h2>Map columns</h2>
+
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">
+      Asset class: select what type of transactions this file contains.
+    </div>
+    <div class="ac-toggles" id="acToggles">
+      <button class="ac-btn" data-ac="stock">Stock</button>
+      <button class="ac-btn" data-ac="cfd">CFD</button>
+      <button class="ac-btn" data-ac="crypto">Crypto</button>
+      <button class="ac-btn" data-ac="savings">Savings</button>
+    </div>
+
+    <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem">CSV preview (first 5 rows)</div>
+    <div class="preview-wrap"><table class="preview-table" id="previewTable"></table></div>
+
+    <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem">Column mapping</div>
+    <table class="map-table" id="mapTable"></table>
+
+    <div class="error-msg" id="step2Err"></div>
+    <div class="btn-group">
+      <button class="btn btn-secondary" id="backBtn1">&#8592; Back</button>
+      <button class="btn btn-primary" id="nextBtn2" disabled>Next: Validate</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Validate (hidden initially) -->
+  <div class="card" id="step3" style="display:none">
+    <h2>Validation results</h2>
+    <div id="validationLoading" style="text-align:center;padding:2rem 0">
+      <span class="spin" style="display:inline-block;width:20px;height:20px"></span>
+      <div style="margin-top:.5rem;font-size:.85rem;color:var(--muted)">Validating rows...</div>
+    </div>
+    <div id="validationResults" style="display:none">
+      <div id="validationSummary" style="padding:.6rem .8rem;margin-bottom:.75rem;border-radius:6px;font-size:.85rem"></div>
+      <div id="validationIssues"></div>
+      <div id="validationMissingBuys"></div>
+      <div id="validationDateGaps"></div>
+    </div>
+    <div class="error-msg" id="step3Err"></div>
+    <div class="btn-group" id="step3Btns" style="display:none">
+      <button class="btn btn-secondary" id="backBtn2">&#8592; Back to Mapping</button>
+      <button class="btn btn-primary" id="nextBtn3">Continue to Import</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Review & Import (hidden initially) -->
+  <div class="card" id="step4" style="display:none">
+    <h2>Review &amp; import</h2>
+    <div id="overlapWarning" style="display:none;padding:.6rem .8rem;margin-bottom:.75rem;border-radius:6px;background:#fff8e1;border:1px solid #ffe082;font-size:.82rem;color:#6d4c00"></div>
+    <div class="summary-list" id="summaryList"></div>
+    <div class="error-msg" id="step4Err"></div>
+    <div id="successBox" style="display:none"></div>
+    <div class="btn-group" id="step4Btns">
+      <button class="btn btn-secondary" id="backBtn3">&#8592; Back</button>
+      <button class="btn btn-primary" id="importBtn">Import</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const DB_FIELDS = {
+  stock:   { required: ["date","type"], optional: ["ticker","quantity","price_per_share","total_amount","currency","fx_rate"] },
+  cfd:     { required: ["date","type","ticker"], optional: ["quantity","price_per_share","total_amount","currency","fx_rate"] },
+  crypto:  { required: ["date","type","ticker"], optional: ["quantity","price_per_share","total_amount"] },
+  savings: { required: ["date","type"], optional: ["ticker","quantity","price_per_share","total_amount","fx_rate"] },
+};
+const FIELD_LABELS = {
+  date:"Date", ticker:"Ticker / Symbol", type:"Transaction Type",
+  quantity:"Quantity", price_per_share:"Price per Share",
+  total_amount:"Total Amount", currency:"Currency", fx_rate:"FX Rate",
+};
+const FIELD_ALIASES = {
+  date:            ["date","started date","datevalue","settlementdate","started_date"],
+  ticker:          ["ticker","symbol","financialinstrument"],
+  type:            ["type","transactiontypename","transaction type"],
+  quantity:        ["quantity","volume","volumevalue","quantity of shares","qty"],
+  price_per_share: ["price per share","price","pricevalue","price_per_share"],
+  total_amount:    ["total amount","amount","value","total_amount"],
+  currency:        ["currency","ccy"],
+  fx_rate:         ["fx rate","fxrate","fx_rate","exchange rate"],
+};
+
+let _headers = [], _rows = [], _filename = '', _rowCount = 0;
+let _assetClass = null;
+let _statusData = null;
+
+(async function loadHistory() {
+  try {
+    const resp = await fetch('/status');
+    const data = await resp.json();
+    _statusData = data;
+    const card = document.getElementById('historyCard');
+    const content = document.getElementById('historyContent');
+    if (!data.has_data) {
+      card.style.display = '';
+      content.innerHTML = '<div style="font-size:.85rem;color:var(--muted)">No data imported yet. Upload your first CSV to get started.</div>';
+      return;
+    }
+    const classes = Object.keys(data.asset_classes || {}).join(', ') || 'none';
+    const range = data.date_range ? data.date_range[0] + ' to ' + data.date_range[1] : 'N/A';
+    let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.3rem .8rem;font-size:.84rem">';
+    html += '<div><strong>' + data.import_count + '</strong> imports</div>';
+    html += '<div><strong>' + data.transaction_count + '</strong> transactions</div>';
+    html += '<div>Date range: <strong>' + range + '</strong></div>';
+    html += '<div>Asset classes: <strong>' + classes + '</strong></div>';
+    html += '</div>';
+    card.style.display = '';
+    content.innerHTML = html;
+  } catch(e) {}
+})();
+
+function esc(s) { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+
+// --- Step indicators ---
+function setStep(n) {
+  [1,2,3,4].forEach(i => {
+    const el = document.getElementById('s'+i);
+    el.classList.remove('active','done');
+    if (i < n) el.classList.add('done');
+    else if (i === n) el.classList.add('active');
+  });
+}
+
+// --- File pick ---
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const chosenFile = document.getElementById('chosenFile');
+const previewBtn = document.getElementById('previewBtn');
+const step1Err = document.getElementById('step1Err');
+
+let _selectedFile = null;
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) setFile(f);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); fileInput.value=''; });
+
+function setFile(f) {
+  if (!f.name.toLowerCase().endsWith('.csv')) {
+    step1Err.textContent = 'Only CSV files are supported.'; return;
+  }
+  _selectedFile = f;
+  chosenFile.textContent = f.name + ' (' + (f.size > 1048576 ? (f.size/1048576).toFixed(1)+' MB' : Math.ceil(f.size/1024)+' KB') + ')';
+  previewBtn.disabled = false;
+  step1Err.textContent = '';
+}
+
+// --- Step 1 → 2 ---
+previewBtn.addEventListener('click', async () => {
+  if (!_selectedFile) return;
+  previewBtn.disabled = true;
+  previewBtn.innerHTML = '<span class="spin"></span> Loading...';
+  step1Err.textContent = '';
+  const form = new FormData();
+  form.append('file', _selectedFile);
+  try {
+    const resp = await fetch('/import/preview', { method: 'POST', body: form });
+    const data = await resp.json();
+    if (data.error) { step1Err.textContent = data.error; previewBtn.disabled = false; previewBtn.textContent = 'Next: Map Columns'; return; }
+    _headers = data.headers;
+    _rows = data.rows;
+    _rowCount = data.row_count;
+    _filename = data.filename;
+    showStep2(data.detected_asset_class);
+  } catch(e) {
+    step1Err.textContent = 'Network error: ' + e.message;
+    previewBtn.disabled = false;
+    previewBtn.textContent = 'Next: Map Columns';
+  }
+});
+
+// --- Step 2 setup ---
+function showStep2(detectedClass) {
+  document.getElementById('step1').style.display = 'none';
+  document.getElementById('step2').style.display = '';
+  setStep(2);
+
+  // Asset class buttons
+  _assetClass = detectedClass || 'stock';
+  document.querySelectorAll('.ac-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.ac === _assetClass);
+    btn.addEventListener('click', () => {
+      _assetClass = btn.dataset.ac;
+      document.querySelectorAll('.ac-btn').forEach(b => b.classList.toggle('active', b.dataset.ac === _assetClass));
+      buildMapTable();
+      validateStep2();
+    });
+  });
+
+  buildPreviewTable();
+  buildMapTable();
+  validateStep2();
+}
+
+function buildPreviewTable() {
+  const t = document.getElementById('previewTable');
+  let html = '<thead><tr>' + _headers.map(h => '<th>'+esc(h)+'</th>').join('') + '</tr></thead><tbody>';
+  _rows.forEach(row => {
+    html += '<tr>' + _headers.map((_, i) => '<td>'+esc(row[i] !== undefined ? row[i] : '')+'</td>').join('') + '</tr>';
+  });
+  t.innerHTML = html + '</tbody>';
+}
+
+function bestMatch(field, headers) {
+  const aliases = FIELD_ALIASES[field] || [];
+  const hLower = headers.map(h => h.toLowerCase().trim());
+  for (const alias of aliases) {
+    const idx = hLower.indexOf(alias.toLowerCase());
+    if (idx !== -1) return headers[idx];
+  }
+  return '';
+}
+
+function buildMapTable() {
+  const ac = _assetClass || 'stock';
+  const fields = DB_FIELDS[ac];
+  const all = [...fields.required, ...fields.optional];
+  const t = document.getElementById('mapTable');
+  let html = '';
+  all.forEach(field => {
+    const isReq = fields.required.includes(field);
+    const match = bestMatch(field, _headers);
+    const opts = ['<option value="">— skip —</option>'].concat(_headers.map(h =>
+      `<option value="${esc(h)}" ${h === match ? 'selected' : ''}>${esc(h)}</option>`
+    ));
+    html += `<tr>
+      <td>${FIELD_LABELS[field] || field}</td>
+      <td>${isReq ? '<span class="req-badge">Required</span>' : '<span class="opt-badge">Optional</span>'}</td>
+      <td><select data-field="${field}" data-req="${isReq ? '1' : '0'}">${opts.join('')}</select></td>
+    </tr>`;
+  });
+  t.innerHTML = html;
+  t.querySelectorAll('select').forEach(sel => sel.addEventListener('change', validateStep2));
+}
+
+function validateStep2() {
+  const ac = _assetClass || 'stock';
+  const required = DB_FIELDS[ac].required;
+  const table = document.getElementById('mapTable');
+  let ok = true;
+  required.forEach(field => {
+    const sel = table.querySelector(`select[data-field="${field}"]`);
+    if (!sel || !sel.value) ok = false;
+  });
+  document.getElementById('nextBtn2').disabled = !ok;
+  document.getElementById('step2Err').textContent = '';
+}
+
+// --- Step 2 → 3 (Validate) ---
+document.getElementById('nextBtn2').addEventListener('click', () => {
+  showStep3Validate();
+});
+
+function collectMapping() {
+  const mapping = {};
+  document.querySelectorAll('#mapTable select').forEach(sel => {
+    if (sel.value) mapping[sel.dataset.field] = sel.value;
+  });
+  return mapping;
+}
+
+let _validationData = null;
+
+async function showStep3Validate() {
+  document.getElementById('step2').style.display = 'none';
+  document.getElementById('step3').style.display = '';
+  setStep(3);
+
+  document.getElementById('validationLoading').style.display = '';
+  document.getElementById('validationResults').style.display = 'none';
+  document.getElementById('step3Btns').style.display = 'none';
+  document.getElementById('step3Err').textContent = '';
+
+  const mapping = collectMapping();
+  try {
+    const resp = await fetch('/import/validate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ asset_class: _assetClass, mapping }),
+    });
+    const data = await resp.json();
+    if (data.error) {
+      document.getElementById('step3Err').textContent = data.error;
+      document.getElementById('validationLoading').style.display = 'none';
+      document.getElementById('step3Btns').style.display = '';
+      return;
+    }
+    _validationData = data;
+    renderValidationResults(data);
+  } catch(e) {
+    document.getElementById('step3Err').textContent = 'Network error: ' + e.message;
+    document.getElementById('validationLoading').style.display = 'none';
+    document.getElementById('step3Btns').style.display = '';
+  }
+}
+
+function renderValidationResults(data) {
+  document.getElementById('validationLoading').style.display = 'none';
+  document.getElementById('validationResults').style.display = '';
+  document.getElementById('step3Btns').style.display = '';
+
+  // Summary banner
+  const summary = document.getElementById('validationSummary');
+  if (data.error_rows === 0 && data.warning_rows === 0) {
+    summary.style.background = 'var(--bg-alt, #ecfdf5)';
+    summary.style.border = '1px solid var(--green, #34d399)';
+    summary.style.color = 'var(--green, #059669)';
+    summary.innerHTML = '<strong>&#10003;</strong> ' + esc(data.summary);
+  } else if (data.error_rows > 0) {
+    summary.style.background = '#fef2f2';
+    summary.style.border = '1px solid var(--red, #f87171)';
+    summary.style.color = '#991b1b';
+    summary.innerHTML = '<strong>&#9888;</strong> ' + esc(data.summary);
+  } else {
+    summary.style.background = '#fff8e1';
+    summary.style.border = '1px solid #ffe082';
+    summary.style.color = '#6d4c00';
+    summary.innerHTML = '<strong>&#9888;</strong> ' + esc(data.summary);
+  }
+
+  // Issues table (show first 50)
+  const issuesEl = document.getElementById('validationIssues');
+  if (data.issues && data.issues.length > 0) {
+    const shown = data.issues.slice(0, 50);
+    let html = '<div style="font-size:.8rem;font-weight:600;color:var(--muted);margin:.75rem 0 .4rem">Issues (' + data.issues.length + ' total)</div>';
+    html += '<div class="validation-issues-list">';
+    shown.forEach(issue => {
+      const sevClass = issue.severity === 'error' ? 'sev-error' : issue.severity === 'warning' ? 'sev-warning' : 'sev-info';
+      const sevLabel = issue.severity === 'error' ? 'ERR' : issue.severity === 'warning' ? 'WARN' : 'INFO';
+      html += `<div class="v-issue ${sevClass}">
+        <span class="v-sev">${sevLabel}</span>
+        <span class="v-row">Row ${issue.row}</span>
+        <span class="v-col">${esc(issue.column)}</span>
+        <span class="v-msg">${esc(issue.message)}</span>
+        ${issue.value ? '<span class="v-val">' + esc(issue.value) + '</span>' : ''}
+        ${issue.suggestion ? '<span class="v-sug">' + esc(issue.suggestion) + '</span>' : ''}
+      </div>`;
+    });
+    if (data.issues.length > 50) {
+      html += '<div style="font-size:.8rem;color:var(--muted);padding:.4rem">...and ' + (data.issues.length - 50) + ' more issues</div>';
+    }
+    html += '</div>';
+    issuesEl.innerHTML = html;
+  } else {
+    issuesEl.innerHTML = '';
+  }
+
+  // Missing buys
+  const mbEl = document.getElementById('validationMissingBuys');
+  if (data.missing_buys && data.missing_buys.length > 0) {
+    let html = '<div style="font-size:.8rem;font-weight:600;color:var(--muted);margin:.75rem 0 .4rem">Possible missing data</div>';
+    html += '<div style="font-size:.82rem">';
+    data.missing_buys.forEach(mb => {
+      html += `<div style="padding:.3rem 0;border-bottom:1px solid var(--border,#eee)">
+        <strong>${esc(mb.ticker)}</strong>: ${esc(mb.message)}
+      </div>`;
+    });
+    html += '</div>';
+    mbEl.innerHTML = html;
+  } else {
+    mbEl.innerHTML = '';
+  }
+
+  // Date gaps
+  const dgEl = document.getElementById('validationDateGaps');
+  if (data.date_gaps && data.date_gaps.length > 0) {
+    let html = '<div style="font-size:.8rem;font-weight:600;color:var(--muted);margin:.75rem 0 .4rem">Date gaps (&gt;1 year)</div>';
+    html += '<div style="font-size:.82rem">';
+    data.date_gaps.forEach(g => {
+      html += `<div style="padding:.3rem 0;border-bottom:1px solid var(--border,#eee)">
+        <strong>${esc(g.ticker)}</strong>: ${g.days} day gap (${esc(g.from)} to ${esc(g.to)})
+      </div>`;
+    });
+    html += '</div>';
+    dgEl.innerHTML = html;
+  } else {
+    dgEl.innerHTML = '';
+  }
+
+  // Update button text based on severity
+  const nextBtn = document.getElementById('nextBtn3');
+  if (data.error_rows > 0) {
+    nextBtn.textContent = 'Import Anyway (' + data.valid_rows + ' valid rows)';
+  } else {
+    nextBtn.textContent = 'Continue to Import';
+  }
+}
+
+// --- Step 3 → 4 (Import) ---
+document.getElementById('nextBtn3').addEventListener('click', () => {
+  showStep4();
+});
+
+function showStep4() {
+  document.getElementById('step3').style.display = 'none';
+  document.getElementById('step4').style.display = '';
+  setStep(4);
+
+  const mapping = collectMapping();
+  const mapLines = Object.entries(mapping).map(([k,v]) =>
+    `<div class="summary-row"><span class="summary-lbl">${esc(FIELD_LABELS[k]||k)}</span><span class="summary-val">&#8594; ${esc(v)}</span></div>`
+  ).join('');
+
+  let validInfo = '';
+  if (_validationData) {
+    const d = _validationData;
+    const statusColor = d.error_rows === 0 ? 'var(--green,#059669)' : 'var(--red,#dc2626)';
+    validInfo = `<div class="summary-row"><span class="summary-lbl">Validation</span><span class="summary-val" style="color:${statusColor}">${d.valid_rows} valid, ${d.error_rows} errors, ${d.warning_rows} warnings</span></div>`;
+  }
+
+  document.getElementById('summaryList').innerHTML = `
+    <div class="summary-row"><span class="summary-lbl">File</span><span class="summary-val">${esc(_filename)}</span></div>
+    <div class="summary-row"><span class="summary-lbl">Rows</span><span class="summary-val">${_rowCount}</span></div>
+    <div class="summary-row"><span class="summary-lbl">Asset class</span><span class="summary-val" style="text-transform:capitalize">${esc(_assetClass)}</span></div>
+    ${validInfo}
+    <div class="summary-row" style="margin-top:.5rem"><span class="summary-lbl" style="color:var(--text)">Column mapping</span></div>
+    ${mapLines}
+  `;
+
+  const warn = document.getElementById('overlapWarning');
+  if (_statusData && _statusData.has_data && _statusData.date_range) {
+    warn.style.display = '';
+    warn.textContent = 'Your portfolio has data from ' + _statusData.date_range[0] + ' to ' + _statusData.date_range[1] + '. Duplicates will be automatically skipped.';
+  } else {
+    warn.style.display = 'none';
+  }
+
+  document.getElementById('step4Err').textContent = '';
+  document.getElementById('successBox').style.display = 'none';
+  document.getElementById('step4Btns').style.display = '';
+}
+
+// --- Back buttons ---
+document.getElementById('backBtn1').addEventListener('click', () => {
+  document.getElementById('step2').style.display = 'none';
+  document.getElementById('step1').style.display = '';
+  previewBtn.disabled = false;
+  previewBtn.textContent = 'Next: Map Columns';
+  setStep(1);
+});
+document.getElementById('backBtn2').addEventListener('click', () => {
+  document.getElementById('step3').style.display = 'none';
+  document.getElementById('step2').style.display = '';
+  setStep(2);
+});
+document.getElementById('backBtn3').addEventListener('click', () => {
+  document.getElementById('step4').style.display = 'none';
+  document.getElementById('step3').style.display = '';
+  setStep(3);
+});
+
+// --- Import ---
+document.getElementById('importBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('importBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Importing...';
+  document.getElementById('step4Err').textContent = '';
+
+  const mapping = collectMapping();
+  try {
+    const resp = await fetch('/import/run', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ asset_class: _assetClass, mapping, filename: _filename }),
+    });
+    const data = await resp.json();
+    if (data.error) {
+      document.getElementById('step4Err').textContent = data.error;
+      btn.disabled = false; btn.textContent = 'Import';
+      return;
+    }
+    document.getElementById('step4Btns').style.display = 'none';
+    const box = document.getElementById('successBox');
+    box.style.display = '';
+    box.innerHTML = `<div class="success-box">
+      <div class="big">&#10003; Import complete</div>
+      <div class="sub">${data.new} new &nbsp;&bull;&nbsp; ${data.skipped} skipped &nbsp;&bull;&nbsp; ${data.total} total rows</div>
+      <div class="success-links">
+        <a class="btn btn-primary" href="/report">View Report</a>
+        <button class="btn btn-secondary" onclick="location.href='/import'">Import Another</button>
+      </div>
+    </div>`;
+  } catch(e) {
+    document.getElementById('step4Err').textContent = 'Network error: ' + e.message;
+    btn.disabled = false; btn.textContent = 'Import';
+  }
+});
+</script>
+{% endblock %}

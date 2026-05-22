@@ -7,8 +7,9 @@ separate Dividend element within the declaration.
 XML Schema: http://edavki.durs.si/Documents/Schemas/Doh_Div_3.xsd
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from datetime import datetime
 
 from lxml import etree
 

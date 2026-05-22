@@ -9,6 +9,8 @@ ETN data source: JGP service API at ipi.eprostor.gov.si/jgp-service-api
   - Group 127, displayCompositeProductId 321: all-Slovenia sales by year (fallback)
 """
 
+from __future__ import annotations
+
 import io
 import sqlite3
 import zipfile
@@ -426,7 +428,7 @@ def sync_etn_valuations(conn: sqlite3.Connection, verbose: bool = False,
         else:
             failed.append(name)
             if verbose:
-                print(f"    today: no comparables found")
+                print("    today: no comparables found")
             else:
                 print(f"  {name}: no comparables found")
 

@@ -1,0 +1,110 @@
+{% extends "base.html.j2" %}
+
+{% block meta %}
+<meta name="robots" content="noindex, nofollow">
+{% endblock %}
+
+{% block title %}Account — WealthEagle{% endblock %}
+
+{% block extra_css %}
+<style>
+.danger-zone{border:1px solid var(--red);border-radius:8px;padding:1rem;margin-top:1.5rem}
+.danger-zone h2{color:var(--red)}
+.form-row{display:flex;flex-direction:column;gap:0.5rem;max-width:360px}
+.msg{font-size:.82rem;margin-top:.5rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="app-main">
+  <h1 style="font-size:1.2rem;font-weight:700">Account Settings</h1>
+
+  <div class="card">
+    <h2>Account info</h2>
+    <p style="font-size:0.9rem"><strong>Username:</strong> {{ username }}</p>
+    <p style="font-size:0.9rem"><strong>Email:</strong> {{ email }}</p>
+    <p style="font-size:0.9rem"><strong>Plan:</strong> {{ role.capitalize() }}</p>
+    <p style="font-size:0.9rem"><strong>Subscription status:</strong> {{ subscription_status }}</p>
+  </div>
+
+  <div class="card" style="margin-top:1.5rem">
+    <h2>Subscription</h2>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem">
+      Manage your Premium plan — update payment method, download invoices, or cancel.
+    </p>
+    {% if billing_portal_url %}
+    <a class="btn btn-secondary" href="{{ billing_portal_url }}" target="_blank" rel="noopener">Manage subscription &rarr;</a>
+    {% else %}
+    <p style="font-size:0.82rem;color:var(--muted)">Subscription management not configured. Contact support to manage your plan.</p>
+    {% endif %}
+  </div>
+
+  <div class="card" style="margin-top:1.5rem">
+    <h2>Change password</h2>
+    <div class="form-row">
+      <div>
+        <label>Current password</label>
+        <input type="password" id="curPw" autocomplete="current-password" placeholder="Current password">
+      </div>
+      <div>
+        <label>New password</label>
+        <input type="password" id="newPw" autocomplete="new-password" placeholder="At least 8 characters">
+      </div>
+      <div>
+        <label>Confirm new password</label>
+        <input type="password" id="confirmPw" autocomplete="new-password" placeholder="Repeat new password">
+      </div>
+      <button class="btn btn-primary" id="changePwBtn" style="width:fit-content;margin-top:0.25rem">Update password</button>
+    </div>
+    <p id="pwMsg" class="msg"></p>
+  </div>
+
+  <div class="danger-zone">
+    <h2>Delete account</h2>
+    <p style="font-size:0.85rem;margin-bottom:1rem">
+      Permanently delete your WealthEagle account and all your portfolio data. This cannot be undone.
+    </p>
+    <p style="font-size:0.85rem;margin-bottom:1rem;color:var(--muted)">
+      We recommend <a href="/export/fifo-csv">exporting your data</a> before deleting.
+    </p>
+    <button class="btn btn-danger" id="deleteBtn">Delete my account</button>
+    <p id="deleteMsg" class="msg"></p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('changePwBtn').addEventListener('click', async () => {
+  const cur = document.getElementById('curPw').value;
+  const nw = document.getElementById('newPw').value;
+  const conf = document.getElementById('confirmPw').value;
+  const msg = document.getElementById('pwMsg');
+  const resp = await fetch('/account/change-password', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: new URLSearchParams({current_password: cur, new_password: nw, confirm_password: conf})
+  });
+  const data = await resp.json();
+  if (data.ok) {
+    msg.style.color = 'var(--green)';
+    msg.textContent = 'Password updated successfully.';
+    document.getElementById('curPw').value = '';
+    document.getElementById('newPw').value = '';
+    document.getElementById('confirmPw').value = '';
+  } else {
+    msg.style.color = 'var(--red)';
+    msg.textContent = data.error || 'Failed to update password.';
+  }
+});
+
+document.getElementById('deleteBtn').addEventListener('click', async () => {
+  if (!confirm('Are you sure? This will permanently delete your account and all your portfolio data.')) return;
+  if (!confirm('This action cannot be undone. Confirm deletion?')) return;
+  const resp = await fetch('/account/delete', {method: 'POST'});
+  if (resp.ok || resp.redirected) {
+    window.location.href = '/';
+  }
+});
+</script>
+{% endblock %}

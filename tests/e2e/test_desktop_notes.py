@@ -1,6 +1,5 @@
 """Desktop investment notes CRUD tests."""
 
-import pytest
 
 
 def _go_to_notes(page, server_url):

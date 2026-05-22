@@ -1,5 +1,7 @@
 """SQLite database layer for portfolio analytics."""
 
+from __future__ import annotations
+
 import hashlib
 import os
 import sqlite3

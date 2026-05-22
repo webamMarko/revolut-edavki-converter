@@ -1,5 +1,7 @@
 """Fetch historical prices from Yahoo Finance via yfinance."""
 
+from __future__ import annotations
+
 import sqlite3
 from datetime import datetime, timedelta
 
@@ -274,7 +276,7 @@ def sync_benchmarks(conn: sqlite3.Connection, start_date: datetime | None = None
                 print(f"    -> {len(df)} records")
         else:
             if verbose:
-                print(f"    -> FAILED")
+                print("    -> FAILED")
 
     target.commit()
     print("Benchmark indexes updated")
@@ -499,14 +501,13 @@ def sync_dividend_schedules(conn: sqlite3.Connection, verbose: bool = False):
             # Get calendar info for payment dates
             try:
                 cal = tk.calendar
-                next_payment_date = None
                 if cal is not None and hasattr(cal, 'get'):
-                    ex_date_info = cal.get("Ex-Dividend Date")
                     payment_info = cal.get("Dividend Date")
                     if payment_info is not None:
-                        next_payment_date = str(payment_info)[:10] if not isinstance(payment_info, str) else payment_info
+                        # Payment date is available but not currently used
+                        pass
             except Exception:
-                next_payment_date = None
+                pass
 
             # Determine frequency from historical dates
             div_dates = sorted(divs.index.to_pydatetime().tolist())

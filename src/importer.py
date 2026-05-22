@@ -1,5 +1,7 @@
 """CSV import with deduplication for portfolio analytics."""
 
+from __future__ import annotations
+
 import hashlib
 import re
 import sqlite3
@@ -192,7 +194,6 @@ def _parse_savings_row(row) -> dict | None:
     raw_val_usd = row.get("Value, USD")
     raw_val_eur = row.get("Value, EUR")
     raw_fx = row.get("FX Rate")
-    raw_pps = row.get("Price per share")
     raw_qty = row.get("Quantity of shares")
 
     if currency == "EUR":
@@ -201,20 +202,17 @@ def _parse_savings_row(row) -> dict | None:
         # "Value, EUR" col → price per share
         # "FX Rate" col → quantity of shares
         value_eur = _parse_savings_amount(raw_val_usd)
-        pps = _parse_savings_amount(raw_val_eur)
         qty = _parse_savings_amount(raw_fx)
         fx_rate = 1.0
     elif currency == "GBP":
         # GBP section: "Value, USD" col → GBP value, "Value, EUR" → EUR value
         value_eur = _parse_savings_amount(raw_val_eur)
-        pps = _parse_savings_amount(raw_pps)
         qty = _parse_savings_amount(raw_qty)
         gbp_val = _parse_savings_amount(raw_val_usd)
         fx_rate = abs(value_eur / gbp_val) if gbp_val and gbp_val != 0 and value_eur else _parse_savings_amount(raw_fx) or 1.0
     else:
         # USD section: standard columns
         value_eur = _parse_savings_amount(raw_val_eur)
-        pps = _parse_savings_amount(raw_pps)
         qty = _parse_savings_amount(raw_qty)
         fx_rate = _parse_savings_amount(raw_fx) or 1.0
 
@@ -289,7 +287,6 @@ def _parse_crypto_row(row) -> dict | None:
     quantity = _parse_amount(row.get("Quantity"))
     price = _parse_eur_amount(row.get("Price"))
     value = _parse_eur_amount(row.get("Value"))
-    fees = _parse_eur_amount(row.get("Fees"))
 
     return {
         "date": date,
@@ -1041,7 +1038,8 @@ def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) 
 
     if asset_class == "ilirika":
         split_deltas = _preprocess_ilirika_splits(df)
-        parse_row = lambda row: _parse_ilirika_row(row, split_deltas)
+        def parse_row(row):
+            return _parse_ilirika_row(row, split_deltas)
     else:
         parse_row = {
             "cfd": _parse_cfd_row,

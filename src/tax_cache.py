@@ -1,12 +1,13 @@
 """Persistent caching layer for compute_tax_report() results."""
 
+from __future__ import annotations
+
 import json
 import sqlite3
 from dataclasses import asdict
 from datetime import datetime
 
 from .tax import TaxReport, SaleTaxDetail, UnrealizedTaxDetail, TaxLossHarvestCandidate
-from .analytics_cache import compute_data_hash
 
 
 def get_cached_tax(conn: sqlite3.Connection, year: int, scope: str,

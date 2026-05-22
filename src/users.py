@@ -4,6 +4,8 @@ Stores users in a separate SQLite database at $REVOLUT_DATA_DIR/_system/users.db
 Handles authentication, invite tokens, role management, and Stripe customer linking.
 """
 
+from __future__ import annotations
+
 import hashlib
 import os
 import secrets
@@ -155,7 +157,7 @@ def _row_to_user(row: sqlite3.Row) -> User:
         stripe_customer_id=row["stripe_customer_id"],
         created_at=row["created_at"],
         last_login=row["last_login"],
-        onboarding_completed=row.get("onboarding_completed", 0),
+        onboarding_completed=row["onboarding_completed"] if "onboarding_completed" in row.keys() else 0,
     )
 
 
@@ -674,7 +676,6 @@ def create_session(
     conn: sqlite3.Connection | None = None,
 ) -> str:
     """Create a persistent session token for a User. Returns the raw token."""
-    import time
     close = conn is None
     if conn is None:
         conn = get_users_db()

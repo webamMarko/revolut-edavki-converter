@@ -1,5 +1,7 @@
 """CSV import validation with row-level issue detection and correction suggestions."""
 
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass, field
 from difflib import get_close_matches

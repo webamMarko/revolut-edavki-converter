@@ -3,10 +3,10 @@
 Stores events in _system/audit.db with structured fields for filtering.
 """
 
+from __future__ import annotations
+
 import os
 import sqlite3
-import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 def _default_data_dir() -> str:

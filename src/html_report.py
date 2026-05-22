@@ -1,5 +1,7 @@
 """HTML report generator for portfolio analytics."""
 
+from __future__ import annotations
+
 import html
 import json
 import sqlite3

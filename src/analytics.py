@@ -1,8 +1,10 @@
 """Portfolio analytics engine — daily portfolio reconstruction and metric computation."""
 
+from __future__ import annotations
+
 import sqlite3
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -712,7 +714,6 @@ def _compute_analytics_inner(conn: sqlite3.Connection, year: int | None,
                 "realized_gain_eur": total_realized_gain,
             })
 
-        prev_portfolio_value = portfolio_value
         current += timedelta(days=1)
 
     # Build daily DataFrame

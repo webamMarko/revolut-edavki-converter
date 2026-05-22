@@ -4,6 +4,8 @@ Produces a formatted PDF with: per-ticker gain/loss summary, holding period
 breakdown, total tax liability by bracket, and reconciliation details.
 """
 
+from __future__ import annotations
+
 import io
 from collections import defaultdict
 from datetime import datetime
@@ -14,11 +16,11 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm, cm
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
-    PageBreak, HRFlowable,
+    HRFlowable,
 )
 
-from .tax import TaxReport, SaleTaxDetail
-from .tax_regimes import TaxRegime, get_regime
+from .tax import TaxReport
+from .tax_regimes import get_regime
 
 
 def _fmt_eur(val: float) -> str:

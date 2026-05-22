@@ -1,6 +1,5 @@
 """Desktop admin page tests."""
 
-import pytest
 
 
 class TestAdminPage:

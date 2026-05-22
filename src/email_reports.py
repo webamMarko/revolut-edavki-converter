@@ -4,11 +4,12 @@ Manages report preferences per user and generates/sends portfolio summary emails
 Designed to be invoked via cron: `python -m src.cli send-reports`
 """
 
-import json
+from __future__ import annotations
+
 import os
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from .users import get_users_db, User, _row_to_user
@@ -358,7 +359,6 @@ def _render_weekly_email(username: str, summary: dict) -> tuple[str, str, str]:
     subject = f"Weekly Portfolio Summary — {summary['end_date']}"
 
     gain_sign = "+" if summary["total_gain_eur"] >= 0 else ""
-    day_sign = "+" if summary.get("day_change_eur", 0) >= 0 else ""
 
     gainers_html = ""
     if summary.get("top_gainers"):
@@ -370,8 +370,8 @@ def _render_weekly_email(username: str, summary: dict) -> tuple[str, str, str]:
     losers_html = ""
     if summary.get("top_losers"):
         losers_html = "<h3 style='margin-top:1rem;font-size:0.95rem'>Top losers</h3><ul>"
-        for l in summary["top_losers"]:
-            losers_html += f"<li><strong>{l['ticker']}</strong>: €{l['gain_eur']:,.2f}</li>"
+        for loser in summary["top_losers"]:
+            losers_html += f"<li><strong>{loser['ticker']}</strong>: €{loser['gain_eur']:,.2f}</li>"
         losers_html += "</ul>"
 
     app_url = os.environ.get("APP_BASE_URL", "http://localhost:8083")
@@ -535,10 +535,10 @@ def _render_digest_email(
             movers_text += "Top gainers:\n" + "\n".join(f"  {g['ticker']}: +{g['pct']:.1f}% (+€{g['eur']:,.2f})" for g in top_gainers) + "\n"
         if top_losers:
             movers_html += "<div style='font-size:0.82rem;color:#888;margin-bottom:0.3rem'>Losers</div><ul style='margin:0 0 0 0;padding-left:1.2rem'>"
-            for l in top_losers:
-                movers_html += f"<li><strong>{l['ticker']}</strong>: {l['pct']:.1f}% (€{l['eur']:,.2f})</li>"
+            for loser in top_losers:
+                movers_html += f"<li><strong>{loser['ticker']}</strong>: {loser['pct']:.1f}% (€{loser['eur']:,.2f})</li>"
             movers_html += "</ul>"
-            movers_text += "Top losers:\n" + "\n".join(f"  {l['ticker']}: {l['pct']:.1f}% (€{l['eur']:,.2f})" for l in top_losers) + "\n"
+            movers_text += "Top losers:\n" + "\n".join(f"  {loser['ticker']}: {loser['pct']:.1f}% (€{loser['eur']:,.2f})" for loser in top_losers) + "\n"
     elif not is_premium:
         movers_html = """
         <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:6px;padding:12px;margin-top:1.5rem;font-size:0.85rem">

@@ -5,6 +5,8 @@ considering already-realized gains, and flags wash-sale risk (Slovenia: FURS
 treats sell-and-rebuy within 30 days as potentially non-deductible).
 """
 
+from __future__ import annotations
+
 import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -12,12 +14,10 @@ from datetime import datetime, timedelta
 
 from .importer import normalize_date
 from .tax import (
-    TaxLossHarvestCandidate,
     compute_tax_report,
     _get_rate_for_class,
-    standardized_costs,
 )
-from .tax_regimes import TaxRegime, get_regime, DEFAULT_REGIME
+from .tax_regimes import get_regime, DEFAULT_REGIME
 
 
 WASH_SALE_WINDOW_DAYS = 30

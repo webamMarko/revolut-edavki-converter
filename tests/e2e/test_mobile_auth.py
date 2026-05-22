@@ -1,6 +1,5 @@
 """Mobile authentication tests."""
 
-import pytest
 from conftest import _login
 
 

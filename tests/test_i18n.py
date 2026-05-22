@@ -8,7 +8,6 @@ Verifies:
 - get_locale_for_country("ZZ") returns "en" (unknown country)
 """
 
-import pytest
 
 from src.i18n import get_translations, get_locale_for_country
 

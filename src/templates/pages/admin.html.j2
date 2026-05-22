@@ -1,0 +1,107 @@
+{% extends "base.html.j2" %}
+
+{% block meta %}
+<meta name="robots" content="noindex, nofollow">
+{% endblock %}
+
+{% block title %}Admin — WealthEagle{% endblock %}
+
+{% block extra_css %}
+<style>
+.form-row{display:flex;gap:.75rem;margin-top:.5rem;flex-wrap:wrap}
+#newEmail{flex:1;min-width:200px;margin-bottom:0}
+#newRole{width:auto;margin-bottom:0;background:var(--raised)}
+.msg{font-size:.82rem;margin-top:.5rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="app-main">
+  <div style="display:flex;align-items:center;gap:1rem;margin-bottom:.5rem">
+    <h1 style="font-size:1.2rem;font-weight:700;margin:0">User Management</h1>
+    <a href="/admin/audit-log" class="btn btn-secondary btn-sm">Audit Log</a>
+  </div>
+
+  <div class="card">
+    <h2>Create user &amp; send invite</h2>
+    <div class="form-row">
+      <input type="email" id="newEmail" placeholder="user@example.com">
+      <select id="newRole">
+        <option value="premium">Premium</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button class="btn btn-primary btn-sm" id="createBtn">Create &amp; send invite</button>
+    </div>
+    <p id="createMsg" class="msg"></p>
+  </div>
+
+  <div class="card">
+    <h2>All users</h2>
+    <table class="data-table">
+      <thead><tr><th>#</th><th>Username</th><th>Email</th><th>Role</th><th>Last seen</th></tr></thead>
+      <tbody>
+      {% for u in users %}
+        <tr>
+          <td>{{ u.id }}</td>
+          <td>{{ u.username }}</td>
+          <td>{{ u.email }}</td>
+          <td>
+            <select data-uid="{{ u.id }}" class="role-select" {% if u.username == current_username %}disabled{% endif %}>
+              {% for r in ["guest", "premium", "admin"] %}
+              <option value="{{ r }}" {% if r == u.role %}selected{% endif %}>{{ r }}</option>
+              {% endfor %}
+            </select>
+            {% if u.invite_token %}
+            <span class="badge badge-accent">invite pending</span>
+            {% endif %}
+          </td>
+          <td style="color:var(--muted);font-size:.8rem">{{ (u.last_login or u.created_at)[:10] }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('createBtn').addEventListener('click', async () => {
+  const email = document.getElementById('newEmail').value.trim();
+  const role = document.getElementById('newRole').value;
+  const msg = document.getElementById('createMsg');
+  if (!email) { msg.textContent = 'Enter an email address.'; return; }
+  const resp = await fetch('/admin/users', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({email, role})
+  });
+  const data = await resp.json();
+  if (data.ok) {
+    msg.style.color = 'var(--green)';
+    msg.textContent = data.email_sent
+      ? 'Invite sent to ' + email + ' (username: ' + data.username + ')'
+      : 'User created. Invite URL: ' + data.invite_url;
+    document.getElementById('newEmail').value = '';
+    setTimeout(() => location.reload(), 2000);
+  } else {
+    msg.style.color = 'var(--red)';
+    msg.textContent = data.error;
+  }
+});
+
+document.querySelectorAll('.role-select').forEach(sel => {
+  sel.addEventListener('change', async () => {
+    const uid = sel.dataset.uid;
+    const role = sel.value;
+    const resp = await fetch('/admin/users/' + uid + '/role', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({role})
+    });
+    const data = await resp.json();
+    if (!data.ok) alert('Failed to update role.');
+  });
+});
+</script>
+{% endblock %}

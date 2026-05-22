@@ -1,0 +1,328 @@
+{% extends "base.html.j2" %}
+
+{% block meta %}
+<meta name="description" content="Track your Revolut portfolio performance, generate eDavki tax reports, and plan your FIRE journey with daily-granularity analytics.">
+<meta name="robots" content="{{ robots }}">
+<link rel="canonical" href="{{ app_base_url }}/">
+<meta property="og:title" content="WealthEagle — Portfolio Analytics & Tax Reporting for Revolut Investors">
+<meta property="og:description" content="Track your Revolut portfolio performance, generate eDavki tax reports, and plan your FIRE journey with daily-granularity analytics.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ app_base_url }}/">
+<meta property="og:image" content="{{ app_base_url }}/static/og-card.png">
+<meta property="og:site_name" content="WealthEagle">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="WealthEagle — Portfolio Analytics & Tax Reporting">
+<meta name="twitter:description" content="Track your Revolut portfolio performance, generate eDavki tax reports, and plan your FIRE journey.">
+<meta name="twitter:image" content="{{ app_base_url }}/static/og-card.png">
+{% endblock %}
+
+{% block title %}WealthEagle — Portfolio Analytics & Tax Reporting for Revolut Investors{% endblock %}
+
+{% block extra_css %}
+{% if not is_premium %}
+<style>
+/* ---- Landing page ---- */
+.landing{max-width:960px;width:100%;margin:0 auto;padding:2rem 1rem;display:flex;flex-direction:column;gap:3rem}
+.hero{text-align:center;padding:2.5rem 1rem 1.5rem}
+.hero-tagline{font-size:clamp(1.5rem,4vw,2.2rem);font-weight:700;letter-spacing:-0.03em;line-height:1.2;margin-bottom:0.75rem}
+.hero-tagline .hl{color:var(--accent)}
+.hero-sub{font-size:1rem;color:var(--muted);max-width:520px;margin:0 auto 1.75rem}
+.hero-ctas{display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap}
+.hero-ctas .btn{padding:0.7rem 1.6rem;font-size:0.95rem}
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
+.feature-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;text-align:center;transition:border-color 0.15s}
+.feature-card:hover{border-color:var(--accent)}
+.feature-icon{font-size:2rem;margin-bottom:0.6rem}
+.feature-title{font-size:0.92rem;font-weight:700;margin-bottom:0.35rem}
+.feature-desc{font-size:0.8rem;color:var(--muted);line-height:1.5}
+.how-section{text-align:center}
+.how-section h2{font-size:1.15rem;font-weight:700;margin-bottom:1.5rem}
+.how-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1.25rem}
+.how-step{display:flex;flex-direction:column;align-items:center;gap:0.5rem}
+.how-num{width:36px;height:36px;border-radius:50%;background:var(--accent-dim);color:var(--accent);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:0.95rem}
+.how-label{font-size:0.88rem;font-weight:600}
+.how-desc{font-size:0.78rem;color:var(--muted)}
+.how-arrow{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.2rem}
+.preview-section{text-align:center}
+.preview-section h2{font-size:1.15rem;font-weight:700;margin-bottom:1rem}
+.preview-frame{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;overflow:hidden}
+.preview-placeholder{display:flex;flex-direction:column;align-items:center;gap:0.75rem;padding:2rem 1rem}
+.preview-placeholder .icon{font-size:2.5rem}
+.preview-placeholder .text{font-size:0.88rem;color:var(--muted)}
+.preview-placeholder .btn{margin-top:0.5rem}
+@media (max-width:768px) {
+  .landing{padding:1.25rem 0.75rem;gap:2rem}
+  .hero{padding:1.5rem 0.5rem 1rem}
+  .features-grid{grid-template-columns:1fr 1fr}
+  .how-arrow{display:none}
+  .how-steps{grid-template-columns:1fr}
+}
+@media (max-width:480px) {
+  .features-grid{grid-template-columns:1fr}
+}
+</style>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if is_premium %}
+<div class="app-main">
+{% endif %}
+
+{% if is_premium and is_demo_view %}
+  <div class="demo-banner">
+    &#128270; You're viewing <strong>demo data</strong>.
+    <button onclick="switchToMyPortfolio()" style="background:none;border:none;color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline;padding:0;font-size:inherit">
+      Switch to my portfolio
+    </button>
+  </div>
+{% endif %}
+
+{% if not is_premium %}
+  <div class="guest-banner">
+    &#128275; You're viewing the <strong>demo portfolio</strong>.
+    <a href="/login" style="color:var(--accent);font-weight:700">Log in</a> to view your own data
+    or <a href="/pricing" style="color:var(--accent);font-weight:700">see pricing &rarr;</a>
+  </div>
+{% endif %}
+
+{% if is_premium %}
+  <div id="statusBar" class="status-bar" style="display:none"></div>
+{% endif %}
+
+{% if not is_premium %}
+<div class="landing">
+  <section class="hero">
+    <h1 class="hero-tagline">Your Revolut portfolio.<br><span class="hl">Analyzed. Tax-ready. Private.</span></h1>
+    <p class="hero-sub">Import your Revolut trading CSV and get portfolio analytics, Monte Carlo projections, and eDavki-ready tax reports — all self-hosted.</p>
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="/report">Try the Demo</a>
+      <a class="btn btn-secondary" href="/login">Get Started</a>
+    </div>
+  </section>
+
+  <section class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">&#128202;</div>
+      <div class="feature-title">Tax Automation</div>
+      <div class="feature-desc">eDavki-ready capital gains &amp; dividend reporting with FIFO matching</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#128200;</div>
+      <div class="feature-title">Multi-Asset Analytics</div>
+      <div class="feature-desc">Stocks, CFDs, crypto &amp; savings in one unified dashboard</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#127919;</div>
+      <div class="feature-title">FIRE Projections</div>
+      <div class="feature-desc">Monte Carlo simulations for financial independence planning</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#128274;</div>
+      <div class="feature-title">Self-Hosted Privacy</div>
+      <div class="feature-desc">Your data stays on your server — no third-party access</div>
+    </div>
+  </section>
+
+  <section class="how-section">
+    <h2>How It Works</h2>
+    <div class="how-steps">
+      <div class="how-step">
+        <div class="how-num">1</div>
+        <div class="how-label">Upload CSV</div>
+        <div class="how-desc">Export from Revolut and drop the file here</div>
+      </div>
+      <div class="how-arrow">&rarr;</div>
+      <div class="how-step">
+        <div class="how-num">2</div>
+        <div class="how-label">Sync Prices</div>
+        <div class="how-desc">Historical prices and FX rates fetched automatically</div>
+      </div>
+      <div class="how-arrow">&rarr;</div>
+      <div class="how-step">
+        <div class="how-num">3</div>
+        <div class="how-label">Get Report</div>
+        <div class="how-desc">Analytics dashboard with tax-ready exports</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="preview-section">
+    <h2>See It in Action</h2>
+    <div class="preview-frame">
+      <div class="preview-placeholder">
+        <div class="icon">&#128202;</div>
+        <div class="text">Explore a live demo with sample portfolio data</div>
+        <a class="btn btn-primary btn-sm" href="/report">Open Demo Report</a>
+      </div>
+    </div>
+  </section>
+</div>
+{% endif %}
+
+  <div id="uploadCard" class="card"{% if not is_premium %} style="display:none"{% endif %}>
+    <h2>Upload CSV Files</h2>
+
+    <div class="drop-zone" id="dropZone">
+      <div class="icon">&#128196;</div>
+      <div class="lbl">Drop files here or <strong>browse</strong></div>
+      <div class="hint">CSV or Excel — stocks, CFD, crypto, or savings (auto-detected)</div>
+      <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" multiple>
+    </div>
+
+    <div id="fileList" class="file-list"></div>
+
+    <div class="btn-group">
+      <button class="btn btn-primary" id="uploadBtn" disabled>Upload &amp; Import</button>
+    </div>
+
+    <div class="progress" id="progress">
+      <div class="progress-bar"><div class="fill" id="progressFill" style="width:0%"></div></div>
+      <div class="progress-label" id="progressLabel">Importing...</div>
+    </div>
+
+    <div class="results" id="results"></div>
+
+    <div class="actions" id="actions">
+      <button class="btn btn-secondary" id="syncBtn">Sync Prices</button>
+      <a class="btn btn-primary" href="/report" target="_blank">View Report</a>
+      <button class="btn btn-secondary" id="resetBtn">Import More</button>
+    </div>
+  </div>
+
+{% if is_premium %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const isPremium = {{ 'true' if is_premium else 'false' }};
+
+  const fileInput = document.getElementById('fileInput');
+  const dropZone = document.getElementById('dropZone');
+  const fileList = document.getElementById('fileList');
+  const uploadBtn = document.getElementById('uploadBtn');
+  const progress = document.getElementById('progress');
+  const progressFill = document.getElementById('progressFill');
+  const progressLabel = document.getElementById('progressLabel');
+  const resultsEl = document.getElementById('results');
+  const actionsEl = document.getElementById('actions');
+  const statusBar = document.getElementById('statusBar');
+  const syncBtn = document.getElementById('syncBtn');
+  const resetBtn = document.getElementById('resetBtn');
+
+  let selectedFiles = [];
+
+  fetch('/status').then(r=>r.json()).then(data => {
+    if (data.has_data) {
+      const items = [];
+      items.push('<span class="num">'+data.transaction_count+'</span> <span class="lbl">transactions</span>');
+      items.push('<span class="num">'+data.ticker_count+'</span> <span class="lbl">tickers</span>');
+      if (data.date_range) items.push('<span class="lbl">'+data.date_range[0]+' to '+data.date_range[1]+'</span>');
+      if (data.asset_classes) {
+        const tags = Object.entries(data.asset_classes).map(function(e){ return e[0]+': '+e[1]; }).join(', ');
+        items.push('<span class="lbl">'+tags+'</span>');
+      }
+      statusBar.innerHTML = items.map(function(i){ return '<div class="status-item">'+i+'</div>'; }).join('');
+      statusBar.style.display = '';
+    }
+  }).catch(function(){});
+
+  if (!isPremium) return;
+
+  dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('dragover'); });
+  dropZone.addEventListener('drop', function(e) {
+    e.preventDefault(); dropZone.classList.remove('dragover'); addFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', function() { addFiles(fileInput.files); fileInput.value = ''; });
+
+  function addFiles(fl) {
+    for (var i = 0; i < fl.length; i++) {
+      var f = fl[i];
+      var ext = f.name.split('.').pop().toLowerCase();
+      if (['csv','xlsx','xls'].indexOf(ext) === -1) continue;
+      if (selectedFiles.some(function(sf) { return sf.name === f.name && sf.size === f.size; })) continue;
+      selectedFiles.push(f);
+    }
+    renderFileList();
+  }
+
+  function renderFileList() {
+    uploadBtn.disabled = selectedFiles.length === 0;
+    fileList.innerHTML = selectedFiles.map(function(f, i) {
+      var size = f.size < 1024 ? f.size + ' B'
+        : f.size < 1048576 ? (f.size/1024).toFixed(1) + ' KB'
+        : (f.size/1048576).toFixed(1) + ' MB';
+      return '<div class="file-item">'
+        + '<span class="name">' + esc(f.name) + '</span>'
+        + '<span class="size">' + size + '</span>'
+        + '<button class="remove" data-idx="' + i + '">&times;</button>'
+        + '</div>';
+    }).join('');
+    fileList.querySelectorAll('.remove').forEach(function(btn) {
+      btn.addEventListener('click', function() { selectedFiles.splice(+btn.dataset.idx, 1); renderFileList(); });
+    });
+  }
+
+  function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  uploadBtn.addEventListener('click', async function() {
+    if (!selectedFiles.length) return;
+    uploadBtn.disabled = true;
+    progress.classList.add('active');
+    resultsEl.classList.remove('active');
+    actionsEl.classList.remove('active');
+    progressFill.style.width = '30%';
+    progressLabel.textContent = 'Uploading ' + selectedFiles.length + ' file(s)...';
+    var form = new FormData();
+    selectedFiles.forEach(function(f) { form.append('files', f); });
+    try {
+      progressFill.style.width = '60%';
+      progressLabel.textContent = 'Importing...';
+      var resp = await fetch('/upload', { method: 'POST', body: form });
+      var data = await resp.json();
+      progressFill.style.width = '100%';
+      if (data.error) { progressLabel.textContent = 'Error: ' + data.error; uploadBtn.disabled = false; return; }
+      progressLabel.textContent = 'Done!';
+      resultsEl.innerHTML = data.results.map(function(r) {
+        if (r.error) return '<div class="result-item"><span class="status">&#10060;</span>'
+          + '<div class="info"><div class="filename">' + esc(r.filename) + '</div><div class="error">' + esc(r.error) + '</div></div></div>';
+        var icon = r.new > 0 ? '&#9989;' : '&#9898;';
+        return '<div class="result-item"><span class="status">' + icon + '</span>'
+          + '<div class="info"><div class="filename">' + esc(r.filename) + '</div>'
+          + '<div class="detail">' + r.new + ' new, ' + r.skipped + ' skipped (of ' + r.total + ' rows)</div></div></div>';
+      }).join('');
+      resultsEl.classList.add('active');
+      actionsEl.classList.add('active');
+      selectedFiles = []; renderFileList();
+    } catch (e) {
+      progressFill.style.width = '100%';
+      progressLabel.textContent = 'Error: ' + e.message;
+      uploadBtn.disabled = false;
+    }
+  });
+
+  syncBtn.addEventListener('click', async function() {
+    syncBtn.disabled = true; syncBtn.textContent = 'Syncing...';
+    try {
+      var resp = await fetch('/sync', { method: 'POST' });
+      var data = await resp.json();
+      syncBtn.textContent = data.ok ? 'Synced!' : 'Error: ' + data.error;
+    } catch(e) { syncBtn.textContent = 'Error'; }
+    setTimeout(function() { syncBtn.textContent = 'Sync Prices'; syncBtn.disabled = false; }, 3000);
+  });
+
+  resetBtn.addEventListener('click', function() {
+    resultsEl.classList.remove('active'); actionsEl.classList.remove('active');
+    progress.classList.remove('active'); progressFill.style.width = '0%';
+    uploadBtn.disabled = true;
+  });
+})();
+
+// Welcome wizard
+window.ROLE = '{{ role }}';
+</script>
+{% endblock %}

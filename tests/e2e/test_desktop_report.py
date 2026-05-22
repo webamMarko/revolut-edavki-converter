@@ -240,7 +240,6 @@ class TestTransactions:
         premium_desktop_page.wait_for_timeout(300)
 
         count_el = premium_desktop_page.locator("#txCount")
-        initial_text = count_el.text_content()
 
         # Type a filter
         premium_desktop_page.locator("#txFilter").fill("BUY")
