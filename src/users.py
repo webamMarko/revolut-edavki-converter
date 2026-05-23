@@ -36,14 +36,17 @@ class User:
     id: int
     username: str
     email: str
-    role: str                     # 'guest', 'premium', 'admin'
+    role: str                     # 'guest', 'premium', 'admin', 'cofounder'
     password_hash: str | None
     invite_token: str | None
     invite_expires: str | None
     stripe_customer_id: str | None
-    created_at: str
-    last_login: str | None
-    onboarding_completed: int     # 0=not completed, 1=completed
+    stripe_subscription_status: str | None
+    credits_remaining: int = 0
+    credits_last_reset: str | None = None
+    created_at: str = ""
+    last_login: str | None = None
+    onboarding_completed: int = 0     # 0=not completed, 1=completed
 
 
 # ---------------------------------------------------------------------------
@@ -57,11 +60,13 @@ CREATE TABLE IF NOT EXISTS users (
     email              TEXT NOT NULL UNIQUE,
     password_hash      TEXT,
     role               TEXT NOT NULL DEFAULT 'premium'
-                       CHECK(role IN ('guest', 'premium', 'admin')),
+                       CHECK(role IN ('guest', 'premium', 'admin', 'cofounder')),
     invite_token       TEXT UNIQUE,
     invite_expires     TEXT,
     stripe_customer_id TEXT UNIQUE,
     stripe_subscription_status TEXT,
+    credits_remaining  INTEGER NOT NULL DEFAULT 0,
+    credits_last_reset TEXT,
     created_at         TEXT NOT NULL DEFAULT (datetime('now')),
     last_login         TEXT
 );
@@ -107,6 +112,32 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     used_at    TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS system_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tickets (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(id),
+    type            TEXT NOT NULL CHECK(type IN ('bug', 'idea')),
+    title           TEXT NOT NULL,
+    description     TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new', 'in_progress', 'done')),
+    paperclip_issue_id TEXT,
+    status_synced_at TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS ticket_comments (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_id   INTEGER NOT NULL REFERENCES tickets(id),
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    body        TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 # Migration: add columns that may not exist in older DBs
@@ -114,7 +145,31 @@ _MIGRATIONS = [
     "ALTER TABLE users ADD COLUMN stripe_subscription_status TEXT",
     "ALTER TABLE users ADD COLUMN onboarding_completed INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE sessions ADD COLUMN active_portfolio_id INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE users ADD COLUMN credits_remaining INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN credits_last_reset TEXT",
 ]
+
+# Default system settings
+_DEFAULT_SETTINGS = {
+    "cofounder_price_eur": "249",
+    "bug_token_multiplier": "5000",
+    "idea_token_multiplier": "10000",
+    "credits_per_week": "100",
+}
+
+
+def _init_default_settings(conn: sqlite3.Connection) -> None:
+    """Initialize default system settings if they don't exist."""
+    for key, value in _DEFAULT_SETTINGS.items():
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)",
+                (key, value),
+            )
+        except sqlite3.OperationalError:
+            # system_settings table might not exist in older schemas
+            pass
+    conn.commit()
 
 
 def get_users_db() -> sqlite3.Connection:
@@ -134,6 +189,8 @@ def get_users_db() -> sqlite3.Connection:
             conn.commit()
         except sqlite3.OperationalError:
             pass
+    # Initialize default system settings
+    _init_default_settings(conn)
     return conn
 
 
@@ -180,6 +237,7 @@ def _row_to_user(row: sqlite3.Row) -> User:
         invite_token=row["invite_token"],
         invite_expires=row["invite_expires"],
         stripe_customer_id=row["stripe_customer_id"],
+        stripe_subscription_status=row["stripe_subscription_status"] if "stripe_subscription_status" in row.keys() else None,
         created_at=row["created_at"],
         last_login=row["last_login"],
         onboarding_completed=row["onboarding_completed"] if "onboarding_completed" in row.keys() else 0,
