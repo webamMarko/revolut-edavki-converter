@@ -18,11 +18,21 @@ from .analytics import (
 
 
 def compute_data_hash(conn: sqlite3.Connection,
-                      prices_conn: sqlite3.Connection | None = None) -> str:
-    """SHA-256 of transaction count + last transaction date + last sync date."""
-    row = conn.execute(
-        "SELECT COUNT(*), MAX(date) FROM transactions WHERE asset_class != 'realestate'"
-    ).fetchone()
+                      prices_conn: sqlite3.Connection | None = None,
+                      portfolio_id: int | None = None) -> str:
+    """SHA-256 of transaction count + last transaction date + last sync date.
+
+    portfolio_id: if set, only hash transactions from this portfolio
+    """
+    if portfolio_id:
+        row = conn.execute(
+            "SELECT COUNT(*), MAX(date) FROM transactions WHERE asset_class != 'realestate' AND portfolio_id = ?",
+            (portfolio_id,)
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT COUNT(*), MAX(date) FROM transactions WHERE asset_class != 'realestate'"
+        ).fetchone()
     tx_count = row[0] or 0
     last_tx_date = row[1] or ""
 
@@ -37,28 +47,42 @@ def compute_data_hash(conn: sqlite3.Connection,
     ).fetchone()
     last_fx_date = fx_row[0] if fx_row else ""
 
-    payload = f"{tx_count}|{last_tx_date}|{last_sync_date}|{last_fx_date}"
+    # Include portfolio_id in hash so different portfolios have different cache keys
+    portfolio_key = f"|portfolio={portfolio_id}" if portfolio_id else ""
+    payload = f"{tx_count}|{last_tx_date}|{last_sync_date}|{last_fx_date}{portfolio_key}"
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def get_cached(conn: sqlite3.Connection, scope: str, data_hash: str) -> AnalyticsResult | None:
-    """Return cached AnalyticsResult if hash matches, else None."""
-    row = conn.execute(
-        "SELECT result_json FROM cached_analytics WHERE scope = ? AND data_hash = ?",
-        (scope, data_hash)
-    ).fetchone()
+def get_cached(conn: sqlite3.Connection, scope: str, data_hash: str, portfolio_id: int | None = None) -> AnalyticsResult | None:
+    """Return cached AnalyticsResult if hash matches, else None.
+
+    portfolio_id: if set, only retrieve cache for this portfolio
+    """
+    if portfolio_id:
+        row = conn.execute(
+            "SELECT result_json FROM cached_analytics WHERE scope = ? AND data_hash = ? AND portfolio_id = ?",
+            (scope, data_hash, portfolio_id)
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT result_json FROM cached_analytics WHERE scope = ? AND data_hash = ?",
+            (scope, data_hash)
+        ).fetchone()
     if not row:
         return None
     return _deserialize(row[0])
 
 
-def put_cache(conn: sqlite3.Connection, scope: str, data_hash: str, result: AnalyticsResult):
-    """Upsert analytics result into cache."""
+def put_cache(conn: sqlite3.Connection, scope: str, data_hash: str, result: AnalyticsResult, portfolio_id: int | None = None):
+    """Upsert analytics result into cache.
+
+    portfolio_id: if set, cache this result for this specific portfolio
+    """
     result_json = _serialize(result)
     conn.execute(
-        "INSERT OR REPLACE INTO cached_analytics (scope, data_hash, result_json, created_at) "
-        "VALUES (?, ?, ?, ?)",
-        (scope, data_hash, result_json, datetime.now().isoformat())
+        "INSERT OR REPLACE INTO cached_analytics (scope, data_hash, result_json, created_at, portfolio_id) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (scope, data_hash, result_json, datetime.now().isoformat(), portfolio_id or 1)
     )
     conn.commit()
 

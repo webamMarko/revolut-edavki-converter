@@ -114,6 +114,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             portfolio.serve_pricing_page(self)
 
         # API routes
+        elif path == "/api/portfolios":
+            api.api_get_portfolios(self)
         elif path == "/api/dividend-summary":
             api.handle_dividend_summary(self)
         elif path == "/api/email-preferences":
@@ -212,6 +214,10 @@ class UploadHandler(BaseHTTPRequestHandler):
             import_wizard.handle_import_run(self)
 
         # API routes
+        elif path == "/api/portfolios":
+            api.api_create_portfolio(self)
+        elif path == "/api/switch-portfolio":
+            api.api_switch_portfolio(self)
         elif path == "/api/notes":
             api.api_create_note(self)
         elif path == "/api/onboarding-complete":
@@ -244,8 +250,11 @@ class UploadHandler(BaseHTTPRequestHandler):
             return
         path = urlparse(self.path).path
         parts = path.split("/")
+        # /api/portfolios/<id>
+        if len(parts) == 4 and parts[1] == "api" and parts[2] == "portfolios" and parts[3].isdigit():
+            api.api_update_portfolio(self, int(parts[3]))
         # /api/notes/<id>
-        if len(parts) == 4 and parts[1] == "api" and parts[2] == "notes" and parts[3].isdigit():
+        elif len(parts) == 4 and parts[1] == "api" and parts[2] == "notes" and parts[3].isdigit():
             api.api_update_note(self, int(parts[3]))
         # /api/goals/<id>
         elif len(parts) == 4 and parts[1] == "api" and parts[2] == "goals" and parts[3].isdigit():
@@ -258,8 +267,11 @@ class UploadHandler(BaseHTTPRequestHandler):
             return
         path = urlparse(self.path).path
         parts = path.split("/")
+        # /api/portfolios/<id>
+        if len(parts) == 4 and parts[1] == "api" and parts[2] == "portfolios" and parts[3].isdigit():
+            api.api_delete_portfolio(self, int(parts[3]))
         # /api/notes/<id>
-        if len(parts) == 4 and parts[1] == "api" and parts[2] == "notes" and parts[3].isdigit():
+        elif len(parts) == 4 and parts[1] == "api" and parts[2] == "notes" and parts[3].isdigit():
             api.api_delete_note(self, int(parts[3]))
         # /api/goals/<id>
         elif len(parts) == 4 and parts[1] == "api" and parts[2] == "goals" and parts[3].isdigit():

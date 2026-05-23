@@ -22,19 +22,20 @@ def api_get_analytics(handler, scope: str):
         json_response(handler, {"error": f"Invalid scope. Must be one of: {', '.join(valid_scopes)}"}, status=400)
         return
     session = get_session(handler)
+    portfolio_id = session.get("active_portfolio_id", 1)  # Default to portfolio 1
     conn = portfolio_conn(session, get_session_token(handler))
     from ..prices_db import get_prices_conn_or_none
     prices_conn = get_prices_conn_or_none()
     try:
         from ..analytics import compute_analytics
         from ..analytics_cache import compute_data_hash, get_cached, put_cache
-        data_hash = compute_data_hash(conn, prices_conn)
-        cached = get_cached(conn, scope, data_hash)
+        data_hash = compute_data_hash(conn, prices_conn, portfolio_id=portfolio_id)
+        cached = get_cached(conn, scope, data_hash, portfolio_id=portfolio_id)
         if cached is not None:
             ac_analytics = cached
         else:
-            ac_analytics = compute_analytics(conn, scope=scope, prices_conn=prices_conn)
-            put_cache(conn, scope, data_hash, ac_analytics)
+            ac_analytics = compute_analytics(conn, scope=scope, prices_conn=prices_conn, portfolio_id=portfolio_id)
+            put_cache(conn, scope, data_hash, ac_analytics, portfolio_id=portfolio_id)
 
         ac_daily = ac_analytics.daily_series
         result = {
@@ -703,3 +704,126 @@ def serve_shared_portfolio(handler, token: str):
             prices_conn.close()
         if conn:
             conn.close()
+
+
+# ------------------------------------------------------------------
+# Portfolio API (multi-portfolio support)
+# ------------------------------------------------------------------
+
+def api_get_portfolios(handler):
+    """GET /api/portfolios — list user's portfolios with active_portfolio_id."""
+    session = get_session(handler)
+    conn = portfolio_conn(session, get_session_token(handler))
+    try:
+        from .. import db
+        portfolios = db.list_portfolios(conn)
+        response = {
+            "portfolios": portfolios,
+            "active_portfolio_id": session.get("active_portfolio_id", 1),
+            "max_portfolios": 5,
+        }
+        json_response(handler, response)
+    except Exception as e:
+        json_response(handler, {"error": str(e)}, status=500)
+    finally:
+        conn.close()
+
+
+def api_create_portfolio(handler):
+    """POST /api/portfolios — create a new portfolio."""
+    session = get_session(handler)
+    conn = portfolio_conn(session, get_session_token(handler))
+    try:
+        body = json.loads(handler.rfile.read(int(handler.headers.get("Content-Length", 0))).decode())
+        name = body.get("name", "").strip()
+        if not name:
+            json_response(handler, {"error": "Portfolio name is required"}, status=400)
+            return
+
+        from .. import db
+        try:
+            portfolio = db.create_portfolio(conn, name)
+            json_response(handler, portfolio, status=201)
+        except ValueError as e:
+            if "Maximum of 5 portfolios" in str(e):
+                json_response(handler, {"error": str(e)}, status=409)
+            else:
+                json_response(handler, {"error": str(e)}, status=400)
+    except Exception as e:
+        json_response(handler, {"error": str(e)}, status=500)
+    finally:
+        conn.close()
+
+
+def api_update_portfolio(handler, portfolio_id: int):
+    """PUT /api/portfolios/{id} — rename a portfolio."""
+    session = get_session(handler)
+    conn = portfolio_conn(session, get_session_token(handler))
+    try:
+        body = json.loads(handler.rfile.read(int(handler.headers.get("Content-Length", 0))).decode())
+        new_name = body.get("name", "").strip()
+        if not new_name:
+            json_response(handler, {"error": "Portfolio name is required"}, status=400)
+            return
+
+        from .. import db
+        try:
+            db.rename_portfolio(conn, portfolio_id, new_name)
+            # Return the updated portfolio
+            updated = conn.execute(
+                "SELECT id, name, slug, is_default FROM portfolios WHERE id = ?",
+                (portfolio_id,)
+            ).fetchone()
+            if updated:
+                response = dict(updated)
+                json_response(handler, response)
+            else:
+                json_response(handler, {"error": "Portfolio not found"}, status=404)
+        except ValueError as e:
+            json_response(handler, {"error": str(e)}, status=400)
+    except Exception as e:
+        json_response(handler, {"error": str(e)}, status=500)
+    finally:
+        conn.close()
+
+
+def api_delete_portfolio(handler, portfolio_id: int):
+    """DELETE /api/portfolios/{id} — delete a portfolio."""
+    session = get_session(handler)
+    conn = portfolio_conn(session, get_session_token(handler))
+    try:
+        from .. import db
+        try:
+            db.delete_portfolio(conn, portfolio_id)
+            json_response(handler, {"deleted": True})
+        except ValueError as e:
+            if "Cannot delete default portfolio" in str(e):
+                json_response(handler, {"error": str(e)}, status=400)
+            else:
+                json_response(handler, {"error": str(e)}, status=400)
+    except Exception as e:
+        json_response(handler, {"error": str(e)}, status=500)
+    finally:
+        conn.close()
+
+
+def api_switch_portfolio(handler):
+    """POST /api/switch-portfolio — set active portfolio in session."""
+    from .. import users
+    session = get_session(handler)
+    token = get_session_token(handler)
+    try:
+        body = json.loads(handler.rfile.read(int(handler.headers.get("Content-Length", 0))).decode())
+        portfolio_id = body.get("portfolio_id")
+        if not portfolio_id or not isinstance(portfolio_id, int):
+            json_response(handler, {"error": "portfolio_id must be an integer"}, status=400)
+            return
+
+        users_conn = users.get_users_db()
+        try:
+            users.set_active_portfolio(token, portfolio_id, users_conn)
+            json_response(handler, {"active_portfolio_id": portfolio_id})
+        finally:
+            users_conn.close()
+    except Exception as e:
+        json_response(handler, {"error": str(e)}, status=500)

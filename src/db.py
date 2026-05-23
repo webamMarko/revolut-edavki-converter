@@ -10,7 +10,7 @@ from pathlib import Path
 DB_DIR = Path.home() / ".revolut-edavki"
 DB_PATH = DB_DIR / "portfolio.db"
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS transactions (
@@ -59,6 +59,15 @@ CREATE TABLE IF NOT EXISTS import_log (
 CREATE TABLE IF NOT EXISTS metadata (
     key   TEXT PRIMARY KEY,
     value TEXT
+);
+
+CREATE TABLE IF NOT EXISTS portfolios (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    slug       TEXT NOT NULL,
+    is_default INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(slug)
 );
 
 CREATE TABLE IF NOT EXISTS real_estate_properties (
@@ -273,6 +282,50 @@ def _init_schema(conn: sqlite3.Connection):
             );
         """)
 
+    if current_version < 10:
+        # Multi-portfolio support: add portfolios table and portfolio_id to scoped tables
+        # Insert default "Main" portfolio if it doesn't exist
+        default_exists = conn.execute("SELECT 1 FROM portfolios WHERE id = 1").fetchone()
+        if not default_exists:
+            conn.execute("""
+                INSERT INTO portfolios (id, name, slug, is_default)
+                VALUES (1, 'Main', 'main', 1)
+            """)
+
+        # Add portfolio_id column to scoped tables
+        scoped_tables = [
+            "transactions",
+            "import_log",
+            "real_estate_properties",
+            "investment_notes",
+            "cached_analytics",
+            "dividend_schedule",
+            "goals",
+        ]
+
+        for table in scoped_tables:
+            # Check if column already exists
+            columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+            if "portfolio_id" not in columns:
+                conn.execute(f"""
+                    ALTER TABLE {table}
+                    ADD COLUMN portfolio_id INTEGER NOT NULL DEFAULT 1
+                """)
+
+        # Add portfolio_id to cached_tax_reports if it exists
+        tables = {row[0] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )}
+        if "cached_tax_reports" in tables:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(cached_tax_reports)")}
+            if "portfolio_id" not in columns:
+                conn.execute("""
+                    ALTER TABLE cached_tax_reports
+                    ADD COLUMN portfolio_id INTEGER NOT NULL DEFAULT 1
+                """)
+
+        conn.commit()
+
     if current_version < SCHEMA_VERSION:
         conn.execute(
             "INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', ?)",
@@ -292,3 +345,101 @@ def transaction_row_hash(date, ticker, type_, quantity, total_amount, currency) 
         str(currency or ''),
     ]
     return hashlib.sha256("|".join(parts).encode()).hexdigest()
+
+
+# Portfolio CRUD functions
+
+def _generate_slug(conn: sqlite3.Connection, name: str) -> str:
+    """Generate a unique slug from a portfolio name."""
+    import re
+    # Convert to lowercase, replace non-alphanumeric with hyphens, strip leading/trailing hyphens
+    base_slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+    if not base_slug:
+        base_slug = "portfolio"
+
+    # Check for uniqueness, append -2, -3, etc. if needed
+    slug = base_slug
+    counter = 2
+    while True:
+        existing = conn.execute("SELECT 1 FROM portfolios WHERE slug = ?", (slug,)).fetchone()
+        if not existing:
+            break
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    return slug
+
+
+def list_portfolios(conn: sqlite3.Connection) -> list[dict]:
+    """Return all portfolios as a list of dicts."""
+    rows = conn.execute("""
+        SELECT id, name, slug, is_default, created_at
+        FROM portfolios
+        ORDER BY is_default DESC, created_at ASC
+    """).fetchall()
+    return [dict(row) for row in rows]
+
+
+def create_portfolio(conn: sqlite3.Connection, name: str) -> dict:
+    """Create a new portfolio. Raises ValueError if limit of 5 is reached."""
+    # Check portfolio limit
+    count = conn.execute("SELECT COUNT(*) FROM portfolios").fetchone()[0]
+    if count >= 5:
+        raise ValueError("Maximum of 5 portfolios reached")
+
+    slug = _generate_slug(conn, name)
+    cursor = conn.execute("""
+        INSERT INTO portfolios (name, slug, is_default)
+        VALUES (?, ?, 0)
+    """, (name, slug))
+    conn.commit()
+
+    # Return the created portfolio
+    row = conn.execute("SELECT * FROM portfolios WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    return dict(row)
+
+
+def rename_portfolio(conn: sqlite3.Connection, portfolio_id: int, new_name: str):
+    """Rename a portfolio and regenerate its slug."""
+    new_slug = _generate_slug(conn, new_name)
+    conn.execute("""
+        UPDATE portfolios
+        SET name = ?, slug = ?
+        WHERE id = ?
+    """, (new_name, new_slug, portfolio_id))
+    conn.commit()
+
+
+def delete_portfolio(conn: sqlite3.Connection, portfolio_id: int):
+    """Delete a portfolio and all its scoped data. Raises ValueError for default portfolio."""
+    # Check if it's the default portfolio
+    row = conn.execute("SELECT is_default FROM portfolios WHERE id = ?", (portfolio_id,)).fetchone()
+    if not row:
+        raise ValueError("Portfolio not found")
+    if row["is_default"]:
+        raise ValueError("Cannot delete default portfolio")
+
+    # Delete scoped data
+    scoped_tables = [
+        "transactions",
+        "import_log",
+        "real_estate_properties",
+        "investment_notes",
+        "cached_analytics",
+        "dividend_schedule",
+        "goals",
+    ]
+
+    for table in scoped_tables:
+        conn.execute(f"DELETE FROM {table} WHERE portfolio_id = ?", (portfolio_id,))
+
+    # Delete cached_tax_reports if table exists
+    tables = {row[0] for row in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    )}
+    if "cached_tax_reports" in tables:
+        conn.execute("DELETE FROM cached_tax_reports WHERE portfolio_id = ?", (portfolio_id,))
+
+    # Delete the portfolio itself
+    conn.execute("DELETE FROM portfolios WHERE id = ?", (portfolio_id,))
+    conn.commit()

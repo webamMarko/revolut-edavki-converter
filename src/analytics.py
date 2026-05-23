@@ -111,36 +111,60 @@ def _get_price(price_cache: dict, ticker: str, date_str: str, conn: sqlite3.Conn
     return None
 
 
-def _build_holdings_timeline(conn: sqlite3.Connection, scope: str = "all") -> list[dict]:
+def _build_holdings_timeline(conn: sqlite3.Connection, scope: str = "all", portfolio_id: int | None = None) -> list[dict]:
     """Query all transactions and return sorted list of dicts.
 
     scope: 'stock', 'cfd', 'crypto', or 'all'
+    portfolio_id: if set, only return transactions from this portfolio
     """
     if scope == "all":
-        rows = conn.execute(
-            """SELECT date, ticker, type, quantity, price_per_share, total_amount,
-                      currency, fx_rate, asset_class, source_file
-               FROM transactions WHERE asset_class != 'realestate' ORDER BY date"""
-        ).fetchall()
+        if portfolio_id:
+            rows = conn.execute(
+                """SELECT date, ticker, type, quantity, price_per_share, total_amount,
+                          currency, fx_rate, asset_class, source_file
+                   FROM transactions WHERE asset_class != 'realestate' AND portfolio_id = ? ORDER BY date""",
+                (portfolio_id,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT date, ticker, type, quantity, price_per_share, total_amount,
+                          currency, fx_rate, asset_class, source_file
+                   FROM transactions WHERE asset_class != 'realestate' ORDER BY date"""
+            ).fetchall()
     else:
-        rows = conn.execute(
-            """SELECT date, ticker, type, quantity, price_per_share, total_amount,
-                      currency, fx_rate, asset_class, source_file
-               FROM transactions WHERE asset_class = ? ORDER BY date""",
-            (scope,)
-        ).fetchall()
+        if portfolio_id:
+            rows = conn.execute(
+                """SELECT date, ticker, type, quantity, price_per_share, total_amount,
+                          currency, fx_rate, asset_class, source_file
+                   FROM transactions WHERE asset_class = ? AND portfolio_id = ? ORDER BY date""",
+                (scope, portfolio_id)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT date, ticker, type, quantity, price_per_share, total_amount,
+                          currency, fx_rate, asset_class, source_file
+                   FROM transactions WHERE asset_class = ? ORDER BY date""",
+                (scope,)
+            ).fetchall()
     return [dict(r) for r in rows]
 
 
-def _sources_with_cash_events(conn: sqlite3.Connection) -> set[str]:
+def _sources_with_cash_events(conn: sqlite3.Connection, portfolio_id: int | None = None) -> set[str]:
     """Return set of source_file names that contain CASH TOP-UP or CASH WITHDRAWAL events.
 
     Files with cash events track invested amounts via those events.
     Files without them (e.g. Ilirika) need BUY/SELL to track invested.
+    portfolio_id: if set, only check sources in this portfolio
     """
-    rows = conn.execute(
-        "SELECT DISTINCT source_file FROM transactions WHERE type IN ('CASH TOP-UP', 'CASH WITHDRAWAL')"
-    ).fetchall()
+    if portfolio_id:
+        rows = conn.execute(
+            "SELECT DISTINCT source_file FROM transactions WHERE type IN ('CASH TOP-UP', 'CASH WITHDRAWAL') AND portfolio_id = ?",
+            (portfolio_id,)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT DISTINCT source_file FROM transactions WHERE type IN ('CASH TOP-UP', 'CASH WITHDRAWAL')"
+        ).fetchall()
     return {r[0] for r in rows}
 
 
@@ -174,7 +198,8 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
                       start_date: datetime | None = None,
                       end_date: datetime | None = None,
                       scope: str = "all",
-                      prices_conn: sqlite3.Connection | None = None) -> AnalyticsResult:
+                      prices_conn: sqlite3.Connection | None = None,
+                      portfolio_id: int | None = None) -> AnalyticsResult:
     """Compute full portfolio analytics.
 
     Holdings are tracked in ORIGINAL CSV quantities (not split-adjusted).
@@ -206,7 +231,7 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
             _prices_conn_owned = False
 
     try:
-        return _compute_analytics_inner(conn, year, start_date, end_date, scope, prices_conn)
+        return _compute_analytics_inner(conn, year, start_date, end_date, scope, prices_conn, portfolio_id)
     finally:
         if _prices_conn_owned and prices_conn is not None:
             prices_conn.close()
@@ -214,16 +239,17 @@ def compute_analytics(conn: sqlite3.Connection, year: int | None = None,
 
 def _compute_analytics_inner(conn: sqlite3.Connection, year: int | None,
                              start_date: datetime | None, end_date: datetime | None,
-                             scope: str, prices_conn: sqlite3.Connection | None) -> AnalyticsResult:
+                             scope: str, prices_conn: sqlite3.Connection | None,
+                             portfolio_id: int | None = None) -> AnalyticsResult:
     """Inner implementation of compute_analytics (after prices_conn resolution)."""
-    transactions = _build_holdings_timeline(conn, scope=scope)
+    transactions = _build_holdings_timeline(conn, scope=scope, portfolio_id=portfolio_id)
     if not transactions:
         raise ValueError("No transactions in database. Run 'import' first.")
 
     # Detect which source files have cash events (CASH TOP-UP/WITHDRAWAL).
     # For sources without cash events (e.g. Ilirika broker), BUY/SELL amounts
     # are used to track invested capital instead.
-    cash_event_sources = _sources_with_cash_events(conn)
+    cash_event_sources = _sources_with_cash_events(conn, portfolio_id=portfolio_id)
 
     # Determine date range
     first_date = normalize_date(transactions[0]["date"])

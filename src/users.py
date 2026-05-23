@@ -90,12 +90,13 @@ CREATE TABLE IF NOT EXISTS magic_login_tokens (
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
-    token      TEXT PRIMARY KEY,
-    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    username   TEXT NOT NULL,
-    role       TEXT NOT NULL,
-    expires_at TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    token               TEXT PRIMARY KEY,
+    user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    username            TEXT NOT NULL,
+    role                TEXT NOT NULL,
+    active_portfolio_id INTEGER NOT NULL DEFAULT 1,
+    expires_at          TEXT NOT NULL,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
@@ -112,12 +113,36 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 _MIGRATIONS = [
     "ALTER TABLE users ADD COLUMN stripe_subscription_status TEXT",
     "ALTER TABLE users ADD COLUMN onboarding_completed INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE sessions ADD COLUMN active_portfolio_id INTEGER NOT NULL DEFAULT 1",
 ]
 
 
 def get_users_db() -> sqlite3.Connection:
     """Return a connection to the user registry database, creating it if needed."""
     path = _users_db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(_SCHEMA_SQL)
+    conn.commit()
+    # Apply additive migrations (ignore errors for already-existing columns)
+    for sql in _MIGRATIONS:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+    return conn
+
+
+def get_users_connection(db_path: Path | None = None) -> sqlite3.Connection:
+    """Return a connection to a users database (for testing with custom paths)."""
+    if db_path is None:
+        return get_users_db()
+
+    path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     conn.execute("PRAGMA journal_mode=WAL")
@@ -674,6 +699,7 @@ SESSION_TTL_SECONDS = 86400 * 7  # 7 days
 def create_session(
     user,
     conn: sqlite3.Connection | None = None,
+    active_portfolio_id: int = 1,
 ) -> str:
     """Create a persistent session token for a User. Returns the raw token."""
     close = conn is None
@@ -683,8 +709,8 @@ def create_session(
         token = secrets.token_urlsafe(32)
         expires_at = (datetime.now(timezone.utc) + timedelta(seconds=SESSION_TTL_SECONDS)).isoformat()
         conn.execute(
-            "INSERT INTO sessions (token, user_id, username, role, expires_at) VALUES (?, ?, ?, ?, ?)",
-            (token, user.id, user.username, user.role, expires_at),
+            "INSERT INTO sessions (token, user_id, username, role, active_portfolio_id, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (token, user.id, user.username, user.role, active_portfolio_id, expires_at),
         )
         conn.commit()
         return token
@@ -697,7 +723,7 @@ def get_session(
     token: str,
     conn: sqlite3.Connection | None = None,
 ) -> dict | None:
-    """Return session dict {user_id, username, role} or None if missing/expired."""
+    """Return session dict {user_id, username, role, active_portfolio_id} or None if missing/expired."""
     close = conn is None
     if conn is None:
         conn = get_users_db()
@@ -723,6 +749,7 @@ def get_session(
             "user_id": row["user_id"],
             "username": row["username"],
             "role": row["current_role"],
+            "active_portfolio_id": row["active_portfolio_id"] if "active_portfolio_id" in row.keys() else 1,
         }
     finally:
         if close:
@@ -759,6 +786,40 @@ def purge_expired_sessions(conn: sqlite3.Connection | None = None) -> int:
     finally:
         if close:
             conn.close()
+
+
+def set_active_portfolio(
+    token: str,
+    portfolio_id: int,
+    conn: sqlite3.Connection | None = None,
+) -> bool:
+    """Update the active_portfolio_id for a session. Returns True on success."""
+    close = conn is None
+    if conn is None:
+        conn = get_users_db()
+    try:
+        cursor = conn.execute(
+            "UPDATE sessions SET active_portfolio_id = ? WHERE token = ?",
+            (portfolio_id, token),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        if close:
+            conn.close()
+
+
+def _create_session(
+    username: str,
+    conn: sqlite3.Connection,
+    active_portfolio_id: int = 1,
+) -> str:
+    """Internal helper for tests: create a session by username. Returns raw token."""
+    user_row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    if not user_row:
+        raise ValueError(f"User not found: {username}")
+    user = _row_to_user(user_row)
+    return create_session(user, conn, active_portfolio_id)
 
 
 # ---------------------------------------------------------------------------
