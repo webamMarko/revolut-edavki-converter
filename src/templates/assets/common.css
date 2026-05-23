@@ -36,6 +36,20 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 .header-link{color:var(--accent);text-decoration:none;font-weight:600}
 .header-link:hover{opacity:0.85}
 
+/* ---- Portfolio switcher ---- */
+.portfolio-switcher{position:relative}
+.portfolio-switcher-btn{display:flex;align-items:center;gap:0.35rem;background:none;border:1px solid var(--border);
+  border-radius:6px;padding:0.25rem 0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text);transition:border-color 0.12s}
+.portfolio-switcher-btn:hover{border-color:var(--accent)}
+.portfolio-chevron{transition:transform 0.15s}
+.portfolio-switcher-btn[aria-expanded="true"] .portfolio-chevron{transform:rotate(180deg)}
+.portfolio-dropdown{position:absolute;top:calc(100% + 4px);right:0;min-width:180px;background:var(--card-bg);
+  border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:100;overflow:hidden}
+.portfolio-dropdown-item{display:block;width:100%;padding:0.5rem 0.75rem;border:none;background:none;text-align:left;
+  cursor:pointer;font-size:0.82rem;color:var(--text);transition:background 0.1s}
+.portfolio-dropdown-item:hover{background:var(--hover)}
+.portfolio-dropdown-item.active{font-weight:600;color:var(--accent)}
+
 /* ---- Theme toggle ---- */
 .theme-toggle{background:none;border:1px solid var(--border);border-radius:20px;
               padding:0.15rem 0.5rem;cursor:pointer;font-size:0.85rem;line-height:1;

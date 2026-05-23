@@ -16,6 +16,17 @@
     {% endif %}
   </nav>
   <div class="header-right">
+    {% if role in ("premium", "admin") %}
+    <div class="portfolio-switcher" id="portfolioSwitcher">
+      <button class="portfolio-switcher-btn" id="portfolioSwitcherBtn" aria-haspopup="listbox" aria-expanded="false">
+        <span class="portfolio-name" id="activePortfolioName">{{ active_portfolio_name or 'Main' }}</span>
+        <svg class="portfolio-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l3 3 3-3"/></svg>
+      </button>
+      <div class="portfolio-dropdown" id="portfolioDropdown" role="listbox" style="display:none">
+        <div class="portfolio-dropdown-list" id="portfolioDropdownList"></div>
+      </div>
+    </div>
+    {% endif %}
     <button class="theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>
     {% if username %}
       <span class="header-user">{{ username }}</span>
@@ -25,3 +36,67 @@
     {% endif %}
   </div>
 </header>
+{% if role in ("premium", "admin") %}
+<script>
+(function(){
+  var btn=document.getElementById('portfolioSwitcherBtn');
+  var dropdown=document.getElementById('portfolioDropdown');
+  var list=document.getElementById('portfolioDropdownList');
+  var nameEl=document.getElementById('activePortfolioName');
+  if(!btn)return;
+
+  function toggle(){
+    var open=dropdown.style.display==='none';
+    dropdown.style.display=open?'block':'none';
+    btn.setAttribute('aria-expanded',open);
+    if(open)loadPortfolios();
+  }
+  btn.addEventListener('click',toggle);
+  document.addEventListener('click',function(e){
+    if(!e.target.closest('.portfolio-switcher')){
+      dropdown.style.display='none';
+      btn.setAttribute('aria-expanded','false');
+    }
+  });
+
+  function loadPortfolios(){
+    fetch('/api/portfolios').then(function(r){return r.json()}).then(function(data){
+      var portfolios=data.portfolios||[];
+      var activeId=data.active_portfolio_id||1;
+      list.innerHTML='';
+      portfolios.forEach(function(p){
+        var item=document.createElement('button');
+        item.className='portfolio-dropdown-item'+(p.id===activeId?' active':'');
+        item.textContent=p.name;
+        item.setAttribute('role','option');
+        item.setAttribute('aria-selected',p.id===activeId);
+        item.addEventListener('click',function(){switchPortfolio(p.id,p.name)});
+        list.appendChild(item);
+      });
+    });
+  }
+
+  function switchPortfolio(id,name){
+    fetch('/api/switch-portfolio',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({portfolio_id:id})
+    }).then(function(r){return r.json()}).then(function(data){
+      if(data.active_portfolio_id){
+        nameEl.textContent=name;
+        dropdown.style.display='none';
+        btn.setAttribute('aria-expanded','false');
+        window.location.reload();
+      }
+    });
+  }
+
+  fetch('/api/portfolios').then(function(r){return r.json()}).then(function(data){
+    var portfolios=data.portfolios||[];
+    var activeId=data.active_portfolio_id||1;
+    var active=portfolios.find(function(p){return p.id===activeId});
+    if(active)nameEl.textContent=active.name;
+  });
+})();
+</script>
+{% endif %}

@@ -152,6 +152,35 @@
   </div>
 
   <div class="card" style="margin-top:1.5rem">
+    <h2>Portfolios</h2>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem">
+      Manage your portfolios — create, rename, or delete. You can have up to 5 portfolios.
+    </p>
+    <div id="portfolioList" style="margin-bottom:1rem"></div>
+    <div style="display:flex;gap:0.75rem;align-items:end;flex-wrap:wrap">
+      <div>
+        <label>New portfolio name</label>
+        <input type="text" id="newPortfolioName" placeholder="e.g. Trading" style="width:200px" maxlength="50">
+      </div>
+      <button class="btn btn-primary" id="createPortfolioBtn">Create portfolio</button>
+    </div>
+    <p id="portfolioMsg" class="settings-footer"></p>
+  </div>
+
+  <div id="deletePortfolioModal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.5);align-items:center;justify-content:center">
+    <div style="background:var(--card-bg);border-radius:12px;padding:1.5rem;max-width:400px;width:90%;box-shadow:0 8px 24px rgba(0,0,0,0.2)">
+      <h3 style="margin:0 0 0.75rem">Delete portfolio?</h3>
+      <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem">
+        This will permanently delete <strong id="deletePortfolioName"></strong> and all its transactions, analytics, and reports. This cannot be undone.
+      </p>
+      <div style="display:flex;gap:0.75rem;justify-content:flex-end">
+        <button class="btn btn-secondary" id="cancelDeleteBtn">Cancel</button>
+        <button class="btn" style="background:var(--red);color:#fff" id="confirmDeleteBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1.5rem">
     <h2>Subscription</h2>
     <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem">
       Manage your Premium subscription — update payment method, download invoices, or cancel.
@@ -287,5 +316,99 @@ async function deleteShare(id) {
   await fetch(`/api/shares/${id}/delete`, { method: 'POST' });
   loadShares();
 }
+
+// --- Portfolios ---
+let deletePortfolioId = null;
+const modal = document.getElementById('deletePortfolioModal');
+
+async function loadPortfolios() {
+  const list = document.getElementById('portfolioList');
+  try {
+    const resp = await fetch('/api/portfolios');
+    const data = await resp.json();
+    const portfolios = data.portfolios || [];
+    if (!portfolios.length) {
+      list.innerHTML = '<p style="font-size:0.82rem;color:var(--muted)">No portfolios found.</p>';
+      return;
+    }
+    list.innerHTML = portfolios.map(p => `
+      <div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+        <div style="flex:1;min-width:150px">
+          <span style="font-size:0.85rem;font-weight:500">${p.name}</span>
+          ${p.is_default ? '<span style="font-size:0.7rem;color:var(--muted);margin-left:0.5rem">default</span>' : ''}
+        </div>
+        <button class="btn btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.6rem"
+          onclick="renamePortfolio(${p.id},'${p.name.replace(/'/g,"\\'")}')">Rename</button>
+        ${!p.is_default ? `<button class="btn" style="font-size:0.75rem;padding:0.3rem 0.6rem;color:var(--red)"
+          onclick="showDeleteModal(${p.id},'${p.name.replace(/'/g,"\\'")}')">Delete</button>` : ''}
+      </div>
+    `).join('');
+  } catch(e) {
+    list.innerHTML = '<p style="color:var(--red);font-size:0.82rem">Failed to load portfolios.</p>';
+  }
+}
+loadPortfolios();
+
+document.getElementById('createPortfolioBtn').addEventListener('click', async () => {
+  const name = document.getElementById('newPortfolioName').value.trim();
+  const msg = document.getElementById('portfolioMsg');
+  if (!name) { msg.style.color='var(--red)'; msg.textContent='Name is required.'; return; }
+  const btn = document.getElementById('createPortfolioBtn');
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/api/portfolios', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name})
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      msg.style.color='var(--green)'; msg.textContent='Portfolio created.';
+      document.getElementById('newPortfolioName').value='';
+      loadPortfolios();
+    } else {
+      msg.style.color='var(--red)'; msg.textContent=data.error||'Failed to create.';
+    }
+  } catch(e) { msg.style.color='var(--red)'; msg.textContent='Network error.'; }
+  btn.disabled = false;
+  setTimeout(()=>{msg.textContent='';},4000);
+});
+
+async function renamePortfolio(id, currentName) {
+  const newName = prompt('Rename portfolio:', currentName);
+  if (!newName || newName.trim() === currentName) return;
+  try {
+    const resp = await fetch(`/api/portfolios/${id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name: newName.trim()})
+    });
+    if (resp.ok) loadPortfolios();
+    else { const d=await resp.json(); alert(d.error||'Failed to rename.'); }
+  } catch(e) { alert('Network error.'); }
+}
+
+function showDeleteModal(id, name) {
+  deletePortfolioId = id;
+  document.getElementById('deletePortfolioName').textContent = name;
+  modal.style.display = 'flex';
+}
+
+document.getElementById('cancelDeleteBtn').addEventListener('click', () => {
+  modal.style.display = 'none';
+  deletePortfolioId = null;
+});
+
+document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+  if (!deletePortfolioId) return;
+  try {
+    await fetch(`/api/portfolios/${deletePortfolioId}`, { method: 'DELETE' });
+    loadPortfolios();
+  } catch(e) { alert('Network error.'); }
+  modal.style.display = 'none';
+  deletePortfolioId = null;
+});
+
+modal.addEventListener('click', (e) => {
+  if (e.target === modal) { modal.style.display='none'; deletePortfolioId=null; }
+});
 </script>
 {% endblock %}

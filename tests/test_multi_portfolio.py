@@ -621,3 +621,70 @@ class TestImporterPortfolioScoping:
         ).fetchone()
         assert row is not None
         assert row["portfolio_id"] == 1
+
+
+# Phase 4: UI Components - Tasks 35-38
+
+class TestUIComponents:
+    """Test UI template rendering for portfolio switcher and settings."""
+
+    def test_nav_renders_switcher_for_premium(self):
+        """Task 35: Nav renders portfolio switcher for premium/admin users."""
+        from src.web.templates import page_env
+        template = page_env.get_template("partials/nav.html.j2")
+        html = template.render(role="premium", username="testuser", active_page="home")
+        assert "portfolioSwitcher" in html
+        assert "portfolioSwitcherBtn" in html
+        assert "portfolio-dropdown" in html
+
+    def test_nav_hides_switcher_for_guest(self):
+        """Task 35b: Nav hides portfolio switcher for guest users."""
+        from src.web.templates import page_env
+        template = page_env.get_template("partials/nav.html.j2")
+        html = template.render(role="guest", username=None, active_page="home")
+        assert "portfolioSwitcher" not in html
+
+    def test_nav_renders_switcher_for_admin(self):
+        """Task 35c: Nav renders portfolio switcher for admin users."""
+        from src.web.templates import page_env
+        template = page_env.get_template("partials/nav.html.j2")
+        html = template.render(role="admin", username="admin", active_page="home")
+        assert "portfolioSwitcher" in html
+
+    def test_nav_switcher_calls_switch_portfolio(self):
+        """Task 36: Dropdown JS calls POST /api/switch-portfolio."""
+        from src.web.templates import page_env
+        template = page_env.get_template("partials/nav.html.j2")
+        html = template.render(role="premium", username="testuser", active_page="home")
+        assert "/api/switch-portfolio" in html
+        assert "/api/portfolios" in html
+
+    def test_settings_renders_portfolio_crud(self):
+        """Task 37: Settings page renders portfolio CRUD buttons."""
+        from src.web.templates import page_env, FOUC_SCRIPT, COMMON_JS
+        template = page_env.get_template("pages/settings.html.j2")
+        html = template.render(
+            role="premium", username="testuser", active_page="settings",
+            fouc_script=FOUC_SCRIPT, common_js=COMMON_JS,
+            show_header=True, show_drop_import=False,
+            billing_portal_url=None,
+        )
+        assert "portfolioList" in html
+        assert "createPortfolioBtn" in html
+        assert "newPortfolioName" in html
+        assert "/api/portfolios" in html
+
+    def test_settings_renders_delete_confirmation_dialog(self):
+        """Task 38: Settings page shows delete confirmation dialog."""
+        from src.web.templates import page_env, FOUC_SCRIPT, COMMON_JS
+        template = page_env.get_template("pages/settings.html.j2")
+        html = template.render(
+            role="premium", username="testuser", active_page="settings",
+            fouc_script=FOUC_SCRIPT, common_js=COMMON_JS,
+            show_header=True, show_drop_import=False,
+            billing_portal_url=None,
+        )
+        assert "deletePortfolioModal" in html
+        assert "confirmDeleteBtn" in html
+        assert "cancelDeleteBtn" in html
+        assert "Delete portfolio?" in html
