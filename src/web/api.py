@@ -719,7 +719,7 @@ def api_get_portfolios(handler):
         portfolios = db.list_portfolios(conn)
         response = {
             "portfolios": portfolios,
-            "active_portfolio_id": session.get("active_portfolio_id", 1),
+            "active_portfolio_id": session.get("active_portfolio_id", 1) if session else 1,
             "max_portfolios": 5,
         }
         json_response(handler, response)
