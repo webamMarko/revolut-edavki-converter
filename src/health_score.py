@@ -132,6 +132,7 @@ def _holding_period_score(
     positions: list,
     country: str,
     prices_conn: sqlite3.Connection | None,
+    portfolio_id: int | None = None,
 ) -> tuple[float, str]:
     """Fraction of unrealised gains that would benefit from crossing a bracket threshold.
 
@@ -158,14 +159,25 @@ def _holding_period_score(
 
     # Fetch lots from DB directly for robustness
     try:
-        rows = conn.execute(
-            """SELECT ticker, date, SUM(quantity) as qty,
-                      AVG(price_per_share) as avg_cost
-               FROM transactions
-               WHERE type='BUY' AND asset_class='stock'
-               GROUP BY ticker, date
-               ORDER BY ticker, date"""
-        ).fetchall()
+        if portfolio_id:
+            rows = conn.execute(
+                """SELECT ticker, date, SUM(quantity) as qty,
+                          AVG(price_per_share) as avg_cost
+                   FROM transactions
+                   WHERE type='BUY' AND asset_class='stock' AND portfolio_id = ?
+                   GROUP BY ticker, date
+                   ORDER BY ticker, date""",
+                (portfolio_id,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT ticker, date, SUM(quantity) as qty,
+                          AVG(price_per_share) as avg_cost
+                   FROM transactions
+                   WHERE type='BUY' AND asset_class='stock'
+                   GROUP BY ticker, date
+                   ORDER BY ticker, date"""
+            ).fetchall()
     except Exception:
         return 100.0, "Unable to query lots"
 
@@ -189,10 +201,16 @@ def _holding_period_score(
     for p in positions:
         tk = p["ticker"]
         if tk not in ticker_currency:
-            row = conn.execute(
-                "SELECT currency FROM transactions WHERE ticker=? AND type IN ('BUY','SELL') "
-                "ORDER BY date DESC LIMIT 1", (tk,)
-            ).fetchone()
+            if portfolio_id:
+                row = conn.execute(
+                    "SELECT currency FROM transactions WHERE ticker=? AND type IN ('BUY','SELL') "
+                    "AND portfolio_id = ? ORDER BY date DESC LIMIT 1", (tk, portfolio_id)
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT currency FROM transactions WHERE ticker=? AND type IN ('BUY','SELL') "
+                    "ORDER BY date DESC LIMIT 1", (tk,)
+                ).fetchone()
             ticker_currency[tk] = row[0] if row else "EUR"
 
     def to_eur(amount: float, currency: str) -> float:
@@ -350,6 +368,7 @@ def compute_health_score(
     conn: sqlite3.Connection | None = None,
     country: str = DEFAULT_REGIME,
     prices_conn: sqlite3.Connection | None = None,
+    portfolio_id: int | None = None,
 ) -> HealthScore:
     """Compute composite portfolio health score.
 
@@ -371,7 +390,7 @@ def compute_health_score(
     vol_score, vol_detail = _volatility_score(analytics_summary)
 
     if conn is not None:
-        hp_score, hp_detail = _holding_period_score(conn, positions, country, prices_conn)
+        hp_score, hp_detail = _holding_period_score(conn, positions, country, prices_conn, portfolio_id=portfolio_id)
     else:
         hp_score, hp_detail = 100.0, "Holding-period data unavailable"
 

@@ -511,3 +511,113 @@ class TestQueryScoping:
         for table in scoped_tables:
             columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
             assert "portfolio_id" in columns, f"{table} missing portfolio_id column"
+
+
+# Phase 3: Query Scoping - tax.py and importer.py
+
+def _insert_tx(conn, portfolio_id, ticker, tx_type, date, qty, price, currency="USD"):
+    """Helper to insert a transaction for testing."""
+    conn.execute(
+        """INSERT INTO transactions
+           (date, ticker, type, quantity, price_per_share, total_amount, currency, fx_rate, asset_class, portfolio_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, 'stock', ?)""",
+        (date, ticker, tx_type, qty, price, qty * price, currency, portfolio_id),
+    )
+    conn.commit()
+
+
+class TestTaxPortfolioScoping:
+    """Phase 3: compute_tax_report respects portfolio_id filtering."""
+
+    def _seed_two_portfolios(self, conn):
+        p2 = db.create_portfolio(conn, "Second")
+        p2_id = p2["id"]
+        # Portfolio 1: buy+sell AAPL
+        _insert_tx(conn, 1, "AAPL", "BUY", "2024-01-10", 10, 100.0)
+        _insert_tx(conn, 1, "AAPL", "SELL", "2024-06-15", 10, 150.0)
+        # Portfolio 2: buy+sell GOOGL
+        _insert_tx(conn, p2_id, "GOOGL", "BUY", "2024-02-01", 5, 200.0)
+        _insert_tx(conn, p2_id, "GOOGL", "SELL", "2024-07-01", 5, 250.0)
+        # Need fx_rates for the tax computation
+        conn.execute("INSERT OR IGNORE INTO fx_rates (date, eur_usd) VALUES ('2024-01-10', 1.10)")
+        conn.execute("INSERT OR IGNORE INTO fx_rates (date, eur_usd) VALUES ('2024-02-01', 1.10)")
+        conn.execute("INSERT OR IGNORE INTO fx_rates (date, eur_usd) VALUES ('2024-06-15', 1.10)")
+        conn.execute("INSERT OR IGNORE INTO fx_rates (date, eur_usd) VALUES ('2024-07-01', 1.10)")
+        conn.commit()
+        return p2_id
+
+    def test_tax_report_filters_by_portfolio(self, conn):
+        """Tax report for portfolio 1 should only include AAPL sales."""
+        from src.tax import compute_tax_report
+        p2_id = self._seed_two_portfolios(conn)
+
+        report_p1 = compute_tax_report(conn, 2024, portfolio_id=1)
+        report_p2 = compute_tax_report(conn, 2024, portfolio_id=p2_id)
+
+        tickers_p1 = {s.ticker for s in report_p1.realized_sales}
+        tickers_p2 = {s.ticker for s in report_p2.realized_sales}
+
+        assert "AAPL" in tickers_p1
+        assert "GOOGL" not in tickers_p1
+        assert "GOOGL" in tickers_p2
+        assert "AAPL" not in tickers_p2
+
+    def test_tax_report_no_filter_returns_all(self, conn):
+        """Tax report without portfolio_id should include both portfolios."""
+        from src.tax import compute_tax_report
+        self._seed_two_portfolios(conn)
+
+        report = compute_tax_report(conn, 2024)
+        tickers = {s.ticker for s in report.realized_sales}
+        assert "AAPL" in tickers
+        assert "GOOGL" in tickers
+
+
+class TestImporterPortfolioScoping:
+    """Phase 3: import_csv tags imported rows with portfolio_id."""
+
+    def test_imported_transactions_tagged_with_portfolio_id(self, conn, tmp_path):
+        """Imported transactions should carry the given portfolio_id."""
+        import csv
+
+        p2 = db.create_portfolio(conn, "Import Target")
+        p2_id = p2["id"]
+
+        csv_file = tmp_path / "revolut.csv"
+        with open(csv_file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Date", "Ticker", "Type", "Quantity", "Price per share",
+                             "Total Amount", "Currency", "FX Rate"])
+            writer.writerow(["2024-03-01", "MSFT", "BUY", "5", "400.00",
+                             "2000.00", "USD", "1.08"])
+
+        from src.importer import import_csv
+        result = import_csv(conn, str(csv_file), portfolio_id=p2_id)
+
+        # Check the transaction was tagged with p2_id
+        row = conn.execute(
+            "SELECT portfolio_id FROM transactions WHERE ticker = 'MSFT'"
+        ).fetchone()
+        assert row is not None
+        assert row["portfolio_id"] == p2_id
+
+    def test_import_default_portfolio_id(self, conn, tmp_path):
+        """Import without portfolio_id should not set portfolio_id (uses DB default=1)."""
+        import csv
+
+        csv_file = tmp_path / "revolut2.csv"
+        with open(csv_file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Date", "Ticker", "Type", "Quantity", "Price per share",
+                             "Total Amount", "Currency", "FX Rate"])
+            writer.writerow(["2024-04-01", "TSLA", "BUY", "2", "170.00",
+                             "340.00", "USD", "1.08"])
+
+        from src.importer import import_csv
+        import_csv(conn, str(csv_file))
+
+        row = conn.execute(
+            "SELECT portfolio_id FROM transactions WHERE ticker = 'TSLA'"
+        ).fetchone()
+        assert row is not None
+        assert row["portfolio_id"] == 1

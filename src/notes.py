@@ -12,22 +12,36 @@ def add_note(
     tickers: str = "",
     conviction: str = "medium",
     action: str = "watch",
+    portfolio_id: int | None = None,
 ) -> int:
     """Insert a new investment note. Returns the new row id."""
-    cur = conn.execute(
-        """INSERT INTO investment_notes (title, summary, body, tickers, conviction, action)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (title, summary, body, tickers, conviction, action),
-    )
+    if portfolio_id:
+        cur = conn.execute(
+            """INSERT INTO investment_notes (title, summary, body, tickers, conviction, action, portfolio_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (title, summary, body, tickers, conviction, action, portfolio_id),
+        )
+    else:
+        cur = conn.execute(
+            """INSERT INTO investment_notes (title, summary, body, tickers, conviction, action)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (title, summary, body, tickers, conviction, action),
+        )
     conn.commit()
     return cur.lastrowid
 
 
-def list_notes(conn: sqlite3.Connection) -> list[dict]:
+def list_notes(conn: sqlite3.Connection, portfolio_id: int | None = None) -> list[dict]:
     """Return all notes ordered by newest first."""
-    rows = conn.execute(
-        "SELECT * FROM investment_notes ORDER BY created_at DESC"
-    ).fetchall()
+    if portfolio_id:
+        rows = conn.execute(
+            "SELECT * FROM investment_notes WHERE portfolio_id = ? ORDER BY created_at DESC",
+            (portfolio_id,)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM investment_notes ORDER BY created_at DESC"
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -62,9 +76,10 @@ def delete_note(conn: sqlite3.Connection, note_id: int) -> bool:
     return cur.rowcount > 0
 
 
-def query_notes_for_report(conn: sqlite3.Connection, prices_conn: sqlite3.Connection | None = None) -> list[dict]:
+def query_notes_for_report(conn: sqlite3.Connection, prices_conn: sqlite3.Connection | None = None,
+                           portfolio_id: int | None = None) -> list[dict]:
     """Return all notes enriched with live ticker data for the HTML report."""
-    notes = list_notes(conn)
+    notes = list_notes(conn, portfolio_id=portfolio_id)
     if not notes:
         return []
 
@@ -89,15 +104,28 @@ def query_notes_for_report(conn: sqlite3.Connection, prices_conn: sqlite3.Connec
 
     # Current positions (held tickers with cost basis)
     held: dict[str, dict] = {}
-    for row in conn.execute(
-        """SELECT ticker,
-                  SUM(CASE WHEN type='BUY'  THEN quantity      ELSE -quantity     END) AS qty,
-                  SUM(CASE WHEN type='BUY'  THEN total_amount  ELSE -total_amount END) AS cost
-           FROM transactions
-           WHERE ticker IS NOT NULL AND asset_class = 'stock'
-           GROUP BY ticker
-           HAVING qty > 0.0001"""
-    ).fetchall():
+    if portfolio_id:
+        held_rows = conn.execute(
+            """SELECT ticker,
+                      SUM(CASE WHEN type='BUY'  THEN quantity      ELSE -quantity     END) AS qty,
+                      SUM(CASE WHEN type='BUY'  THEN total_amount  ELSE -total_amount END) AS cost
+               FROM transactions
+               WHERE ticker IS NOT NULL AND asset_class = 'stock' AND portfolio_id = ?
+               GROUP BY ticker
+               HAVING qty > 0.0001""",
+            (portfolio_id,)
+        ).fetchall()
+    else:
+        held_rows = conn.execute(
+            """SELECT ticker,
+                      SUM(CASE WHEN type='BUY'  THEN quantity      ELSE -quantity     END) AS qty,
+                      SUM(CASE WHEN type='BUY'  THEN total_amount  ELSE -total_amount END) AS cost
+               FROM transactions
+               WHERE ticker IS NOT NULL AND asset_class = 'stock'
+               GROUP BY ticker
+               HAVING qty > 0.0001"""
+        ).fetchall()
+    for row in held_rows:
         held[row["ticker"]] = {
             "quantity": round(row["qty"], 4),
             "cost_basis_eur": round(row["cost"] or 0, 2),

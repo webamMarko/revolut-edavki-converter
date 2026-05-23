@@ -297,43 +297,75 @@ def _next_ticker(conn: sqlite3.Connection) -> str:
 
 def add_property(conn: sqlite3.Connection, name: str, address: str, municipality: str,
                  cadastral_municipality: str, property_type: str, area_m2: float,
-                 purchase_price_eur: float, purchase_date: str, notes: str = "") -> str:
+                 purchase_price_eur: float, purchase_date: str, notes: str = "",
+                 portfolio_id: int | None = None) -> str:
     """Add a property and its synthetic BUY transaction. Returns assigned ticker."""
     ticker = _next_ticker(conn)
 
-    conn.execute("""
-        INSERT INTO real_estate_properties
-            (ticker, name, address, municipality, cadastral_municipality,
-             property_type, area_m2, purchase_price_eur, purchase_date, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (ticker, name, address, municipality, cadastral_municipality,
-          property_type, area_m2, purchase_price_eur, purchase_date, notes))
+    if portfolio_id:
+        conn.execute("""
+            INSERT INTO real_estate_properties
+                (ticker, name, address, municipality, cadastral_municipality,
+                 property_type, area_m2, purchase_price_eur, purchase_date, notes, portfolio_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (ticker, name, address, municipality, cadastral_municipality,
+              property_type, area_m2, purchase_price_eur, purchase_date, notes, portfolio_id))
 
-    conn.execute("""
-        INSERT OR IGNORE INTO transactions
-            (date, ticker, type, quantity, price_per_share, total_amount,
-             currency, fx_rate, asset_class, source_file)
-        VALUES (?, ?, 'BUY', 1.0, ?, ?, 'EUR', 1.0, 'realestate', 'manual-realestate')
-    """, (purchase_date + " 00:00:00", ticker, purchase_price_eur, purchase_price_eur))
+        conn.execute("""
+            INSERT OR IGNORE INTO transactions
+                (date, ticker, type, quantity, price_per_share, total_amount,
+                 currency, fx_rate, asset_class, source_file, portfolio_id)
+            VALUES (?, ?, 'BUY', 1.0, ?, ?, 'EUR', 1.0, 'realestate', 'manual-realestate', ?)
+        """, (purchase_date + " 00:00:00", ticker, purchase_price_eur, purchase_price_eur, portfolio_id))
+    else:
+        conn.execute("""
+            INSERT INTO real_estate_properties
+                (ticker, name, address, municipality, cadastral_municipality,
+                 property_type, area_m2, purchase_price_eur, purchase_date, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (ticker, name, address, municipality, cadastral_municipality,
+              property_type, area_m2, purchase_price_eur, purchase_date, notes))
+
+        conn.execute("""
+            INSERT OR IGNORE INTO transactions
+                (date, ticker, type, quantity, price_per_share, total_amount,
+                 currency, fx_rate, asset_class, source_file)
+            VALUES (?, ?, 'BUY', 1.0, ?, ?, 'EUR', 1.0, 'realestate', 'manual-realestate')
+        """, (purchase_date + " 00:00:00", ticker, purchase_price_eur, purchase_price_eur))
 
     conn.commit()
     return ticker
 
 
-def list_properties(conn: sqlite3.Connection) -> list[dict]:
+def list_properties(conn: sqlite3.Connection, portfolio_id: int | None = None) -> list[dict]:
     """Return all properties with their latest estimated value."""
-    rows = conn.execute("""
-        SELECT p.*,
-               dp.close  AS estimated_value_eur,
-               dp.date   AS estimated_date
-        FROM real_estate_properties p
-        LEFT JOIN (
-            SELECT ticker, close, date,
-                   ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY date DESC) AS rn
-            FROM daily_prices WHERE currency = 'EUR'
-        ) dp ON dp.ticker = p.ticker AND dp.rn = 1
-        ORDER BY p.purchase_date
-    """).fetchall()
+    if portfolio_id:
+        rows = conn.execute("""
+            SELECT p.*,
+                   dp.close  AS estimated_value_eur,
+                   dp.date   AS estimated_date
+            FROM real_estate_properties p
+            LEFT JOIN (
+                SELECT ticker, close, date,
+                       ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY date DESC) AS rn
+                FROM daily_prices WHERE currency = 'EUR'
+            ) dp ON dp.ticker = p.ticker AND dp.rn = 1
+            WHERE p.portfolio_id = ?
+            ORDER BY p.purchase_date
+        """, (portfolio_id,)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT p.*,
+                   dp.close  AS estimated_value_eur,
+                   dp.date   AS estimated_date
+            FROM real_estate_properties p
+            LEFT JOIN (
+                SELECT ticker, close, date,
+                       ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY date DESC) AS rn
+                FROM daily_prices WHERE currency = 'EUR'
+            ) dp ON dp.ticker = p.ticker AND dp.rn = 1
+            ORDER BY p.purchase_date
+        """).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -354,9 +386,13 @@ def set_manual_valuation(conn: sqlite3.Connection, ticker: str, value_eur: float
 # ---------------------------------------------------------------------------
 
 def sync_etn_valuations(conn: sqlite3.Connection, verbose: bool = False,
-                        prices_conn: sqlite3.Connection | None = None):
+                        prices_conn: sqlite3.Connection | None = None,
+                        portfolio_id: int | None = None):
     """Estimate market value for all properties: backfill year-by-year + update today."""
-    properties = conn.execute("SELECT * FROM real_estate_properties").fetchall()
+    if portfolio_id:
+        properties = conn.execute("SELECT * FROM real_estate_properties WHERE portfolio_id = ?", (portfolio_id,)).fetchall()
+    else:
+        properties = conn.execute("SELECT * FROM real_estate_properties").fetchall()
     if not properties:
         print("Real estate: no properties in database.")
         return

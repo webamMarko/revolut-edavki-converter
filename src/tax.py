@@ -130,7 +130,8 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                        include_unrealized: bool = False,
                        scope: str = "all",
                        country: str = DEFAULT_REGIME,
-                       prices_conn: sqlite3.Connection | None = None) -> TaxReport:
+                       prices_conn: sqlite3.Connection | None = None,
+                       portfolio_id: int | None = None) -> TaxReport:
     """Compute capital gains tax for a fiscal year using the specified country's regime.
 
     scope: 'stock', 'cfd', 'crypto', or 'all'
@@ -148,18 +149,34 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
     # Real estate (asset_class='realestate') is taxed under a separate Slovenian form
     # (Doh-Nepremičnine) and must not be included in this Doh-KDVP calculation.
     if scope == "all":
-        transactions = conn.execute(
-            """SELECT date, ticker, type, quantity, price_per_share, total_amount,
-                      currency, fx_rate, asset_class
-               FROM transactions WHERE asset_class != 'realestate' ORDER BY date"""
-        ).fetchall()
+        if portfolio_id:
+            transactions = conn.execute(
+                """SELECT date, ticker, type, quantity, price_per_share, total_amount,
+                          currency, fx_rate, asset_class
+                   FROM transactions WHERE asset_class != 'realestate' AND portfolio_id = ? ORDER BY date""",
+                (portfolio_id,)
+            ).fetchall()
+        else:
+            transactions = conn.execute(
+                """SELECT date, ticker, type, quantity, price_per_share, total_amount,
+                          currency, fx_rate, asset_class
+                   FROM transactions WHERE asset_class != 'realestate' ORDER BY date"""
+            ).fetchall()
     else:
-        transactions = conn.execute(
-            """SELECT date, ticker, type, quantity, price_per_share, total_amount,
-                      currency, fx_rate, asset_class
-               FROM transactions WHERE asset_class = ? ORDER BY date""",
-            (scope,)
-        ).fetchall()
+        if portfolio_id:
+            transactions = conn.execute(
+                """SELECT date, ticker, type, quantity, price_per_share, total_amount,
+                          currency, fx_rate, asset_class
+                   FROM transactions WHERE asset_class = ? AND portfolio_id = ? ORDER BY date""",
+                (scope, portfolio_id)
+            ).fetchall()
+        else:
+            transactions = conn.execute(
+                """SELECT date, ticker, type, quantity, price_per_share, total_amount,
+                          currency, fx_rate, asset_class
+                   FROM transactions WHERE asset_class = ? ORDER BY date""",
+                (scope,)
+            ).fetchall()
     transactions = [dict(r) for r in transactions]
 
     is_cfd_scope = scope == "cfd"

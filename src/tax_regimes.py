@@ -4,6 +4,8 @@ Each regime defines: capital gains rates, crypto rules, netting rules,
 standardized cost allowances, and country-specific exemptions.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 
 

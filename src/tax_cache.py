@@ -11,17 +11,25 @@ from .tax import TaxReport, SaleTaxDetail, UnrealizedTaxDetail, TaxLossHarvestCa
 
 
 def get_cached_tax(conn: sqlite3.Connection, year: int, scope: str,
-                   country: str, data_hash: str) -> TaxReport | None:
+                   country: str, data_hash: str,
+                   portfolio_id: int | None = None) -> TaxReport | None:
     """Return cached TaxReport if valid, else None.
 
     Immutable entries (past years) skip hash check entirely.
     Current-year entries require matching data_hash.
     """
-    row = conn.execute(
-        "SELECT result_json, is_immutable, data_hash FROM cached_tax_reports "
-        "WHERE year = ? AND scope = ? AND country = ?",
-        (year, scope, country)
-    ).fetchone()
+    if portfolio_id:
+        row = conn.execute(
+            "SELECT result_json, is_immutable, data_hash FROM cached_tax_reports "
+            "WHERE year = ? AND scope = ? AND country = ? AND portfolio_id = ?",
+            (year, scope, country, portfolio_id)
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT result_json, is_immutable, data_hash FROM cached_tax_reports "
+            "WHERE year = ? AND scope = ? AND country = ?",
+            (year, scope, country)
+        ).fetchone()
     if not row:
         return None
     if row["is_immutable"]:
@@ -33,17 +41,26 @@ def get_cached_tax(conn: sqlite3.Connection, year: int, scope: str,
 
 def put_tax_cache(conn: sqlite3.Connection, year: int, scope: str,
                   country: str, data_hash: str, report: TaxReport,
-                  current_year: int):
+                  current_year: int, portfolio_id: int | None = None):
     """Upsert tax report into cache. Mark immutable if year < current_year."""
     result_json = _serialize(report)
     is_immutable = 1 if year < current_year else 0
-    conn.execute(
-        "INSERT OR REPLACE INTO cached_tax_reports "
-        "(year, scope, country, data_hash, result_json, is_immutable, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (year, scope, country, data_hash, result_json, is_immutable,
-         datetime.now().isoformat())
-    )
+    if portfolio_id:
+        conn.execute(
+            "INSERT OR REPLACE INTO cached_tax_reports "
+            "(year, scope, country, data_hash, result_json, is_immutable, created_at, portfolio_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (year, scope, country, data_hash, result_json, is_immutable,
+             datetime.now().isoformat(), portfolio_id)
+        )
+    else:
+        conn.execute(
+            "INSERT OR REPLACE INTO cached_tax_reports "
+            "(year, scope, country, data_hash, result_json, is_immutable, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (year, scope, country, data_hash, result_json, is_immutable,
+             datetime.now().isoformat())
+        )
     conn.commit()
 
 

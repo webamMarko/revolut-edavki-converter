@@ -21,11 +21,18 @@ class GoalProjection:
     percentile_90: float
 
 
-def list_goals(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute(
-        "SELECT id, name, target_amount_eur, target_date, monthly_contribution, "
-        "scope, tickers, created_at, updated_at FROM goals ORDER BY target_date"
-    ).fetchall()
+def list_goals(conn: sqlite3.Connection, portfolio_id: int | None = None) -> list[dict]:
+    if portfolio_id:
+        rows = conn.execute(
+            "SELECT id, name, target_amount_eur, target_date, monthly_contribution, "
+            "scope, tickers, created_at, updated_at FROM goals WHERE portfolio_id = ? ORDER BY target_date",
+            (portfolio_id,)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, name, target_amount_eur, target_date, monthly_contribution, "
+            "scope, tickers, created_at, updated_at FROM goals ORDER BY target_date"
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -40,12 +47,20 @@ def get_goal(conn: sqlite3.Connection, goal_id: int) -> dict | None:
 
 def create_goal(conn: sqlite3.Connection, name: str, target_amount_eur: float,
                 target_date: str, monthly_contribution: float = 0,
-                scope: str = "all", tickers: str = "") -> int:
-    cur = conn.execute(
-        "INSERT INTO goals (name, target_amount_eur, target_date, monthly_contribution, scope, tickers) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (name, target_amount_eur, target_date, monthly_contribution, scope, tickers)
-    )
+                scope: str = "all", tickers: str = "",
+                portfolio_id: int | None = None) -> int:
+    if portfolio_id:
+        cur = conn.execute(
+            "INSERT INTO goals (name, target_amount_eur, target_date, monthly_contribution, scope, tickers, portfolio_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (name, target_amount_eur, target_date, monthly_contribution, scope, tickers, portfolio_id)
+        )
+    else:
+        cur = conn.execute(
+            "INSERT INTO goals (name, target_amount_eur, target_date, monthly_contribution, scope, tickers) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (name, target_amount_eur, target_date, monthly_contribution, scope, tickers)
+        )
     conn.commit()
     return cur.lastrowid
 

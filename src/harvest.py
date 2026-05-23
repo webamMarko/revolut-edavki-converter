@@ -83,6 +83,7 @@ def compute_harvest_suggestions(
     scope: str = "all",
     country: str = DEFAULT_REGIME,
     prices_conn: sqlite3.Connection | None = None,
+    portfolio_id: int | None = None,
 ) -> HarvestReport:
     """Compute ranked tax-loss harvesting suggestions.
 
@@ -104,7 +105,7 @@ def compute_harvest_suggestions(
 
     tax_report = compute_tax_report(
         conn, year=year, include_unrealized=False, scope=scope, country=country,
-        prices_conn=prices_conn
+        prices_conn=prices_conn, portfolio_id=portfolio_id
     )
 
     total_realized_gain = tax_report.total_realized_gain_eur
@@ -118,18 +119,34 @@ def compute_harvest_suggestions(
 
     # Rebuild FIFO lots and detect wash-sale risk from recent buys
     if scope == "all":
-        transactions = conn.execute(
-            """SELECT date, ticker, type, quantity, price_per_share, total_amount,
-                      currency, fx_rate, asset_class
-               FROM transactions WHERE asset_class != 'realestate' ORDER BY date"""
-        ).fetchall()
+        if portfolio_id:
+            transactions = conn.execute(
+                """SELECT date, ticker, type, quantity, price_per_share, total_amount,
+                          currency, fx_rate, asset_class
+                   FROM transactions WHERE asset_class != 'realestate' AND portfolio_id = ? ORDER BY date""",
+                (portfolio_id,)
+            ).fetchall()
+        else:
+            transactions = conn.execute(
+                """SELECT date, ticker, type, quantity, price_per_share, total_amount,
+                          currency, fx_rate, asset_class
+                   FROM transactions WHERE asset_class != 'realestate' ORDER BY date"""
+            ).fetchall()
     else:
-        transactions = conn.execute(
-            """SELECT date, ticker, type, quantity, price_per_share, total_amount,
-                      currency, fx_rate, asset_class
-               FROM transactions WHERE asset_class = ? ORDER BY date""",
-            (scope,)
-        ).fetchall()
+        if portfolio_id:
+            transactions = conn.execute(
+                """SELECT date, ticker, type, quantity, price_per_share, total_amount,
+                          currency, fx_rate, asset_class
+                   FROM transactions WHERE asset_class = ? AND portfolio_id = ? ORDER BY date""",
+                (scope, portfolio_id)
+            ).fetchall()
+        else:
+            transactions = conn.execute(
+                """SELECT date, ticker, type, quantity, price_per_share, total_amount,
+                          currency, fx_rate, asset_class
+                   FROM transactions WHERE asset_class = ? ORDER BY date""",
+                (scope,)
+            ).fetchall()
     transactions = [dict(r) for r in transactions]
 
     fifo_lots: dict[str, list] = defaultdict(list)

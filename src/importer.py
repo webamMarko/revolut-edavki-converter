@@ -945,6 +945,7 @@ def import_csv_mapped(
     column_map: dict,
     filename_hint: str = "",
     verbose: bool = False,
+    portfolio_id: int | None = None,
 ) -> ImportResult:
     """Import a CSV using an explicit user-supplied column mapping.
 
@@ -984,16 +985,28 @@ def import_csv_mapped(
 
         try:
             rh = _row_hash(parsed, asset_class)
-            conn.execute(
-                """INSERT OR IGNORE INTO transactions
-                   (date, ticker, type, quantity, price_per_share, total_amount,
-                    currency, fx_rate, asset_class, source_file, row_hash)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (parsed["date"], parsed["ticker"], parsed["type"],
-                 parsed["quantity"], parsed["price_per_share"],
-                 parsed["total_amount"], parsed["currency"],
-                 parsed["fx_rate"], asset_class, filename_hint or path.name, rh),
-            )
+            if portfolio_id:
+                conn.execute(
+                    """INSERT OR IGNORE INTO transactions
+                       (date, ticker, type, quantity, price_per_share, total_amount,
+                        currency, fx_rate, asset_class, source_file, row_hash, portfolio_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (parsed["date"], parsed["ticker"], parsed["type"],
+                     parsed["quantity"], parsed["price_per_share"],
+                     parsed["total_amount"], parsed["currency"],
+                     parsed["fx_rate"], asset_class, filename_hint or path.name, rh, portfolio_id),
+                )
+            else:
+                conn.execute(
+                    """INSERT OR IGNORE INTO transactions
+                       (date, ticker, type, quantity, price_per_share, total_amount,
+                        currency, fx_rate, asset_class, source_file, row_hash)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (parsed["date"], parsed["ticker"], parsed["type"],
+                     parsed["quantity"], parsed["price_per_share"],
+                     parsed["total_amount"], parsed["currency"],
+                     parsed["fx_rate"], asset_class, filename_hint or path.name, rh),
+                )
             if conn.execute("SELECT changes()").fetchone()[0] > 0:
                 new += 1
             else:
@@ -1002,17 +1015,25 @@ def import_csv_mapped(
             skipped += 1
 
     display_name = filename_hint or path.name
-    conn.execute(
-        """INSERT INTO import_log (filename, file_hash, rows_total, rows_new, rows_skipped)
-           VALUES (?, ?, ?, ?, ?)""",
-        (display_name, fhash, total, new, total - new),
-    )
+    if portfolio_id:
+        conn.execute(
+            """INSERT INTO import_log (filename, file_hash, rows_total, rows_new, rows_skipped, portfolio_id)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (display_name, fhash, total, new, total - new, portfolio_id),
+        )
+    else:
+        conn.execute(
+            """INSERT INTO import_log (filename, file_hash, rows_total, rows_new, rows_skipped)
+               VALUES (?, ?, ?, ?, ?)""",
+            (display_name, fhash, total, new, total - new),
+        )
     conn.commit()
 
     return ImportResult(total=total, new=new, skipped=total - new)
 
 
-def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) -> ImportResult:
+def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False,
+               portfolio_id: int | None = None) -> ImportResult:
     """Import a Revolut CSV/Excel file into the database with deduplication."""
     path = Path(file_path)
     if not path.exists():
@@ -1081,16 +1102,28 @@ def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) 
 
         try:
             rh = _row_hash(parsed, effective_asset_class)
-            conn.execute(
-                """INSERT OR IGNORE INTO transactions
-                   (date, ticker, type, quantity, price_per_share, total_amount,
-                    currency, fx_rate, asset_class, source_file, row_hash)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (parsed["date"], parsed["ticker"], parsed["type"],
-                 parsed["quantity"], parsed["price_per_share"],
-                 parsed["total_amount"], parsed["currency"],
-                 parsed["fx_rate"], effective_asset_class, path.name, rh),
-            )
+            if portfolio_id:
+                conn.execute(
+                    """INSERT OR IGNORE INTO transactions
+                       (date, ticker, type, quantity, price_per_share, total_amount,
+                        currency, fx_rate, asset_class, source_file, row_hash, portfolio_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (parsed["date"], parsed["ticker"], parsed["type"],
+                     parsed["quantity"], parsed["price_per_share"],
+                     parsed["total_amount"], parsed["currency"],
+                     parsed["fx_rate"], effective_asset_class, path.name, rh, portfolio_id),
+                )
+            else:
+                conn.execute(
+                    """INSERT OR IGNORE INTO transactions
+                       (date, ticker, type, quantity, price_per_share, total_amount,
+                        currency, fx_rate, asset_class, source_file, row_hash)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (parsed["date"], parsed["ticker"], parsed["type"],
+                     parsed["quantity"], parsed["price_per_share"],
+                     parsed["total_amount"], parsed["currency"],
+                     parsed["fx_rate"], effective_asset_class, path.name, rh),
+                )
             if conn.execute("SELECT changes()").fetchone()[0] > 0:
                 new += 1
             else:
@@ -1105,11 +1138,18 @@ def import_csv(conn: sqlite3.Connection, file_path: str, verbose: bool = False) 
         warnings.append(f"{dup_count} duplicate rows skipped")
 
     # Log the import
-    conn.execute(
-        """INSERT INTO import_log (filename, file_hash, rows_total, rows_new, rows_skipped)
-           VALUES (?, ?, ?, ?, ?)""",
-        (path.name, fhash, total, new, total - new),
-    )
+    if portfolio_id:
+        conn.execute(
+            """INSERT INTO import_log (filename, file_hash, rows_total, rows_new, rows_skipped, portfolio_id)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (path.name, fhash, total, new, total - new, portfolio_id),
+        )
+    else:
+        conn.execute(
+            """INSERT INTO import_log (filename, file_hash, rows_total, rows_new, rows_skipped)
+               VALUES (?, ?, ?, ?, ?)""",
+            (path.name, fhash, total, new, total - new),
+        )
     conn.commit()
 
     return ImportResult(total=total, new=new, skipped=total - new, warnings=warnings)

@@ -18,12 +18,16 @@ _env = Environment(
 )
 
 
-def query_real_estate(conn: sqlite3.Connection, prices_conn: sqlite3.Connection | None = None) -> dict:
+def query_real_estate(conn: sqlite3.Connection, prices_conn: sqlite3.Connection | None = None,
+                      portfolio_id: int | None = None) -> dict:
     """Return real estate properties with valuations and price history."""
     _pconn = prices_conn if prices_conn is not None else conn
     try:
-        # Properties from user DB, valuations from prices DB
-        props_raw = conn.execute("SELECT * FROM real_estate_properties ORDER BY purchase_date").fetchall()
+        if portfolio_id:
+            props_raw = conn.execute("SELECT * FROM real_estate_properties WHERE portfolio_id = ? ORDER BY purchase_date",
+                                     (portfolio_id,)).fetchall()
+        else:
+            props_raw = conn.execute("SELECT * FROM real_estate_properties ORDER BY purchase_date").fetchall()
     except Exception:
         return {}
     if not props_raw:
@@ -99,10 +103,15 @@ def query_real_estate(conn: sqlite3.Connection, prices_conn: sqlite3.Connection 
 def query_transactions(conn: sqlite3.Connection,
                        year: int | None = None,
                        start_date: datetime | None = None,
-                       end_date: datetime | None = None) -> list[dict]:
+                       end_date: datetime | None = None,
+                       portfolio_id: int | None = None) -> list[dict]:
     """Query transactions from database with optional date filtering."""
     conditions = []
     params = []
+
+    if portfolio_id:
+        conditions.append("portfolio_id = ?")
+        params.append(portfolio_id)
 
     if year:
         conditions.append("date LIKE ?")
@@ -155,22 +164,24 @@ def query_fire_config(conn: sqlite3.Connection) -> dict | None:
         return None
 
 
-def query_investment_notes(conn: sqlite3.Connection) -> list[dict]:
+def query_investment_notes(conn: sqlite3.Connection, portfolio_id: int | None = None) -> list[dict]:
     """Return investment notes enriched with live ticker data."""
     try:
         from .notes import query_notes_for_report
-        return query_notes_for_report(conn)
+        return query_notes_for_report(conn, portfolio_id=portfolio_id)
     except Exception:
         return []
 
 
-def _query_dividend_data(conn: sqlite3.Connection | None) -> dict:
+def _query_dividend_data(conn: sqlite3.Connection | None, portfolio_id: int | None = None) -> dict:
     """Query per-ticker and monthly dividend data from transactions."""
     if conn is None:
         return {"by_ticker": [], "by_month": [], "total_eur": 0}
 
     dividend_types = ("DIVIDEND", "BOND COUPON", "INTEREST PAID", "STAKING REWARD", "LEARN REWARD")
     placeholders = ",".join("?" for _ in dividend_types)
+    pf_filter = " AND portfolio_id = ?" if portfolio_id else ""
+    pf_params = (portfolio_id,) if portfolio_id else ()
 
     # Per-ticker totals
     rows = conn.execute(f"""
@@ -180,10 +191,10 @@ def _query_dividend_data(conn: sqlite3.Connection | None) -> dict:
         ) as total_eur,
         COUNT(*) as payment_count
         FROM transactions
-        WHERE type IN ({placeholders}) AND total_amount IS NOT NULL AND total_amount != 0
+        WHERE type IN ({placeholders}) AND total_amount IS NOT NULL AND total_amount != 0{pf_filter}
         GROUP BY ticker
         ORDER BY total_eur DESC
-    """, dividend_types).fetchall()
+    """, (*dividend_types, *pf_params)).fetchall()
 
     by_ticker = [
         {"ticker": r[0] or "Unknown", "total_eur": round(r[1], 2), "count": r[2]}
@@ -199,10 +210,10 @@ def _query_dividend_data(conn: sqlite3.Connection | None) -> dict:
                  ELSE ABS(total_amount) END
         ) as total_eur
         FROM transactions
-        WHERE type IN ({placeholders}) AND total_amount IS NOT NULL AND total_amount != 0
+        WHERE type IN ({placeholders}) AND total_amount IS NOT NULL AND total_amount != 0{pf_filter}
         GROUP BY month
         ORDER BY month
-    """, dividend_types).fetchall()
+    """, (*dividend_types, *pf_params)).fetchall()
 
     by_month = [{"month": r[0], "total_eur": round(r[1], 2)} for r in rows]
 
@@ -216,9 +227,9 @@ def _query_dividend_data(conn: sqlite3.Connection | None) -> dict:
         ) as ttm_eur
         FROM transactions
         WHERE type IN ({placeholders}) AND total_amount IS NOT NULL AND total_amount != 0
-          AND date >= ?
+          AND date >= ?{pf_filter}
         GROUP BY ticker
-    """, (*dividend_types, ttm_start)).fetchall()
+    """, (*dividend_types, ttm_start, *pf_params)).fetchall()
     ttm_by_ticker = {r[0]: round(r[1], 2) for r in rows}
 
     return {"by_ticker": by_ticker, "by_month": by_month, "total_eur": total_eur,
@@ -302,7 +313,8 @@ def _query_company_names(conn: sqlite3.Connection | None, tickers: list[str]) ->
 
 
 def _query_currency_exposure(conn: sqlite3.Connection, positions: list,
-                             prices_conn: sqlite3.Connection | None = None) -> list[dict]:
+                             prices_conn: sqlite3.Connection | None = None,
+                             portfolio_id: int | None = None) -> list[dict]:
     """Determine native currency of each position and compute exposure breakdown."""
     if not conn or not positions:
         return []
@@ -319,11 +331,18 @@ def _query_currency_exposure(conn: sqlite3.Connection, positions: list,
             if ticker.startswith(prefix):
                 db_ticker = ticker[len(prefix):]
                 break
-        row = conn.execute(
-            "SELECT currency FROM transactions WHERE ticker = ? AND type IN ('BUY','SELL') "
-            "AND currency IS NOT NULL ORDER BY date DESC LIMIT 1",
-            (db_ticker,)
-        ).fetchone()
+        if portfolio_id:
+            row = conn.execute(
+                "SELECT currency FROM transactions WHERE ticker = ? AND type IN ('BUY','SELL') "
+                "AND currency IS NOT NULL AND portfolio_id = ? ORDER BY date DESC LIMIT 1",
+                (db_ticker, portfolio_id)
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT currency FROM transactions WHERE ticker = ? AND type IN ('BUY','SELL') "
+                "AND currency IS NOT NULL ORDER BY date DESC LIMIT 1",
+                (db_ticker,)
+            ).fetchone()
         if row:
             ticker_currency[ticker] = row[0]
         else:
@@ -606,6 +625,7 @@ def _compute_return_attribution(
     total_invested_eur: float,
     conn: sqlite3.Connection | None,
     prices_conn: sqlite3.Connection | None,
+    portfolio_id: int | None = None,
 ) -> list[dict]:
     """Per-position return attribution with FX decomposition for USD-denominated assets.
 
@@ -630,15 +650,27 @@ def _compute_return_attribution(
 
     # Weighted average buy FX rate per ticker (from BUY transactions)
     # EUR/USD at purchase — used to reconstruct buy_price_usd from cost_basis_eur
-    buy_fx_rows = conn.execute(
-        """SELECT ticker, SUM(ABS(total_amount)) as total_usd,
-                  SUM(CASE WHEN fx_rate > 0 THEN ABS(total_amount) ELSE 0 END) as fx_weighted_usd,
-                  SUM(CASE WHEN fx_rate > 0 THEN ABS(total_amount) / fx_rate ELSE 0 END) as total_eur_from_fx
-           FROM transactions
-           WHERE type IN ('BUY','RECEIVE','STAKING REWARD','LEARN REWARD')
-             AND currency != 'EUR' AND fx_rate > 0
-           GROUP BY ticker"""
-    ).fetchall()
+    if portfolio_id:
+        buy_fx_rows = conn.execute(
+            """SELECT ticker, SUM(ABS(total_amount)) as total_usd,
+                      SUM(CASE WHEN fx_rate > 0 THEN ABS(total_amount) ELSE 0 END) as fx_weighted_usd,
+                      SUM(CASE WHEN fx_rate > 0 THEN ABS(total_amount) / fx_rate ELSE 0 END) as total_eur_from_fx
+               FROM transactions
+               WHERE type IN ('BUY','RECEIVE','STAKING REWARD','LEARN REWARD')
+                 AND currency != 'EUR' AND fx_rate > 0 AND portfolio_id = ?
+               GROUP BY ticker""",
+            (portfolio_id,)
+        ).fetchall()
+    else:
+        buy_fx_rows = conn.execute(
+            """SELECT ticker, SUM(ABS(total_amount)) as total_usd,
+                      SUM(CASE WHEN fx_rate > 0 THEN ABS(total_amount) ELSE 0 END) as fx_weighted_usd,
+                      SUM(CASE WHEN fx_rate > 0 THEN ABS(total_amount) / fx_rate ELSE 0 END) as total_eur_from_fx
+               FROM transactions
+               WHERE type IN ('BUY','RECEIVE','STAKING REWARD','LEARN REWARD')
+                 AND currency != 'EUR' AND fx_rate > 0
+               GROUP BY ticker"""
+        ).fetchall()
     # weighted avg FX = sum(amount_usd) / sum(amount_usd/fx_rate)
     avg_buy_fx: dict[str, float] = {}
     for r in buy_fx_rows:
@@ -736,7 +768,8 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                            investment_notes: list[dict] | None = None,
                            conn: sqlite3.Connection | None = None,
                            country: str = "SI",
-                           prices_conn: sqlite3.Connection | None = None) -> dict:
+                           prices_conn: sqlite3.Connection | None = None,
+                           portfolio_id: int | None = None) -> dict:
     """Convert analytics/tax results + transactions to JSON-safe dict."""
     from .tax_regimes import get_regime, REGIMES
     from .i18n import get_translations, get_locale_for_country
@@ -932,7 +965,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
             # Compute enhanced harvest data with wash-sale and net-benefit info
             try:
                 from .harvest import compute_harvest_suggestions
-                enhanced = compute_harvest_suggestions(conn, year=t.year, scope="all", country=t.country)
+                enhanced = compute_harvest_suggestions(conn, year=t.year, scope="all", country=t.country, portfolio_id=portfolio_id)
                 enhanced_map = {s.ticker: s for s in enhanced.suggestions}
             except Exception:
                 enhanced_map = {}
@@ -1039,12 +1072,12 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
     data["real_estate"] = real_estate or {}
     data["fire"] = fire_config  # full config dict or None (replaces old fire_target)
     data["investment_notes"] = investment_notes or []
-    data["dividends"] = _query_dividend_data(conn)
+    data["dividends"] = _query_dividend_data(conn, portfolio_id=portfolio_id)
 
     # Dividend calendar & income forecast
     try:
         from .dividend_forecast import build_dividend_forecast
-        forecast = build_dividend_forecast(conn, prices_conn=_pconn)
+        forecast = build_dividend_forecast(conn, prices_conn=_pconn, portfolio_id=portfolio_id)
         if forecast:
             data["dividend_calendar"] = {
                 "upcoming": [
@@ -1077,15 +1110,24 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
         try:
             from .doh_div_generator import build_dividend_entries, compute_dividend_tax_summary
             div_tax_by_year = {}
-            div_years = [
-                int(r[0]) for r in conn.execute(
-                    "SELECT DISTINCT strftime('%Y', date) FROM transactions "
-                    "WHERE type LIKE 'DIVIDEND%' AND asset_class = 'stock' ORDER BY 1"
-                ).fetchall()
-            ]
+            if portfolio_id:
+                div_years = [
+                    int(r[0]) for r in conn.execute(
+                        "SELECT DISTINCT strftime('%Y', date) FROM transactions "
+                        "WHERE type LIKE 'DIVIDEND%' AND asset_class = 'stock' AND portfolio_id = ? ORDER BY 1",
+                        (portfolio_id,)
+                    ).fetchall()
+                ]
+            else:
+                div_years = [
+                    int(r[0]) for r in conn.execute(
+                        "SELECT DISTINCT strftime('%Y', date) FROM transactions "
+                        "WHERE type LIKE 'DIVIDEND%' AND asset_class = 'stock' ORDER BY 1"
+                    ).fetchall()
+                ]
             for yr in div_years:
                 try:
-                    entries = build_dividend_entries(conn, yr)
+                    entries = build_dividend_entries(conn, yr, portfolio_id=portfolio_id)
                     if entries:
                         s = compute_dividend_tax_summary(entries, yr)
                         div_tax_by_year[str(yr)] = {
@@ -1121,7 +1163,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
     data["company_names"] = _query_company_names(conn, pos_tickers)
 
     # Currency exposure
-    data["currency_exposure"] = _query_currency_exposure(conn, analytics.positions, prices_conn=_pconn)
+    data["currency_exposure"] = _query_currency_exposure(conn, analytics.positions, prices_conn=_pconn, portfolio_id=portfolio_id)
 
     # Sector/industry allocation
     data["sector_allocation"] = _query_sector_allocation(conn, analytics.positions)
@@ -1151,6 +1193,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
             conn=conn,
             country=country,
             prices_conn=_pconn,
+            portfolio_id=portfolio_id,
         )
         data["health_score"] = serialize_health_score(hs)
     except Exception:
@@ -1169,12 +1212,21 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
             ).fetchone()
             last_sync_date = last_price_row[0] if last_price_row else None
 
-            years_with_tx = [
-                int(r[0]) for r in conn.execute(
-                    "SELECT DISTINCT strftime('%Y', date) FROM transactions "
-                    "WHERE asset_class NOT IN ('realestate') ORDER BY 1"
-                ).fetchall()
-            ]
+            if portfolio_id:
+                years_with_tx = [
+                    int(r[0]) for r in conn.execute(
+                        "SELECT DISTINCT strftime('%Y', date) FROM transactions "
+                        "WHERE asset_class NOT IN ('realestate') AND portfolio_id = ? ORDER BY 1",
+                        (portfolio_id,)
+                    ).fetchall()
+                ]
+            else:
+                years_with_tx = [
+                    int(r[0]) for r in conn.execute(
+                        "SELECT DISTINCT strftime('%Y', date) FROM transactions "
+                        "WHERE asset_class NOT IN ('realestate') ORDER BY 1"
+                    ).fetchall()
+                ]
 
             filed_row = conn.execute(
                 "SELECT value FROM metadata WHERE key = 'edavki_filed_years'"
@@ -1204,6 +1256,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
         data["return_attribution"] = _compute_return_attribution(
             analytics.positions, analytics.closed_positions,
             analytics.total_invested_eur, conn, _pconn,
+            portfolio_id=portfolio_id,
         )
     except Exception:
         data["return_attribution"] = []
@@ -1222,13 +1275,15 @@ def generate_html_report(analytics, tax_by_year, transactions: list[dict],
                          prices_conn: sqlite3.Connection | None = None,
                          shared_mode: bool = False,
                          percentage_only: bool = False,
-                         include_holdings: bool = True) -> str:
+                         include_holdings: bool = True,
+                         portfolio_id: int | None = None) -> str:
     """Generate a self-contained HTML report."""
     data = _serialize_report_data(analytics, tax_by_year, transactions, per_class=per_class,
                                   available_classes=available_classes,
                                   real_estate=real_estate, fire_config=fire_config,
                                   investment_notes=investment_notes, conn=conn,
-                                  country=country, prices_conn=prices_conn)
+                                  country=country, prices_conn=prices_conn,
+                                  portfolio_id=portfolio_id)
 
     if shared_mode:
         data["tax_by_year"] = {}

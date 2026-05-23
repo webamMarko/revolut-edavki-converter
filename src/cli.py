@@ -91,7 +91,8 @@ def cmd_import(args):
         for file_path in args.files:
             if args.verbose:
                 print(f"Importing {file_path}...")
-            result = import_csv(conn, file_path, verbose=args.verbose)
+            result = import_csv(conn, file_path, verbose=args.verbose,
+                               portfolio_id=getattr(args, "portfolio_id", None))
             print(f"{file_path}: {result.new} new, {result.skipped} skipped (of {result.total} rows)")
         invalidate_cache(conn)
         invalidate_current_year_tax(conn)
@@ -163,6 +164,7 @@ def cmd_analytics(args):
             start_date=args.start_date,
             end_date=args.end_date,
             scope=args.scope,
+            portfolio_id=getattr(args, "portfolio_id", None),
         )
         format_analytics(results, fmt=args.format, output=args.output,
                         verbose=args.verbose, chart=args.chart)
@@ -184,6 +186,7 @@ def cmd_tax(args):
             include_unrealized=args.include_unrealized,
             scope=args.scope,
             country=getattr(args, "country", "SI"),
+            portfolio_id=getattr(args, "portfolio_id", None),
         )
         if getattr(args, "pdf", None):
             from .pdf_report import generate_tax_pdf
@@ -206,7 +209,8 @@ def cmd_dividend(args):
 
     conn = get_connection()
     try:
-        entries = build_dividend_entries(conn, args.year)
+        entries = build_dividend_entries(conn, args.year,
+                                        portfolio_id=getattr(args, "portfolio_id", None))
         if not entries:
             print(f"No dividend income found for {args.year}.")
             return
@@ -268,6 +272,7 @@ def cmd_harvest(args):
             year=args.year,
             scope=args.scope,
             country=getattr(args, "country", "SI"),
+            portfolio_id=getattr(args, "portfolio_id", None),
         )
         format_harvest(report, verbose=args.verbose)
     finally:
@@ -283,25 +288,36 @@ def cmd_report(args):
 
     conn = get_connection()
     try:
+        pf_id = getattr(args, "portfolio_id", None)
         analytics = compute_analytics(
             conn, year=args.year, start_date=args.start_date,
             end_date=args.end_date, scope="all",
+            portfolio_id=pf_id,
         )
 
         # Compute tax for every year that has transactions (excluding real estate)
         tax_by_year = {}
         try:
-            years_with_tx = [
-                int(r[0]) for r in conn.execute(
-                    "SELECT DISTINCT strftime('%Y', date) FROM transactions "
-                    "WHERE asset_class != 'realestate' ORDER BY 1"
-                ).fetchall()
-            ]
+            if pf_id:
+                years_with_tx = [
+                    int(r[0]) for r in conn.execute(
+                        "SELECT DISTINCT strftime('%Y', date) FROM transactions "
+                        "WHERE asset_class != 'realestate' AND portfolio_id = ? ORDER BY 1",
+                        (pf_id,)
+                    ).fetchall()
+                ]
+            else:
+                years_with_tx = [
+                    int(r[0]) for r in conn.execute(
+                        "SELECT DISTINCT strftime('%Y', date) FROM transactions "
+                        "WHERE asset_class != 'realestate' ORDER BY 1"
+                    ).fetchall()
+                ]
             country = getattr(args, "country", "SI")
             for yr in years_with_tx:
                 try:
                     t = compute_tax_report(conn, year=yr, include_unrealized=False, scope="all",
-                                           country=country)
+                                           country=country, portfolio_id=pf_id)
                     tax_by_year[yr] = t
                 except Exception:
                     pass
@@ -309,29 +325,37 @@ def cmd_report(args):
             pass
 
         transactions = query_transactions(conn, year=args.year,
-                                          start_date=args.start_date, end_date=args.end_date)
+                                          start_date=args.start_date, end_date=args.end_date,
+                                          portfolio_id=pf_id)
 
         # Per-asset-class analytics for the client-side asset class filter UI
         per_class = {}
-        asset_classes = [r[0] for r in conn.execute(
-            "SELECT DISTINCT asset_class FROM transactions"
-        ).fetchall()]
+        if pf_id:
+            asset_classes = [r[0] for r in conn.execute(
+                "SELECT DISTINCT asset_class FROM transactions WHERE portfolio_id = ?", (pf_id,)
+            ).fetchall()]
+        else:
+            asset_classes = [r[0] for r in conn.execute(
+                "SELECT DISTINCT asset_class FROM transactions"
+            ).fetchall()]
         for ac in asset_classes:
             try:
                 per_class[ac] = compute_analytics(
                     conn, year=args.year, start_date=args.start_date,
                     end_date=args.end_date, scope=ac,
+                    portfolio_id=pf_id,
                 )
             except Exception:
                 pass
 
-        re_data = query_real_estate(conn)
+        re_data = query_real_estate(conn, portfolio_id=pf_id)
         fire_cfg = query_fire_config(conn)
-        notes = query_investment_notes(conn)
+        notes = query_investment_notes(conn, portfolio_id=pf_id)
         html = generate_html_report(analytics, tax_by_year, transactions, per_class=per_class,
                                      real_estate=re_data, fire_config=fire_cfg,
                                      investment_notes=notes, conn=conn,
-                                     country=getattr(args, "country", "SI"))
+                                     country=getattr(args, "country", "SI"),
+                                     portfolio_id=pf_id)
 
         output = args.output or f"portfolio_report_{analytics.start_date}_{analytics.end_date}.html"
         with open(output, "w", encoding="utf-8") as f:
@@ -673,6 +697,7 @@ Examples:
     # --- import ---
     p_import = subparsers.add_parser("import", help="Import Revolut CSV/Excel into portfolio database")
     p_import.add_argument("files", nargs="+", help="CSV or Excel file(s) to import")
+    p_import.add_argument("--portfolio-id", type=int, default=None, help="Portfolio ID to import into")
     p_import.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_import.set_defaults(func=cmd_import)
 
@@ -694,6 +719,7 @@ Examples:
     p_analytics.add_argument("--chart", action="store_true", help="Show performance chart")
     p_analytics.add_argument("--scope", choices=["stock", "cfd", "crypto", "savings", "realestate", "all"], default="all",
                              help="Asset class scope (default: all)")
+    p_analytics.add_argument("--portfolio-id", type=int, default=None, help="Portfolio ID to scope results")
     p_analytics.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_analytics.set_defaults(func=cmd_analytics)
 
@@ -708,6 +734,7 @@ Examples:
                        help="Country tax regime: SI, DE, AT, US, IT, ES, FR, NL (default: SI)")
     p_tax.add_argument("--pdf", type=str, metavar="FILE",
                        help="Export tax summary as PDF to the specified file")
+    p_tax.add_argument("--portfolio-id", type=int, default=None, help="Portfolio ID to scope results")
     p_tax.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_tax.set_defaults(func=cmd_tax)
 
@@ -716,6 +743,7 @@ Examples:
     p_div.add_argument("--year", type=int, required=True, help="Fiscal year")
     p_div.add_argument("--output", "-o", type=str, metavar="FILE",
                        help="Output Doh-Div XML file path")
+    p_div.add_argument("--portfolio-id", type=int, default=None, help="Portfolio ID to scope results")
     p_div.add_argument("--verbose", "-v", action="store_true",
                        help="Show per-country breakdown and reclaim guidance")
     p_div.set_defaults(func=cmd_dividend)
@@ -728,6 +756,7 @@ Examples:
                            help="Asset class scope (default: all)")
     p_harvest.add_argument("--country", default="SI",
                            help="Country tax regime: SI, DE, AT, US, IT, ES, FR, NL (default: SI)")
+    p_harvest.add_argument("--portfolio-id", type=int, default=None, help="Portfolio ID to scope results")
     p_harvest.add_argument("--verbose", "-v", action="store_true",
                            help="Show per-lot breakdown and wash-sale details")
     p_harvest.set_defaults(func=cmd_harvest)
@@ -740,6 +769,7 @@ Examples:
     p_report.add_argument("--country", default="SI",
                           help="Country tax regime: SI, DE, AT, US, IT, ES, FR, NL (default: SI)")
     p_report.add_argument("--output", "-o", help="Output HTML file path")
+    p_report.add_argument("--portfolio-id", type=int, default=None, help="Portfolio ID to scope results")
     p_report.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_report.set_defaults(func=cmd_report)
 

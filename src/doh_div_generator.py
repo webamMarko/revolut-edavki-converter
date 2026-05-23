@@ -159,7 +159,7 @@ class DohDivGenerator:
         ).decode('utf-8')
 
 
-def build_dividend_entries(conn, year: int) -> list[DividendEntry]:
+def build_dividend_entries(conn, year: int, portfolio_id: int | None = None) -> list[DividendEntry]:
     """Query dividend transactions from DB and build DividendEntry list for a tax year.
 
     Handles:
@@ -167,14 +167,25 @@ def build_dividend_entries(conn, year: int) -> list[DividendEntry]:
     - DIVIDEND TAX (CORRECTION) entries (withholding adjustments)
     - Currency conversion via fx_rate
     """
-    rows = conn.execute("""
-        SELECT date, ticker, type, total_amount, currency, fx_rate
-        FROM transactions
-        WHERE asset_class = 'stock'
-          AND type LIKE 'DIVIDEND%'
-          AND date >= ? AND date < ?
-        ORDER BY date, ticker
-    """, (f"{year}-01-01", f"{year + 1}-01-01")).fetchall()
+    if portfolio_id:
+        rows = conn.execute("""
+            SELECT date, ticker, type, total_amount, currency, fx_rate
+            FROM transactions
+            WHERE asset_class = 'stock'
+              AND type LIKE 'DIVIDEND%'
+              AND date >= ? AND date < ?
+              AND portfolio_id = ?
+            ORDER BY date, ticker
+        """, (f"{year}-01-01", f"{year + 1}-01-01", portfolio_id)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT date, ticker, type, total_amount, currency, fx_rate
+            FROM transactions
+            WHERE asset_class = 'stock'
+              AND type LIKE 'DIVIDEND%'
+              AND date >= ? AND date < ?
+            ORDER BY date, ticker
+        """, (f"{year}-01-01", f"{year + 1}-01-01")).fetchall()
 
     # Group by ticker+date to pair dividends with their tax corrections
     from collections import defaultdict

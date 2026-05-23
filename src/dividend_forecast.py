@@ -30,14 +30,23 @@ class DividendForecast:
     dividend_changes: list[dict]
 
 
-def _get_held_positions(conn: sqlite3.Connection) -> dict[str, float]:
+def _get_held_positions(conn: sqlite3.Connection, portfolio_id: int | None = None) -> dict[str, float]:
     """Get current share count per ticker using FIFO from transactions."""
-    rows = conn.execute("""
-        SELECT ticker, type, quantity FROM transactions
-        WHERE ticker IS NOT NULL AND asset_class = 'stock'
-          AND type IN ('BUY', 'SELL', 'STOCK SPLIT')
-        ORDER BY date, id
-    """).fetchall()
+    if portfolio_id:
+        rows = conn.execute("""
+            SELECT ticker, type, quantity FROM transactions
+            WHERE ticker IS NOT NULL AND asset_class = 'stock'
+              AND type IN ('BUY', 'SELL', 'STOCK SPLIT')
+              AND portfolio_id = ?
+            ORDER BY date, id
+        """, (portfolio_id,)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT ticker, type, quantity FROM transactions
+            WHERE ticker IS NOT NULL AND asset_class = 'stock'
+              AND type IN ('BUY', 'SELL', 'STOCK SPLIT')
+            ORDER BY date, id
+        """).fetchall()
 
     holdings: dict[str, float] = {}
     for row in rows:
@@ -131,21 +140,30 @@ def _detect_dividend_changes(conn: sqlite3.Connection, ticker: str) -> dict | No
 
 
 def build_dividend_forecast(conn: sqlite3.Connection,
-                            prices_conn: sqlite3.Connection | None = None) -> DividendForecast | None:
+                            prices_conn: sqlite3.Connection | None = None,
+                            portfolio_id: int | None = None) -> DividendForecast | None:
     """Build forward-looking dividend calendar and income projections."""
-    holdings = _get_held_positions(conn)
+    holdings = _get_held_positions(conn, portfolio_id=portfolio_id)
     if not holdings:
         return None
 
     _pconn = prices_conn if prices_conn is not None else conn
     fx_rate = _get_latest_fx_rate(_pconn)
 
-    tickers_with_divs = conn.execute(
-        "SELECT DISTINCT ticker FROM dividend_schedule WHERE ticker IN ({})".format(
-            ",".join("?" for _ in holdings)
-        ),
-        list(holdings.keys())
-    ).fetchall()
+    if portfolio_id:
+        tickers_with_divs = conn.execute(
+            "SELECT DISTINCT ticker FROM dividend_schedule WHERE portfolio_id = ? AND ticker IN ({})".format(
+                ",".join("?" for _ in holdings)
+            ),
+            [portfolio_id] + list(holdings.keys())
+        ).fetchall()
+    else:
+        tickers_with_divs = conn.execute(
+            "SELECT DISTINCT ticker FROM dividend_schedule WHERE ticker IN ({})".format(
+                ",".join("?" for _ in holdings)
+            ),
+            list(holdings.keys())
+        ).fetchall()
     div_tickers = {row[0] for row in tickers_with_divs}
 
     today = datetime.now()
@@ -239,13 +257,22 @@ def build_dividend_forecast(conn: sqlite3.Connection,
     total_monthly = total_annual / 12 if total_annual > 0 else 0
 
     # Yield on cost
-    total_invested_row = conn.execute("""
-        SELECT SUM(
-            CASE WHEN fx_rate > 0 AND currency != 'EUR' THEN ABS(total_amount) / fx_rate
-                 ELSE ABS(total_amount) END
-        ) FROM transactions
-        WHERE type = 'BUY' AND asset_class = 'stock' AND ticker IN ({})
-    """.format(",".join("?" for _ in holdings)), list(holdings.keys())).fetchone()
+    if portfolio_id:
+        total_invested_row = conn.execute("""
+            SELECT SUM(
+                CASE WHEN fx_rate > 0 AND currency != 'EUR' THEN ABS(total_amount) / fx_rate
+                     ELSE ABS(total_amount) END
+            ) FROM transactions
+            WHERE type = 'BUY' AND asset_class = 'stock' AND portfolio_id = ? AND ticker IN ({})
+        """.format(",".join("?" for _ in holdings)), [portfolio_id] + list(holdings.keys())).fetchone()
+    else:
+        total_invested_row = conn.execute("""
+            SELECT SUM(
+                CASE WHEN fx_rate > 0 AND currency != 'EUR' THEN ABS(total_amount) / fx_rate
+                     ELSE ABS(total_amount) END
+            ) FROM transactions
+            WHERE type = 'BUY' AND asset_class = 'stock' AND ticker IN ({})
+        """.format(",".join("?" for _ in holdings)), list(holdings.keys())).fetchone()
     total_invested = total_invested_row[0] if total_invested_row and total_invested_row[0] else 0
     yield_on_cost = (total_annual / total_invested * 100) if total_invested > 0 else None
 

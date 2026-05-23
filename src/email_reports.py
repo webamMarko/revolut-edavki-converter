@@ -158,7 +158,8 @@ def _user_db_path(username: str) -> Path:
     return _DATA_DIR / username / "portfolio.db"
 
 
-def _generate_summary_for_user(username: str, scope: str, country: str) -> dict | None:
+def _generate_summary_for_user(username: str, scope: str, country: str,
+                               portfolio_id: int | None = None) -> dict | None:
     """Generate a portfolio summary dict for a user. Returns None if no data."""
     from .db import get_connection
     from .analytics import compute_analytics
@@ -169,11 +170,14 @@ def _generate_summary_for_user(username: str, scope: str, country: str) -> dict 
 
     conn = get_connection(db_path=db_path)
     try:
-        tx_count = conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
+        if portfolio_id:
+            tx_count = conn.execute("SELECT COUNT(*) FROM transactions WHERE portfolio_id = ?", (portfolio_id,)).fetchone()[0]
+        else:
+            tx_count = conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
         if tx_count == 0:
             return None
 
-        analytics = compute_analytics(conn, scope=scope)
+        analytics = compute_analytics(conn, scope=scope, portfolio_id=portfolio_id)
 
         summary = {
             "total_value_eur": round(analytics.total_value_eur, 2),
