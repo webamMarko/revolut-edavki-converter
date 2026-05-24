@@ -1,0 +1,53 @@
+<section id="dashboard" class="content-section" style="display:none">
+  <div class="dashboard-header">
+    <h2>My Dashboard</h2>
+    <button id="dashboardEditBtn" class="btn btn-icon" aria-label="Edit dashboard" title="Customize dashboard">
+      <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11.5 2.5l2 2-7 7H4.5v-2l7-7z"/>
+        <path d="M10 4l2 2"/>
+      </svg>
+      <span class="btn-text">Edit</span>
+    </button>
+  </div>
+
+  <div id="dashboardDefaultBanner" class="dashboard-banner" style="display:none">
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+      <path d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1zm.75 10.25v1.5h-1.5v-1.5h1.5zm-1.5-6.5v5h1.5v-5h-1.5z"/>
+    </svg>
+    <span>This is your default layout — tap the Edit button to customize</span>
+  </div>
+
+  <div class="grid-stack" id="dashboardGrid"></div>
+
+  <!-- Widget picker panel (slide-out) -->
+  <div id="widgetPickerBackdrop" class="widget-picker-backdrop" style="display:none"></div>
+  <div id="widgetPicker" class="widget-picker" style="display:none">
+    <div class="widget-picker-header">
+      <h3>Add Widget</h3>
+      <button id="widgetPickerClose" class="btn-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="widget-picker-list" id="widgetPickerList">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <!-- Hidden containers for widget content -->
+  <div id="widgetTemplates" style="display:none">
+    <div id="widget-quick-glance" class="widget-template">{% include "sections/quick_glance.html.j2" %}</div>
+    <div id="widget-health-score" class="widget-template">{% include "sections/health_score.html.j2" %}</div>
+    <div id="widget-summary" class="widget-template">{% include "sections/summary.html.j2" %}</div>
+    <div id="widget-charts" class="widget-template">{% include "sections/charts.html.j2" %}</div>
+    <div id="widget-positions" class="widget-template">{% include "sections/positions.html.j2" %}</div>
+    <div id="widget-dividends" class="widget-template">{% include "sections/dividends.html.j2" %}</div>
+    <div id="widget-projections" class="widget-template">{% include "sections/projections.html.j2" %}</div>
+    <div id="widget-notes" class="widget-template">{% include "sections/notes.html.j2" %}</div>
+    <div id="widget-real-estate" class="widget-template">{% include "sections/real_estate.html.j2" %}</div>
+    <div id="widget-risk" class="widget-template">{% include "sections/risk.html.j2" %}</div>
+    <div id="widget-dca-strategy" class="widget-template">{% include "sections/dca_strategy.html.j2" %}</div>
+    <div id="widget-tax-summary" class="widget-template">{% include "sections/tax.html.j2" %}</div>
+    <div id="widget-tax-calendar" class="widget-template">{% include "sections/year_end_calendar.html.j2" %}</div>
+    <div id="widget-smart-sell" class="widget-template">{% include "sections/smart_sell.html.j2" %}</div>
+    <div id="widget-tax-wizard" class="widget-template">{% include "sections/tax_wizard.html.j2" %}</div>
+    <div id="widget-transactions" class="widget-template">{% include "sections/transactions.html.j2" %}</div>
+  </div>
+</section>

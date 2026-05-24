@@ -135,6 +135,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             api.api_get_email_preferences(self)
         elif path == "/api/edavki-filed":
             api.api_get_edavki_filed(self)
+        elif path == "/api/dashboard-layout":
+            api.api_get_dashboard_layout(self)
         elif path.startswith("/api/analytics/"):
             scope = path[len("/api/analytics/"):]
             api.api_get_analytics(self, scope)
@@ -287,8 +289,11 @@ class UploadHandler(BaseHTTPRequestHandler):
             return
         path = urlparse(self.path).path
         parts = path.split("/")
+        # /api/dashboard-layout
+        if path == "/api/dashboard-layout":
+            api.api_save_dashboard_layout(self)
         # /api/portfolios/<id>
-        if len(parts) == 4 and parts[1] == "api" and parts[2] == "portfolios" and parts[3].isdigit():
+        elif len(parts) == 4 and parts[1] == "api" and parts[2] == "portfolios" and parts[3].isdigit():
             api.api_update_portfolio(self, int(parts[3]))
         # /api/notes/<id>
         elif len(parts) == 4 and parts[1] == "api" and parts[2] == "notes" and parts[3].isdigit():

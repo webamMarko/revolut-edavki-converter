@@ -47,6 +47,7 @@ class User:
     created_at: str = ""
     last_login: str | None = None
     onboarding_completed: int = 0     # 0=not completed, 1=completed
+    dashboard_layout: str | None = None  # JSON string for custom dashboard layout
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +148,7 @@ _MIGRATIONS = [
     "ALTER TABLE sessions ADD COLUMN active_portfolio_id INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE users ADD COLUMN credits_remaining INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE users ADD COLUMN credits_last_reset TEXT",
+    "ALTER TABLE users ADD COLUMN dashboard_layout TEXT",
 ]
 
 # Default system settings
@@ -245,6 +247,7 @@ def _row_to_user(row: sqlite3.Row) -> User:
         created_at=row["created_at"],
         last_login=row["last_login"],
         onboarding_completed=row["onboarding_completed"] if "onboarding_completed" in row.keys() else 0,
+        dashboard_layout=row["dashboard_layout"] if "dashboard_layout" in row.keys() else None,
     )
 
 

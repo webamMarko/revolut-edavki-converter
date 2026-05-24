@@ -827,3 +827,192 @@ def api_switch_portfolio(handler):
             users_conn.close()
     except Exception as e:
         json_response(handler, {"error": str(e)}, status=500)
+
+
+# ------------------------------------------------------------------
+# Dashboard Layout API
+# ------------------------------------------------------------------
+
+# Widget registry: hardcoded map of widget ID → metadata
+WIDGET_REGISTRY = {
+    "quick-glance": {"label": "Quick Glance", "template": "sections/quick_glance.html.j2", "default_w": 4, "default_h": 2, "min_w": 3, "min_h": 2},
+    "health-score": {"label": "Health Score", "template": "sections/health_score.html.j2", "default_w": 4, "default_h": 2, "min_w": 3, "min_h": 2},
+    "summary": {"label": "Summary", "template": "sections/summary.html.j2", "default_w": 6, "default_h": 4, "min_w": 4, "min_h": 3},
+    "charts": {"label": "Charts", "template": "sections/charts.html.j2", "default_w": 8, "default_h": 5, "min_w": 6, "min_h": 4},
+    "positions": {"label": "Positions", "template": "sections/positions.html.j2", "default_w": 12, "default_h": 4, "min_w": 6, "min_h": 3},
+    "dividends": {"label": "Dividends", "template": "sections/dividends.html.j2", "default_w": 6, "default_h": 4, "min_w": 4, "min_h": 3},
+    "projections": {"label": "Projections", "template": "sections/projections.html.j2", "default_w": 6, "default_h": 4, "min_w": 4, "min_h": 3},
+    "notes": {"label": "Notes", "template": "sections/notes.html.j2", "default_w": 6, "default_h": 3, "min_w": 4, "min_h": 2},
+    "real-estate": {"label": "Real Estate", "template": "sections/real_estate.html.j2", "default_w": 6, "default_h": 4, "min_w": 4, "min_h": 3},
+    "risk": {"label": "Risk", "template": "sections/risk.html.j2", "default_w": 6, "default_h": 4, "min_w": 4, "min_h": 3},
+    "dca-strategy": {"label": "DCA Strategy", "template": "sections/dca_strategy.html.j2", "default_w": 6, "default_h": 4, "min_w": 4, "min_h": 3},
+    "tax-summary": {"label": "Tax Summary", "template": "sections/tax.html.j2", "default_w": 8, "default_h": 5, "min_w": 6, "min_h": 4},
+    "tax-calendar": {"label": "Tax Calendar", "template": "sections/year_end_calendar.html.j2", "default_w": 6, "default_h": 4, "min_w": 4, "min_h": 3},
+    "smart-sell": {"label": "Smart Sell", "template": "sections/smart_sell.html.j2", "default_w": 6, "default_h": 4, "min_w": 4, "min_h": 3},
+    "tax-wizard": {"label": "Tax Wizard", "template": "sections/tax_wizard.html.j2", "default_w": 6, "default_h": 4, "min_w": 4, "min_h": 3},
+    "transactions": {"label": "History", "template": "sections/transactions.html.j2", "default_w": 12, "default_h": 4, "min_w": 6, "min_h": 3},
+}
+
+# Default layout for first-time users
+DEFAULT_LAYOUT = {
+    "widgets": [
+        {"id": "quick-glance", "x": 0, "y": 0, "w": 4, "h": 2},
+        {"id": "summary", "x": 4, "y": 0, "w": 4, "h": 4},
+        {"id": "charts", "x": 0, "y": 2, "w": 8, "h": 4},
+        {"id": "positions", "x": 0, "y": 6, "w": 12, "h": 4},
+    ]
+}
+
+
+def save_dashboard_layout(user_id: int, layout: dict, conn=None):
+    """Save dashboard layout for a user. Returns True on success.
+    
+    Validates:
+    - widgets is an array of 0-16 items
+    - each widget id is in WIDGET_REGISTRY
+    - x, y, w, h are non-negative integers
+    - w ≤ 12, h ≤ 8
+    - no duplicate widget IDs
+    """
+    from .. import users
+    
+    close = conn is None
+    if conn is None:
+        conn = users.get_users_db()
+    
+    try:
+        widgets = layout.get("widgets", [])
+        
+        # Validate widget count
+        if not isinstance(widgets, list):
+            raise ValueError("widgets must be an array")
+        if len(widgets) > 16:
+            raise ValueError("Too many widgets (max 16)")
+        
+        # Validate each widget
+        seen_ids = set()
+        for widget in widgets:
+            widget_id = widget.get("id")
+            x = widget.get("x")
+            y = widget.get("y")
+            w = widget.get("w")
+            h = widget.get("h")
+            
+            # Validate widget ID
+            if widget_id not in WIDGET_REGISTRY:
+                raise ValueError(f"Invalid widget ID: {widget_id}")
+            
+            # Check for duplicates
+            if widget_id in seen_ids:
+                raise ValueError(f"Duplicate widget ID: {widget_id}")
+            seen_ids.add(widget_id)
+            
+            # Validate coordinates
+            if not all(isinstance(v, int) and v >= 0 for v in [x, y, w, h]):
+                raise ValueError("Invalid coordinates (must be non-negative integers)")
+            
+            # Validate bounds
+            if w > 12:
+                raise ValueError(f"Widget width {w} exceeds grid width (12)")
+            if h > 8:
+                raise ValueError(f"Widget height {h} exceeds max height (8)")
+        
+        # Save to database
+        layout_json = json.dumps(layout)
+        conn.execute(
+            "UPDATE users SET dashboard_layout = ? WHERE id = ?",
+            (layout_json, user_id)
+        )
+        conn.commit()
+        
+        return True
+    
+    finally:
+        if close:
+            conn.close()
+
+
+def get_dashboard_layout(user_id: int, conn=None):
+    """Get dashboard layout for a user. Returns saved layout or default.
+    
+    Returns dict with:
+    - widgets: array of widget objects
+    - isDefault: boolean indicating if this is the default layout
+    """
+    from .. import users
+    
+    close = conn is None
+    if conn is None:
+        conn = users.get_users_db()
+    
+    try:
+        cursor = conn.execute(
+            "SELECT dashboard_layout FROM users WHERE id = ?",
+            (user_id,)
+        )
+        row = cursor.fetchone()
+        
+        if not row or not row[0]:
+            # No saved layout, return default
+            return {"widgets": DEFAULT_LAYOUT["widgets"], "isDefault": True}
+        
+        # Parse saved layout
+        layout = json.loads(row[0])
+        return {"widgets": layout.get("widgets", []), "isDefault": False}
+    
+    finally:
+        if close:
+            conn.close()
+
+
+def api_save_dashboard_layout(handler):
+    """PUT /api/dashboard-layout — save user's dashboard layout."""
+    from .. import users
+    
+    session = get_session(handler)
+    if not session:
+        json_response(handler, {"error": "Unauthorized"}, status=401)
+        return
+    
+    # Role gate: premium/admin only
+    if session.get("role") not in ("premium", "admin", "cofounder"):
+        json_response(handler, {"error": "Forbidden: premium/admin access required"}, status=403)
+        return
+    
+    try:
+        body = json.loads(handler.rfile.read(int(handler.headers.get("Content-Length", 0))).decode())
+        user_id = session.get("user_id")
+        
+        users_conn = users.get_users_db()
+        try:
+            save_dashboard_layout(user_id, body, users_conn)
+            json_response(handler, {"status": "ok"})
+        finally:
+            users_conn.close()
+    
+    except ValueError as e:
+        json_response(handler, {"error": str(e)}, status=400)
+    except Exception as e:
+        json_response(handler, {"error": str(e)}, status=500)
+
+
+def api_get_dashboard_layout(handler):
+    """GET /api/dashboard-layout — get user's dashboard layout."""
+    from .. import users
+    
+    session = get_session(handler)
+    if not session:
+        json_response(handler, {"error": "Unauthorized"}, status=401)
+        return
+    
+    try:
+        user_id = session.get("user_id")
+        users_conn = users.get_users_db()
+        try:
+            layout = get_dashboard_layout(user_id, users_conn)
+            json_response(handler, layout)
+        finally:
+            users_conn.close()
+    
+    except Exception as e:
+        json_response(handler, {"error": str(e)}, status=500)

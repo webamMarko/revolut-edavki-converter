@@ -21,9 +21,12 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gridstack@10.4.1/dist/gridstack.all.noconflict.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/gridstack@10.4.1/dist/gridstack.min.css" rel="stylesheet">
 <style>
 {% include "assets/styles.css" %}
 {% include "assets/styles_notes.css" %}
+{% include "assets/styles_dashboard.css" %}
 </style>
 </head>
 <body>
@@ -36,6 +39,9 @@
     <div class="page-filters" id="pageFilters" style="display:none">
       <select id="mobileRegimeSelect" class="regime-select"></select>
       <div id="mobileAssetToggles" class="page-filters-toggles"></div>
+    </div>
+    <div class="page" id="page-dashboard">
+      {% include "sections/dashboard.html.j2" %}
     </div>
     <div class="page active" id="page-overview">
       {% include "sections/health_score.html.j2" %}
@@ -129,6 +135,7 @@
 {% include "assets/sections/quick_glance.js" %}
 {% include "assets/sections/tax_nudge.js" %}
 {% include "assets/sections/edavki_deadline.js" %}
+{% include "assets/dashboard.js" %}
 {% include "assets/sections/dividend_nudge.js" %}
 {% include "assets/sections/health_score.js" %}
 {% include "assets/sections/waterfall.js" %}

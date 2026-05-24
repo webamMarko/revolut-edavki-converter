@@ -30,6 +30,10 @@ pip install -r requirements-test.txt
 playwright install chromium
 python -m pytest tests/e2e/ -v               # all tests (desktop + mobile)
 python -m pytest tests/e2e/test_desktop_auth.py -v  # auth flow only
+
+# UX audit (accessibility + Claude UX review)
+./ux-audit/run.sh                    # full audit (axe-core + Claude review)
+./ux-audit/run.sh --skip-claude      # accessibility-only (no Claude API needed)
 ```
 
 ## Database
@@ -122,3 +126,14 @@ Runs 15 minutes after NYSE close (22:15 Ljubljana/CEST). Adjust to 21:15 in wint
 - **Data isolation**: `_portfolio_conn(session)` returns demo DB for guests, user DB for premium/admin
 - **`src/web.py`**: `_get_session()`, `_create_session()`, `_require_role()`, `_portfolio_conn()`
 - **`src/users.py`**: `authenticate()`, `create_user()`, `accept_invite()`, `set_role()`
+
+### UX Audit Pipeline (`ux-audit/`)
+
+Automated UX review + accessibility audit. Zero paid APIs required (uses Claude CLI for UX heuristics, axe-core for WCAG checks).
+
+- **Config**: `ux-audit/config.yaml` — pages to audit, viewports, credentials, WCAG standard, CI thresholds
+- **Runner**: `ux-audit/run.sh` or `python3 ux-audit/audit.py [--skip-claude]`
+- **Output**: `ux-audit/output/` — timestamped JSON + markdown reports, page screenshots
+- **Pipeline**: For each page × viewport: Playwright navigates → captures screenshot → extracts page structure → injects axe-core for WCAG checks → Claude CLI reviews screenshots + data → merged JSON/markdown report
+- **CI thresholds**: Configurable in `config.yaml` under `thresholds:` — max violation count, max impact level, min UX score. Exit code 1 on failure.
+- **Adding pages**: Add entries to `pages:` in `config.yaml` with `name`, `path`, `auth` (guest/premium/admin), and optional `wait_for` selector

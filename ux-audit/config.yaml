@@ -1,0 +1,82 @@
+# UX Audit Configuration
+# Defines pages to audit, user flows, viewports, and CI thresholds.
+
+base_url: "http://127.0.0.1:8080"
+
+viewports:
+  desktop:
+    width: 1280
+    height: 720
+  mobile:
+    width: 390
+    height: 844
+
+# Credentials for authenticated pages
+users:
+  guest: null  # no login needed
+  premium:
+    username: "premium"
+    password: "premiumpass"
+  admin:
+    username: "admin"
+    password: "adminpass"
+
+# Pages to audit: each entry specifies a path, required auth, and optional wait selector
+pages:
+  - name: "Login Page"
+    path: "/login"
+    auth: guest
+    wait_for: "button[type='submit']"
+
+  - name: "Dashboard (Guest/Demo)"
+    path: "/"
+    auth: guest
+    wait_for: ".card, .portfolio-summary, main"
+
+  - name: "Dashboard (Premium)"
+    path: "/"
+    auth: premium
+    wait_for: ".card, .portfolio-summary, main"
+
+  - name: "Report Page"
+    path: "/report"
+    auth: premium
+    wait_for: "main, .report"
+
+  - name: "Import Page"
+    path: "/import"
+    auth: premium
+    wait_for: "main, form"
+
+  - name: "Tax Page"
+    path: "/tax"
+    auth: premium
+    wait_for: "main, .tax"
+
+  - name: "Admin Panel"
+    path: "/admin"
+    auth: admin
+    wait_for: "main, table"
+
+  - name: "Account Page"
+    path: "/account"
+    auth: premium
+    wait_for: "main"
+
+# axe-core WCAG rules to check (AA by default)
+accessibility:
+  standard: "wcag2aa"
+  # Rules to ignore (by axe rule ID)
+  skip_rules: []
+
+# CI failure thresholds
+thresholds:
+  # Fail if any axe violation has impact >= this level
+  max_accessibility_impact: "serious"  # minor | moderate | serious | critical
+  # Fail if total critical+serious axe violations exceed this count
+  max_violations: 5
+  # Fail if Claude UX score (1-10) is below this
+  min_ux_score: 4
+
+# Output directory (relative to ux-audit/)
+output_dir: "output"
