@@ -211,19 +211,50 @@ def handle_stripe_webhook(handler):
     obj = event.get("data", {}).get("object", {})
 
     if event_type == "checkout.session.completed":
-        # New subscription purchase → create premium user + send invite
-        email = obj.get("customer_details", {}).get("email") or obj.get("customer_email", "")
+        # Check if this is a cofounder licence purchase
+        metadata = obj.get("metadata", {})
+        purpose = metadata.get("purpose", "")
         stripe_customer_id = obj.get("customer", "")
-        if email:
-            from ..users import create_stripe_user
-            user, raw_token = create_stripe_user(email, stripe_customer_id)
-            if raw_token:
-                invite_url = f"{APP_BASE_URL}/invite/{raw_token}"
+
+        if purpose == "cofounder_licence":
+            # Cofounder one-time purchase → upgrade existing user to cofounder
+            if stripe_customer_id:
+                from ..users import get_user_by_id, set_role, get_users_db
+                from datetime import datetime, timezone
+
+                # Find user by stripe_customer_id
+                conn = get_users_db()
                 try:
-                    from ..email_service import send_invite
-                    send_invite(email, invite_url, user.username)
-                except Exception:
-                    pass
+                    row = conn.execute(
+                        "SELECT id FROM users WHERE stripe_customer_id = ?",
+                        (stripe_customer_id,)
+                    ).fetchone()
+                    if row:
+                        user_id = row["id"]
+                        # Upgrade role to cofounder
+                        set_role(user_id, "cofounder", conn=conn)
+                        # Initialize credits
+                        now_iso = datetime.now(timezone.utc).isoformat()
+                        conn.execute(
+                            "UPDATE users SET credits_remaining = 100, credits_last_reset = ? WHERE id = ?",
+                            (now_iso, user_id)
+                        )
+                        conn.commit()
+                finally:
+                    conn.close()
+        else:
+            # Standard subscription purchase → create premium user + send invite
+            email = obj.get("customer_details", {}).get("email") or obj.get("customer_email", "")
+            if email:
+                from ..users import create_stripe_user
+                user, raw_token = create_stripe_user(email, stripe_customer_id)
+                if raw_token:
+                    invite_url = f"{APP_BASE_URL}/invite/{raw_token}"
+                    try:
+                        from ..email_service import send_invite
+                        send_invite(email, invite_url, user.username)
+                    except Exception:
+                        pass
 
     elif event_type in (
         "customer.subscription.updated",

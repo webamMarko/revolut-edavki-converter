@@ -1,0 +1,107 @@
+{% extends "base.html.j2" %}
+
+{% block meta %}
+<meta name="robots" content="noindex, nofollow">
+{% endblock %}
+
+{% block title %}Tickets — WealthEagle{% endblock %}
+
+{% block extra_css %}
+<style>
+.tickets-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem}
+.tickets-header h1{font-size:1.2rem;font-weight:700;margin:0}
+.credits-badge{background:var(--accent);color:white;padding:0.4rem 0.8rem;border-radius:6px;font-size:0.85rem;font-weight:600}
+.ticket-list{list-style:none;padding:0;margin:0}
+.ticket-item{border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:0.75rem;cursor:pointer;transition:all 0.2s}
+.ticket-item:hover{border-color:var(--accent);box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+.ticket-header{display:flex;justify-content:space-between;align-items:start;margin-bottom:0.5rem}
+.ticket-title{font-weight:600;font-size:0.95rem;margin:0}
+.ticket-meta{display:flex;gap:0.5rem;align-items:center;font-size:0.8rem;color:var(--muted)}
+.ticket-status{display:inline-block;padding:0.2rem 0.6rem;border-radius:4px;font-size:0.75rem;font-weight:600;text-transform:uppercase}
+.ticket-status.new{background:#e3f2fd;color:#1976d2}
+.ticket-status.in_progress{background:#fff3e0;color:#f57c00}
+.ticket-status.done{background:#e8f5e9;color:#388e3c}
+.ticket-type{display:inline-block;padding:0.2rem 0.6rem;border-radius:4px;font-size:0.75rem;font-weight:600;text-transform:uppercase}
+.ticket-type.bug{background:#ffebee;color:#c62828}
+.ticket-type.idea{background:#f3e5f5;color:#7b1fa2}
+.ticket-description{font-size:0.85rem;color:var(--muted);margin-top:0.5rem;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.create-ticket-form{background:var(--bg-secondary);border-radius:8px;padding:1.5rem;margin-bottom:2rem}
+.create-ticket-form h2{font-size:1rem;font-weight:600;margin:0 0 1rem 0}
+.form-group{margin-bottom:1rem}
+.form-group label{display:block;font-size:0.85rem;font-weight:500;margin-bottom:0.4rem}
+.form-group input,.form-group textarea,.form-group select{width:100%;padding:0.6rem;border:1px solid var(--border);border-radius:6px;font-size:0.9rem;font-family:inherit}
+.form-group textarea{min-height:100px;resize:vertical}
+.btn{padding:0.6rem 1.2rem;border:none;border-radius:6px;font-size:0.9rem;font-weight:600;cursor:pointer;transition:all 0.2s}
+.btn-primary{background:var(--accent);color:white}
+.btn-primary:hover{opacity:0.9}
+.empty-state{text-align:center;padding:3rem 1rem;color:var(--muted)}
+.empty-state-icon{font-size:3rem;margin-bottom:1rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="app-main">
+  <div class="tickets-header">
+    <h1>Tickets</h1>
+    {% if credits_remaining is not none %}
+    <div class="credits-badge">{{ credits_remaining }} credits</div>
+    {% endif %}
+  </div>
+
+  {% if role == "cofounder" %}
+  <div class="create-ticket-form">
+    <h2>Submit a new ticket</h2>
+    <form method="POST" action="/tickets">
+      <div class="form-group">
+        <label for="type">Type</label>
+        <select name="type" id="type" required>
+          <option value="">Select type...</option>
+          <option value="bug">🐛 Bug Report</option>
+          <option value="idea">💡 Feature Idea</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="title">Title</label>
+        <input type="text" name="title" id="title" placeholder="Brief description" required maxlength="200">
+      </div>
+      <div class="form-group">
+        <label for="description">Description</label>
+        <textarea name="description" id="description" placeholder="Detailed description..." required></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">Submit Ticket (1 credit)</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if tickets %}
+  <ul class="ticket-list">
+    {% for ticket in tickets %}
+    <li class="ticket-item" onclick="window.location='/tickets/{{ ticket.id }}'">
+      <div class="ticket-header">
+        <h3 class="ticket-title">{{ ticket.title }}</h3>
+        <div class="ticket-meta">
+          <span class="ticket-type {{ ticket.type }}">{{ ticket.type }}</span>
+          <span class="ticket-status {{ ticket.status }}">{{ ticket.status.replace('_', ' ') }}</span>
+        </div>
+      </div>
+      <p class="ticket-description">{{ ticket.description }}</p>
+      <div class="ticket-meta">
+        Created {{ ticket.created_at[:10] }}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-state-icon">📭</div>
+    <p>No tickets yet.</p>
+    {% if role == "cofounder" %}
+    <p>Submit a bug report or feature idea above to get started.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if fouc_script %}{{ fouc_script|safe }}{% endif %}
+{% if common_js %}{{ common_js|safe }}{% endif %}
+{% endblock %}

@@ -1,0 +1,117 @@
+{% extends "base.html.j2" %}
+
+{% block meta %}
+<meta name="robots" content="noindex, nofollow">
+{% endblock %}
+
+{% block title %}{{ ticket.title }} — WealthEagle{% endblock %}
+
+{% block extra_css %}
+<style>
+.back-link{display:inline-block;margin-bottom:1rem;color:var(--accent);text-decoration:none;font-size:0.9rem}
+.back-link:hover{text-decoration:underline}
+.ticket-detail{background:var(--bg-secondary);border-radius:8px;padding:1.5rem;margin-bottom:2rem}
+.ticket-header{display:flex;justify-content:space-between;align-items:start;margin-bottom:1rem}
+.ticket-title{font-size:1.3rem;font-weight:700;margin:0}
+.ticket-badges{display:flex;gap:0.5rem}
+.ticket-type,.ticket-status{display:inline-block;padding:0.3rem 0.7rem;border-radius:4px;font-size:0.75rem;font-weight:600;text-transform:uppercase}
+.ticket-type.bug{background:#ffebee;color:#c62828}
+.ticket-type.idea{background:#f3e5f5;color:#7b1fa2}
+.ticket-status.new{background:#e3f2fd;color:#1976d2}
+.ticket-status.in_progress{background:#fff3e0;color:#f57c00}
+.ticket-status.done{background:#e8f5e9;color:#388e3c}
+.ticket-meta{font-size:0.85rem;color:var(--muted);margin-top:0.5rem}
+.ticket-description{margin-top:1rem;line-height:1.6}
+.comments-section{margin-top:2rem}
+.comments-section h2{font-size:1rem;font-weight:600;margin-bottom:1rem}
+.comment-list{list-style:none;padding:0;margin:0}
+.comment-item{border-left:3px solid var(--border);padding-left:1rem;margin-bottom:1.5rem}
+.comment-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem}
+.comment-author{font-weight:600;font-size:0.9rem}
+.comment-date{font-size:0.8rem;color:var(--muted)}
+.comment-body{font-size:0.9rem;line-height:1.6;white-space:pre-wrap}
+.comment-form{background:var(--bg-secondary);border-radius:8px;padding:1.5rem;margin-top:1.5rem}
+.comment-form h3{font-size:0.95rem;font-weight:600;margin:0 0 1rem 0}
+.form-group{margin-bottom:1rem}
+.form-group label{display:block;font-size:0.85rem;font-weight:500;margin-bottom:0.4rem}
+.form-group textarea{width:100%;padding:0.6rem;border:1px solid var(--border);border-radius:6px;font-size:0.9rem;font-family:inherit;min-height:80px;resize:vertical}
+.btn{padding:0.6rem 1.2rem;border:none;border-radius:6px;font-size:0.9rem;font-weight:600;cursor:pointer;transition:all 0.2s}
+.btn-primary{background:var(--accent);color:white}
+.btn-primary:hover{opacity:0.9}
+.admin-controls{margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+.admin-controls h3{font-size:0.95rem;font-weight:600;margin:0 0 0.75rem 0}
+.status-buttons{display:flex;gap:0.5rem}
+.btn-status{padding:0.5rem 1rem;border:1px solid var(--border);background:var(--bg);border-radius:6px;font-size:0.85rem;font-weight:600;cursor:pointer;transition:all 0.2s}
+.btn-status:hover{background:var(--accent);color:white;border-color:var(--accent)}
+.empty-comments{text-align:center;padding:2rem 1rem;color:var(--muted);font-size:0.9rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="app-main">
+  <a href="/tickets" class="back-link">← Back to tickets</a>
+
+  <div class="ticket-detail">
+    <div class="ticket-header">
+      <h1 class="ticket-title">{{ ticket.title }}</h1>
+      <div class="ticket-badges">
+        <span class="ticket-type {{ ticket.type }}">{{ ticket.type }}</span>
+        <span class="ticket-status {{ ticket.status }}">{{ ticket.status.replace('_', ' ') }}</span>
+      </div>
+    </div>
+    <div class="ticket-meta">
+      Created {{ ticket.created_at[:10] }}
+      {% if ticket.paperclip_issue_id %}
+      • Paperclip issue: {{ ticket.paperclip_issue_id }}
+      {% endif %}
+    </div>
+    <div class="ticket-description">{{ ticket.description }}</div>
+
+    {% if role == "admin" %}
+    <div class="admin-controls">
+      <h3>Admin Controls</h3>
+      <form method="POST" action="/tickets/{{ ticket.id }}/status" style="margin:0">
+        <div class="status-buttons">
+          <button type="submit" name="status" value="new" class="btn-status">Mark as New</button>
+          <button type="submit" name="status" value="in_progress" class="btn-status">Mark as In Progress</button>
+          <button type="submit" name="status" value="done" class="btn-status">Mark as Done</button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="comments-section">
+    <h2>Comments</h2>
+    {% if comments %}
+    <ul class="comment-list">
+      {% for comment in comments %}
+      <li class="comment-item">
+        <div class="comment-header">
+          <span class="comment-author">{{ comment.username }}</span>
+          <span class="comment-date">{{ comment.created_at[:16] }}</span>
+        </div>
+        <div class="comment-body">{{ comment.body }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-comments">No comments yet.</div>
+    {% endif %}
+
+    <div class="comment-form">
+      <h3>Add a comment</h3>
+      <form method="POST" action="/tickets/{{ ticket.id }}/comments">
+        <div class="form-group">
+          <label for="body">Comment</label>
+          <textarea name="body" id="body" placeholder="Write your comment..." required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Post Comment</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% if fouc_script %}{{ fouc_script|safe }}{% endif %}
+{% if common_js %}{{ common_js|safe }}{% endif %}
+{% endblock %}

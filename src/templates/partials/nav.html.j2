@@ -11,6 +11,9 @@
       <a class="nav-link{% if active_page == 'settings' %} active{% endif %}" href="/settings">Settings</a>
       <a class="nav-link{% if active_page == 'account' %} active{% endif %}" href="/account">Account</a>
     {% endif %}
+    {% if role in ("cofounder", "admin") %}
+      <a class="nav-link{% if active_page == 'tickets' %} active{% endif %}" href="/tickets">Tickets</a>
+    {% endif %}
     {% if role == "admin" %}
       <a class="nav-link{% if active_page == 'admin' %} active{% endif %}" href="/admin">Admin</a>
     {% endif %}

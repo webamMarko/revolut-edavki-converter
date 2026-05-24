@@ -214,6 +214,8 @@ def get_users_connection(db_path: Path | None = None) -> sqlite3.Connection:
             conn.commit()
         except sqlite3.OperationalError:
             pass
+    # Initialize default system settings
+    _init_default_settings(conn)
     return conn
 
 
@@ -238,6 +240,8 @@ def _row_to_user(row: sqlite3.Row) -> User:
         invite_expires=row["invite_expires"],
         stripe_customer_id=row["stripe_customer_id"],
         stripe_subscription_status=row["stripe_subscription_status"] if "stripe_subscription_status" in row.keys() else None,
+        credits_remaining=row["credits_remaining"] if "credits_remaining" in row.keys() else 0,
+        credits_last_reset=row["credits_last_reset"] if "credits_last_reset" in row.keys() else None,
         created_at=row["created_at"],
         last_login=row["last_login"],
         onboarding_completed=row["onboarding_completed"] if "onboarding_completed" in row.keys() else 0,
@@ -491,7 +495,7 @@ def list_users(conn: sqlite3.Connection | None = None) -> list[User]:
 
 def set_role(user_id: int, role: str, conn: sqlite3.Connection | None = None) -> bool:
     """Set a user's role. Returns True if a row was updated."""
-    if role not in ("guest", "premium", "admin"):
+    if role not in ("guest", "premium", "admin", "cofounder"):
         raise ValueError(f"Invalid role: {role}")
     close = conn is None
     if conn is None:

@@ -11,7 +11,7 @@ from typing import Optional
 from urllib.parse import urlparse
 
 from .templates import TEMPLATES_DIR
-from . import auth, admin, portfolio, api, exports, import_wizard
+from . import auth, admin, portfolio, api, exports, import_wizard, tickets
 
 FORCE_HTTPS = os.environ.get("FORCE_HTTPS", "").lower() in ("true", "1", "yes")
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8080")
@@ -91,6 +91,17 @@ class UploadHandler(BaseHTTPRequestHandler):
         elif path == "/account":
             auth.serve_account_page(self)
 
+        # Ticket routes
+        elif path == "/tickets":
+            tickets.serve_tickets_page(self)
+        elif path.startswith("/tickets/"):
+            # Extract ticket ID from path
+            try:
+                ticket_id = int(path.split("/")[2])
+                tickets.serve_ticket_detail(self, ticket_id)
+            except (IndexError, ValueError):
+                auth.serve_error_page(self, 404, "Ticket not found")
+
         # Portfolio routes
         elif path == "/":
             portfolio.serve_upload_page(self)
@@ -112,6 +123,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             portfolio.serve_settings_page(self)
         elif path == "/pricing":
             portfolio.serve_pricing_page(self)
+        elif path == "/cofounder":
+            tickets.serve_cofounder_page(self)
 
         # API routes
         elif path == "/api/portfolios":
@@ -189,6 +202,26 @@ class UploadHandler(BaseHTTPRequestHandler):
             auth.handle_change_password(self)
         elif path == "/account/delete":
             auth.handle_delete_account(self)
+
+        # Ticket routes
+        elif path == "/tickets":
+            tickets.handle_create_ticket(self)
+        elif path == "/cofounder/checkout":
+            tickets.handle_cofounder_checkout(self)
+        elif path.endswith("/comments"):
+            # /tickets/{id}/comments
+            try:
+                ticket_id = int(path.split("/")[2])
+                tickets.handle_add_comment(self, ticket_id)
+            except (IndexError, ValueError):
+                auth.serve_error_page(self, 404, "Ticket not found")
+        elif path.endswith("/status"):
+            # /tickets/{id}/status
+            try:
+                ticket_id = int(path.split("/")[2])
+                tickets.handle_update_status(self, ticket_id)
+            except (IndexError, ValueError):
+                auth.serve_error_page(self, 404, "Ticket not found")
 
         # Admin routes
         elif path == "/admin/users":
