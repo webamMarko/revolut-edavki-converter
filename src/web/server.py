@@ -167,6 +167,8 @@ class UploadHandler(BaseHTTPRequestHandler):
         # Static files
         elif path == "/static/common.css":
             self._serve_static_css()
+        elif path == "/static/logo.png":
+            self._serve_logo()
         elif path == "/manifest.json":
             self._serve_manifest()
         elif path == "/sw.js":
@@ -370,6 +372,7 @@ class UploadHandler(BaseHTTPRequestHandler):
             "apple-touch-icon.png",
             "favicon-32.png",
             "favicon-16.png",
+            "favicon.ico",
         }
         if icon_name not in allowed_icons:
             self.send_error(404)
@@ -378,6 +381,22 @@ class UploadHandler(BaseHTTPRequestHandler):
         icon_path = TEMPLATES_DIR / "assets" / "icons" / icon_name
         try:
             with open(icon_path, "rb") as f:
+                content = f.read()
+            self.send_response(200)
+            # Set correct content-type based on file extension
+            content_type = "image/x-icon" if icon_name.endswith(".ico") else "image/png"
+            self.send_header("Content-Type", content_type)
+            self.send_header("Cache-Control", "public, max-age=86400")  # 24 hours
+            self.end_headers()
+            self.wfile.write(content)
+        except FileNotFoundError:
+            self.send_error(404)
+
+    def _serve_logo(self):
+        """Serve the WealthEagle logo."""
+        logo_path = TEMPLATES_DIR / "assets" / "logo.png"
+        try:
+            with open(logo_path, "rb") as f:
                 content = f.read()
             self.send_response(200)
             self.send_header("Content-Type", "image/png")
