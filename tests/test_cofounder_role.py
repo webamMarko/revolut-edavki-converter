@@ -220,6 +220,58 @@ class TestTicketsTable:
 
 # Phase 5: Stripe Co-Founder Purchase - Tasks 24-28
 
+# Phase 6: Admin Settings - Tasks 29-32
+
+class TestAdminSettings:
+    """Test admin settings management."""
+
+    def test_admin_read_system_settings(self, conn):
+        """Task 29: Verify admin can read system settings."""
+        # System settings should be created during schema init
+        settings = {
+            row["key"]: row["value"]
+            for row in conn.execute("SELECT key, value FROM system_settings").fetchall()
+        }
+
+        assert "cofounder_price_eur" in settings
+        assert settings["cofounder_price_eur"] == "249"
+        assert "bug_token_multiplier" in settings
+        assert settings["bug_token_multiplier"] == "5000"
+        assert "idea_token_multiplier" in settings
+        assert settings["idea_token_multiplier"] == "10000"
+        assert "credits_per_week" in settings
+        assert settings["credits_per_week"] == "100"
+
+    def test_admin_update_system_settings(self, conn):
+        """Task 29: Verify admin can update system settings."""
+        # Update a setting
+        conn.execute(
+            "UPDATE system_settings SET value = ? WHERE key = ?",
+            ("499", "cofounder_price_eur")
+        )
+        conn.commit()
+
+        # Verify the update
+        row = conn.execute(
+            "SELECT value FROM system_settings WHERE key = ?",
+            ("cofounder_price_eur",)
+        ).fetchone()
+        assert row["value"] == "499"
+
+        # Update another setting
+        conn.execute(
+            "UPDATE system_settings SET value = ? WHERE key = ?",
+            ("50", "credits_per_week")
+        )
+        conn.commit()
+
+        row = conn.execute(
+            "SELECT value FROM system_settings WHERE key = ?",
+            ("credits_per_week",)
+        ).fetchone()
+        assert row["value"] == "50"
+
+
 class TestStripeCofounderPurchase:
     """Test Stripe integration for co-founder purchases."""
 

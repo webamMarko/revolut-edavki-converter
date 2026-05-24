@@ -231,6 +231,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             # /admin/users/{id}/role
             if len(parts) == 5:
                 admin.handle_admin_set_role(self, parts[3])
+        elif path == "/admin/settings":
+            admin.handle_admin_settings(self)
         elif path == "/webhook/stripe":
             admin.handle_stripe_webhook(self)
 

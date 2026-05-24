@@ -39,12 +39,25 @@ def serve_admin_page(handler):
     if not session or session["role"] != "admin":
         redirect(handler, "/login")
         return
-    from ..users import list_users
+    from ..users import list_users, get_users_db
+
     users = list_users()
+
+    # Load current system settings
+    conn = get_users_db()
+    try:
+        settings = {
+            row["key"]: row["value"]
+            for row in conn.execute("SELECT key, value FROM system_settings").fetchall()
+        }
+    finally:
+        conn.close()
+
     template = page_env.get_template("pages/admin.html.j2")
     html = template.render(
         users=users,
         current_username=session["username"],
+        settings=settings,
         fouc_script=FOUC_SCRIPT,
         common_js=COMMON_JS,
         show_header=True,
@@ -186,6 +199,64 @@ def handle_admin_set_role(handler, user_id_str: str):
         log_event("role_change", username=session["username"],
                   ip_address=get_client_ip(handler), detail=f"user_id={user_id} new_role={role}")
     json_response(handler, {"ok": ok})
+
+
+def handle_admin_settings(handler):
+    """POST /admin/settings — update system settings (admin only)."""
+    session = get_session(handler)
+    if not session or session["role"] != "admin":
+        json_response(handler, {"error": "Forbidden"}, status=403)
+        return
+
+    body = handler._read_body()
+    try:
+        data = json.loads(body)
+    except Exception:
+        json_response(handler, {"error": "Invalid JSON"}, status=400)
+        return
+
+    from ..users import get_users_db
+
+    # List of allowed settings to update
+    allowed_settings = {
+        "cofounder_price_eur": str,
+        "bug_token_multiplier": str,
+        "idea_token_multiplier": str,
+        "credits_per_week": str,
+    }
+
+    conn = get_users_db()
+    try:
+        updated_count = 0
+        for key, expected_type in allowed_settings.items():
+            if key in data:
+                value = data[key]
+                # Validate that the value is a string representation of a number for price/multiplier
+                if key in ("cofounder_price_eur", "bug_token_multiplier", "idea_token_multiplier", "credits_per_week"):
+                    try:
+                        float(value)  # Ensure it's a valid number
+                    except (ValueError, TypeError):
+                        json_response(handler, {"error": f"{key} must be a valid number"}, status=400)
+                        return
+
+                conn.execute(
+                    "UPDATE system_settings SET value = ? WHERE key = ?",
+                    (str(value), key)
+                )
+                updated_count += 1
+
+        conn.commit()
+
+        from ..audit import log_event
+        if updated_count > 0:
+            log_event("admin_settings_updated", username=session["username"],
+                      ip_address=get_client_ip(handler), detail=f"updated {updated_count} settings")
+
+        json_response(handler, {"ok": True, "updated": updated_count})
+    except Exception as e:
+        json_response(handler, {"error": str(e)}, status=500)
+    finally:
+        conn.close()
 
 
 # ------------------------------------------------------------------
