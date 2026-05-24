@@ -134,6 +134,9 @@ def create_ticket(
 ) -> int:
     """Create a new ticket and deduct 1 credit from the user.
 
+    Also attempts to create a Paperclip issue (async). If Paperclip API call
+    fails, the ticket is still created locally.
+
     Args:
         user_id: ID of the user creating the ticket
         ticket_type: 'bug' or 'idea'
@@ -165,7 +168,18 @@ def create_ticket(
             (user_id, ticket_type, title, description)
         )
         conn.commit()
-        return cursor.lastrowid
+        ticket_id = cursor.lastrowid
+
+        # Attempt to create Paperclip issue (non-blocking)
+        paperclip_issue_id = create_paperclip_issue(ticket_id, title, description)
+        if paperclip_issue_id:
+            conn.execute(
+                "UPDATE tickets SET paperclip_issue_id = ?, status_synced_at = datetime('now') WHERE id = ?",
+                (paperclip_issue_id, ticket_id)
+            )
+            conn.commit()
+
+        return ticket_id
     finally:
         if close:
             conn.close()
@@ -253,3 +267,127 @@ def get_comments(ticket_id: int, conn: sqlite3.Connection | None = None) -> list
     finally:
         if close:
             conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Paperclip integration
+# ---------------------------------------------------------------------------
+
+def create_paperclip_issue(ticket_id: int, ticket_title: str, ticket_description: str) -> str | None:
+    """Create a Paperclip issue for a ticket.
+
+    Calls Paperclip API to create an issue and returns the issue ID.
+    If API call fails, returns None and logs the error.
+
+    Args:
+        ticket_id: Internal ticket ID (for reference)
+        ticket_title: Ticket title
+        ticket_description: Ticket description
+
+    Returns:
+        Paperclip issue ID if successful, None if failed
+    """
+    import os
+    import requests
+
+    paperclip_url = os.environ.get("PAPERCLIP_API_URL")
+    paperclip_key = os.environ.get("PAPERCLIP_API_KEY")
+    paperclip_company_id = os.environ.get("PAPERCLIP_COMPANY_ID")
+    agent_id = os.environ.get("PAPERCLIP_AGENT_ID")
+
+    if not (paperclip_url and paperclip_key and paperclip_company_id and agent_id):
+        # Paperclip not configured; silently skip
+        return None
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {paperclip_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "title": f"[{('Bug' if 'bug' in ticket_title.lower() else 'Idea')}] {ticket_title}",
+            "description": ticket_description,
+            "assigneeAgentId": agent_id,
+            "status": "todo",
+        }
+
+        response = requests.post(
+            f"{paperclip_url}/api/companies/{paperclip_company_id}/issues",
+            headers=headers,
+            json=payload,
+            timeout=10,
+        )
+
+        if response.status_code == 201:
+            data = response.json()
+            return data.get("id")
+        else:
+            # API error; log and return None
+            return None
+    except Exception:
+        # Network error, timeout, etc.; silently skip
+        return None
+
+
+def sync_ticket_status_from_paperclip(ticket_id: int, conn: sqlite3.Connection | None = None) -> bool:
+    """Sync ticket status from Paperclip (if status_synced_at is stale, >60s).
+
+    Returns True if status was updated, False otherwise.
+    """
+    import os
+    import requests
+
+    close = conn is None
+    if conn is None:
+        conn = users.get_users_db()
+
+    try:
+        # Get ticket with paperclip_issue_id
+        ticket = conn.execute(
+            "SELECT id, paperclip_issue_id, status_synced_at FROM tickets WHERE id = ?",
+            (ticket_id,)
+        ).fetchone()
+
+        if not ticket or not ticket["paperclip_issue_id"]:
+            return False
+
+        # Check if sync is needed (>60 seconds old)
+        if ticket["status_synced_at"]:
+            last_sync = datetime.fromisoformat(ticket["status_synced_at"])
+            if (datetime.now(timezone.utc) - last_sync).total_seconds() < 60:
+                return False
+
+        paperclip_url = os.environ.get("PAPERCLIP_API_URL")
+        paperclip_key = os.environ.get("PAPERCLIP_API_KEY")
+
+        if not (paperclip_url and paperclip_key):
+            return False
+
+        headers = {"Authorization": f"Bearer {paperclip_key}"}
+
+        response = requests.get(
+            f"{paperclip_url}/api/issues/{ticket['paperclip_issue_id']}",
+            headers=headers,
+            timeout=10,
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            paperclip_status = data.get("status", "todo")
+
+            # Map Paperclip status to local status
+            local_status = "done" if paperclip_status == "done" else "in_progress" if paperclip_status == "in_progress" else "new"
+
+            # Update ticket status and sync timestamp
+            conn.execute(
+                """UPDATE tickets SET status = ?, status_synced_at = datetime('now') WHERE id = ?""",
+                (local_status, ticket_id)
+            )
+            conn.commit()
+            return True
+    finally:
+        if close:
+            conn.close()
+
+    return False

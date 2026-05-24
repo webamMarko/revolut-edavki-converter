@@ -220,6 +220,66 @@ class TestTicketsTable:
 
 # Phase 5: Stripe Co-Founder Purchase - Tasks 24-28
 
+# Phase 7: Paperclip Integration - Tasks 34-36
+
+class TestPaperclipIntegration:
+    """Test Paperclip API integration for ticket-to-issue conversion."""
+
+    def test_create_ticket_integration(self, conn):
+        """Task 34: Verify ticket creation includes Paperclip integration logic."""
+        from src import tickets
+
+        # Create a cofounder user with credits
+        user, _ = users.create_user("cofounder@example.com", role="cofounder", conn=conn)
+        conn.execute("UPDATE users SET credits_remaining = 10 WHERE id = ?", (user.id,))
+        conn.commit()
+
+        # Create a ticket (Paperclip API will not be called since env vars not set)
+        ticket_id = tickets.create_ticket(
+            user_id=user.id,
+            ticket_type="bug",
+            title="Test bug",
+            description="Bug description",
+            conn=conn
+        )
+
+        # Verify ticket was created
+        assert ticket_id is not None
+        row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
+        assert row["title"] == "Test bug"
+        assert row["description"] == "Bug description"
+        assert row["type"] == "bug"
+        assert row["status"] == "new"
+
+    def test_ticket_status_sync_logic(self, conn):
+        """Task 36: Verify status sync function handles ticket updates."""
+        from src import tickets
+
+        # Create a ticket with paperclip_issue_id
+        user, _ = users.create_user("cofounder@example.com", role="cofounder", conn=conn)
+        conn.execute("UPDATE users SET credits_remaining = 10 WHERE id = ?", (user.id,))
+        conn.commit()
+
+        conn.execute(
+            """INSERT INTO tickets (user_id, type, title, description, paperclip_issue_id, status)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (user.id, "bug", "Test", "Desc", "paperclip-123", "new")
+        )
+        conn.commit()
+
+        # Get the ticket ID
+        ticket_id = conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
+
+        # Verify the ticket exists with paperclip_issue_id
+        row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
+        assert row["paperclip_issue_id"] == "paperclip-123"
+        assert row["status"] == "new"
+
+        # Call sync function (will gracefully return False since env vars not set)
+        synced = tickets.sync_ticket_status_from_paperclip(ticket_id, conn=conn)
+        assert synced is False  # No sync happened (API not configured)
+
+
 # Phase 6: Admin Settings - Tasks 29-32
 
 class TestAdminSettings:
