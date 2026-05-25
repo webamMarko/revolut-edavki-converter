@@ -1,3 +1,25 @@
+// --- Scoped element finder ---
+// Finds an element by its data-role attribute within an optional container scope.
+// Key behaviour: when container is null/undefined, skips elements inside #widgetTemplates
+// (the hidden GridStack template pool) to avoid binding charts/tables to invisible clones.
+// Final fallback: document.getElementById for global elements (header, nav) that use plain IDs.
+function scopedFind(container, role) {
+  if (container) {
+    var el = container.querySelector('[data-role="' + role + '"]');
+    if (el) return el;
+    return null;
+  }
+  // Walk all matching elements, return the first NOT inside #widgetTemplates
+  var candidates = document.querySelectorAll('[data-role="' + role + '"]');
+  for (var i = 0; i < candidates.length; i++) {
+    if (!candidates[i].closest('#widgetTemplates')) {
+      return candidates[i];
+    }
+  }
+  // Nothing found by data-role — fallback to plain id (header/nav/global elements)
+  return document.getElementById(role);
+}
+
 // --- i18n translation helper ---
 const _i18n = D.i18n || {};
 function t(key, params) {
@@ -64,11 +86,11 @@ function computeYearlyAverages() {
 
 // --- Regime selector ---
 (function() {
-  const sel = document.getElementById('regimeSelect');
+  const sel = scopedFind(null, 'regimeSelect');
   const regimes = D.available_regimes || [];
   if (!sel || regimes.length === 0) return;
   const current = D.country || 'SI';
-  const mobileSel = document.getElementById('mobileRegimeSelect');
+  const mobileSel = scopedFind(null, 'mobileRegimeSelect');
   [sel, mobileSel].forEach(function(s) {
     if (!s) return;
     regimes.forEach(function(r) {
@@ -80,9 +102,9 @@ function computeYearlyAverages() {
     });
   });
   // Localize labels
-  const lbl = document.getElementById('regimeFilterLabel');
+  const lbl = scopedFind(null, 'regimeFilterLabel');
   if (lbl) lbl.textContent = t('regime.title');
-  const albl = document.getElementById('assetFilterLabel');
+  const albl = scopedFind(null, 'assetFilterLabel');
   if (albl) albl.textContent = t('filter.assets');
 
   function onRegimeChange(newCountry) {
@@ -99,17 +121,17 @@ function computeYearlyAverages() {
   sel.addEventListener('change', function() { onRegimeChange(sel.value); });
   if (mobileSel) mobileSel.addEventListener('change', function() { onRegimeChange(mobileSel.value); });
   // Show page-filters if we have regimes (even without asset filter)
-  const pageFiltersEl = document.getElementById('pageFilters');
+  const pageFiltersEl = scopedFind(null, 'pageFilters');
   if (pageFiltersEl && regimes.length > 1) pageFiltersEl.style.display = '';
 })();
 
 // --- Update all sections ---
 function updateAll() {
-  const banner = document.getElementById('selectionBanner');
+  const banner = scopedFind(null, 'selectionBanner');
   const hint = document.querySelector('.chart-hint');
   if (isZoomed) {
     banner.style.display = '';
-    document.getElementById('selectionLabel').textContent =
+    scopedFind(null, 'selectionLabel').textContent =
       t('period.selected') + ': ' + allDates[selStart] + ' — ' + allDates[selEnd];
     if (hint) hint.textContent = t('period.drag_refine');
   } else {

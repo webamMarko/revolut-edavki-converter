@@ -74,6 +74,13 @@
       currentPage = id;
       localStorage.setItem('activePage', id);
       if (window.notifyBadgeClear) window.notifyBadgeClear(id);
+
+      // Re-render the newly active page. scopedFind(null) now resolves elements
+      // in the active page container, so section JS correctly binds charts/tables
+      // to the visible page rather than the hidden #widgetTemplates pool.
+      if (typeof updateAll === 'function') {
+        requestAnimationFrame(function() { updateAll(); });
+      }
     }, 110);
   }
 

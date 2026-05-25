@@ -1,35 +1,35 @@
-<div id="selectionBanner" class="selection-banner" style="display:none">
-  <span id="selectionLabel"></span>
+<div data-role="selectionBanner" class="selection-banner" style="display:none">
+  <span data-role="selectionLabel"></span>
   <button onclick="resetZoom()">Reset</button>
 </div>
 
-<div id="taxSeasonBanner" class="tax-season-banner" style="display:none" onclick="window.switchPage('tax');setTimeout(function(){if(window.switchTaxSubtab)window.switchTaxSubtab('file')},150)">
+<div data-role="taxSeasonBanner" class="tax-season-banner" style="display:none" onclick="window.switchPage('tax');setTimeout(function(){if(window.switchTaxSubtab)window.switchTaxSubtab('file')},150)">
   <span class="tax-season-banner-icon">&#128203;</span>
   <span class="tax-season-banner-text">It's tax season! <strong>File your taxes</strong> for the previous year using our step-by-step wizard.</span>
   <button class="tax-season-banner-btn">File My Taxes</button>
 </div>
 
-<div id="taxNudgeWidget" style="display:none"></div>
-<div id="edavkiDeadlineWidget" style="display:none"></div>
-<div id="dividendNudgeWidget" style="display:none"></div>
+<div data-role="taxNudgeWidget" style="display:none"></div>
+<div data-role="edavkiDeadlineWidget" style="display:none"></div>
+<div data-role="dividendNudgeWidget" style="display:none"></div>
 
 <div class="page-stack">
-  <section id="summary" class="card-grid"></section>
+  <section data-role="summary" class="card-grid"></section>
 
-  <section id="milestonesSection" class="milestones-strip-wrap" style="display:none">
-    <div id="milestonesStrip" class="milestones-strip"></div>
-    <div id="milestonesList" class="milestones-list" style="display:none"></div>
+  <section data-role="milestonesSection" class="milestones-strip-wrap" style="display:none">
+    <div data-role="milestonesStrip" class="milestones-strip"></div>
+    <div data-role="milestonesList" class="milestones-list" style="display:none"></div>
   </section>
 
-  <section id="achievementsSection" class="card" style="display:none">
+  <section data-role="achievementsSection" class="card" style="display:none">
     <h3 class="ach-section-title">Achievements</h3>
-    <div id="achievementsGrid" class="ach-grid"></div>
+    <div data-role="achievementsGrid" class="ach-grid"></div>
   </section>
 
   <section class="chart-section">
     <div class="chart-header">
       <h2>Portfolio Value</h2>
-      <div class="range-bar" id="rangeBar">
+      <div class="range-bar" data-role="rangeBar">
         <button class="range-btn" data-days="7">7D</button>
         <button class="range-btn" data-days="30">30D</button>
         <button class="range-btn" data-ytd="1">YTD</button>
@@ -40,31 +40,31 @@
       </div>
       <span class="chart-hint">Drag to select a period</span>
     </div>
-    <div class="chart-wrap"><canvas id="portfolioChart"></canvas></div>
+    <div class="chart-wrap"><canvas data-role="portfolioChart"></canvas></div>
   </section>
 
-  <section class="two-col" id="topMoversSection" style="display:none">
+  <section class="two-col" data-role="topMoversSection" style="display:none">
     <div class="card">
       <h3>Top Gainers</h3>
-      <div id="topGainers" class="movers-list"></div>
+      <div data-role="topGainers" class="movers-list"></div>
     </div>
     <div class="card">
       <h3>Top Losers</h3>
-      <div id="topLosers" class="movers-list"></div>
+      <div data-role="topLosers" class="movers-list"></div>
     </div>
   </section>
 
   <section class="two-col">
     <div class="card">
       <h2>Gains Breakdown</h2>
-      <table id="gainsTable" class="data-table"></table>
-      <div id="gainsChartWrap" style="height:180px;margin-top:0.5rem;display:none">
-        <canvas id="gainsChart"></canvas>
+      <table data-role="gainsTable" class="data-table"></table>
+      <div data-role="gainsChartWrap" style="height:180px;margin-top:0.5rem;display:none">
+        <canvas data-role="gainsChart"></canvas>
       </div>
     </div>
-    <div class="card" id="benchmarkTableCard" style="display:none">
+    <div class="card" data-role="benchmarkTableCard" style="display:none">
       <h2>Benchmark Comparison</h2>
-      <table id="benchmarkTable" class="data-table"></table>
+      <table data-role="benchmarkTable" class="data-table"></table>
     </div>
   </section>
 

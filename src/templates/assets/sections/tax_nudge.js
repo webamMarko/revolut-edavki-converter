@@ -1,6 +1,6 @@
 // --- Tax Action Nudge Widget ---
 (function() {
-  var container = document.getElementById('taxNudgeWidget');
+  var container = scopedFind(null, 'taxNudgeWidget');
   if (!container) return;
 
   var today = new Date();

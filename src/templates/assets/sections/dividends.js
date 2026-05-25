@@ -8,30 +8,30 @@ function updateDividends() {
   const hasCalTickers = calTickers && calTickers.length > 0;
 
   if (!hasIncome && !hasCalTickers) {
-    document.getElementById('navDividends').style.display = 'none';
+    scopedFind(null, 'navDividends').style.display = 'none';
     return;
   }
-  document.getElementById('navDividends').style.display = '';
+  scopedFind(null, 'navDividends').style.display = '';
 
   if (!hasIncome && hasCalTickers) {
     const tickerList = calTickers.map(function(tk) {
       return typeof tk === 'string' ? tk : tk.ticker;
     }).join(', ');
-    document.getElementById('dividendCards').innerHTML =
+    scopedFind(null, 'dividendCards').innerHTML =
       '<div class="empty-state" style="grid-column:1/-1;padding:2rem 1rem;text-align:center;color:var(--muted)">'
       + '<div style="font-size:1.5rem;margin-bottom:0.5rem">\uD83D\uDCED</div>'
       + '<p style="margin:0 0 0.5rem;font-weight:600;color:var(--text)">Dividend income will appear here once your imported files include dividend transactions.</p>'
       + '<p style="margin:0;font-size:0.85rem">Your holdings include dividend-paying tickers: <strong>' + tickerList + '</strong></p>'
       + '</div>';
     ['dividendChartSection','dividendGrowthSection','dividendProjectionSection','dividendTableSection']
-      .forEach(function(id) { document.getElementById(id).style.display = 'none'; });
+      .forEach(function(id) { var el = scopedFind(null, id); if (el) el.style.display = 'none'; });
     _buildDividendCalendar();
     return;
   }
 
   // Withholding tax reclaim alert badge
   (function() {
-    var badge = document.getElementById('divReclaimBadge');
+    var badge = scopedFind(null, 'divReclaimBadge');
     if (!badge) return;
     var dtby = D.dividend_tax || {};
     var years = Object.keys(dtby).map(Number).sort(function(a, b) { return a - b; });
@@ -54,7 +54,7 @@ function updateDividends() {
     badge.innerHTML = '<span style="margin-right:0.4rem">⚠️</span>'
       + '<span>€' + amount.toLocaleString(D.locale || 'en', {minimumFractionDigits: 2, maximumFractionDigits: 2})
       + ' in withholding tax may be reclaimable' + countryText + '.</span>'
-      + ' <a href="#dividendTaxSection" onclick="document.getElementById(\'dividendTaxSection\').scrollIntoView({behavior:\'smooth\'});return false;"'
+      + ' <a href="#dividendTaxSection" onclick="var el=scopedFind(null,\'dividendTaxSection\');if(el)el.scrollIntoView({behavior:\'smooth\'});return false;"'
       + ' style="color:inherit;font-weight:600;text-decoration:underline">See reclaim guide →</a>';
     badge.className = 'reclaim-alert-badge reclaim-alert-' + severity;
     badge.style.display = '';
@@ -69,7 +69,7 @@ function updateDividends() {
   const portfolioValue = D.summary ? D.summary.portfolio_value_eur : 0;
   const portfolioYield = portfolioValue > 0 && ttm > 0 ? (ttm / portfolioValue * 100) : null;
 
-  document.getElementById('dividendCards').innerHTML = [
+  scopedFind(null, 'dividendCards').innerHTML = [
     ['div.total_income', t('div.total_income'), fmtCcy(div.total_eur), '', div.total_eur],
     ['div.last_12m', t('div.last_12m'), fmtCcy(ttm), '', ttm],
     ['div.ttm_yield', t('div.ttm_yield'), portfolioYield != null ? fmt(portfolioYield, 2) + '%' : '—', '', portfolioYield],
@@ -91,7 +91,7 @@ function updateDividends() {
   _buildDividendCalendar();
 
   // Per-ticker table
-  const dt = document.getElementById('dividendTable');
+  const dt = scopedFind(null, 'dividendTable');
   dt.innerHTML = '<thead><tr>'
     + '<th>' + t('pos.ticker') + '</th>'
     + '<th>' + t('div.total') + '</th>'
@@ -130,7 +130,7 @@ function _buildDividendChart(monthly) {
     _dividendChart = null;
   }
 
-  const canvas = document.getElementById('dividendChart');
+  const canvas = scopedFind(null, 'dividendChart');
   if (!canvas || monthly.length === 0) return;
 
   const labels = monthly.map(m => m.month);
@@ -199,7 +199,7 @@ let _dividendGrowthChart = null;
 function _buildDividendGrowth(monthly) {
   if (_dividendGrowthChart) { _dividendGrowthChart.destroy(); _dividendGrowthChart = null; }
 
-  const section = document.getElementById('dividendGrowthSection');
+  const section = scopedFind(null, 'dividendGrowthSection');
   if (!monthly || monthly.length === 0) { section.style.display = 'none'; return; }
 
   // Aggregate by year
@@ -215,7 +215,7 @@ function _buildDividendGrowth(monthly) {
   const totals = years.map(y => yearTotals[y]);
 
   // Chart
-  const canvas = document.getElementById('dividendGrowthChart');
+  const canvas = scopedFind(null, 'dividendGrowthChart');
   _dividendGrowthChart = new Chart(canvas.getContext('2d'), {
     type: 'bar',
     data: {
@@ -249,7 +249,7 @@ function _buildDividendGrowth(monthly) {
   });
 
   // Growth table
-  const gt = document.getElementById('dividendGrowthTable');
+  const gt = scopedFind(null, 'dividendGrowthTable');
   gt.innerHTML = '<thead><tr><th>' + t('div.growth.year') + '</th><th>' + t('div.growth.income') + '</th><th>' + t('div.growth.yoy') + '</th><th>' + t('div.growth.pct') + '</th></tr></thead><tbody>'
     + years.map((y, i) => {
       const val = yearTotals[y];
@@ -279,7 +279,7 @@ function _buildDividendCalendar() {
   if (_divCalendarChart) { _divCalendarChart.destroy(); _divCalendarChart = null; }
 
   var cal = D.dividend_calendar;
-  var section = document.getElementById('dividendCalendarSection');
+  var section = scopedFind(null, 'dividendCalendarSection');
   if (!cal || !cal.upcoming || cal.upcoming.length === 0) {
     section.style.display = 'none';
     return;
@@ -287,7 +287,7 @@ function _buildDividendCalendar() {
   section.style.display = '';
 
   // Summary cards
-  var cards = document.getElementById('divCalendarCards');
+  var cards = scopedFind(null, 'divCalendarCards');
   var nextEvent = cal.upcoming[0];
   var daysUntil = Math.ceil((new Date(nextEvent.ex_date) - new Date()) / 86400000);
   cards.innerHTML = [
@@ -300,7 +300,7 @@ function _buildDividendCalendar() {
   }).join('');
 
   // Dividend change alerts
-  var alertsEl = document.getElementById('divCalendarAlerts');
+  var alertsEl = scopedFind(null, 'divCalendarAlerts');
   if (cal.dividend_changes && cal.dividend_changes.length > 0) {
     alertsEl.innerHTML = cal.dividend_changes.map(function(ch) {
       var icon = ch.type === 'increase' ? '↑' : '↓';
@@ -320,7 +320,7 @@ function _buildDividendCalendar() {
   var values = months.map(function(m) { return cal.monthly_breakdown[m]; });
 
   if (months.length > 0) {
-    var canvas = document.getElementById('divCalendarChart');
+    var canvas = scopedFind(null, 'divCalendarChart');
     _divCalendarChart = new Chart(canvas.getContext('2d'), {
       type: 'bar',
       data: {
@@ -364,7 +364,7 @@ function _buildDividendCalendar() {
   }
 
   // Upcoming events table
-  var tbl = document.getElementById('divCalendarTable');
+  var tbl = scopedFind(null, 'divCalendarTable');
   var now = new Date().toISOString().slice(0, 10);
   tbl.innerHTML = '<thead><tr>'
     + '<th>' + t('div.cal.ex_date') + '</th>'
@@ -397,7 +397,7 @@ let _dividendProjectionChart = null;
 function _buildDividendProjection(monthly) {
   if (_dividendProjectionChart) { _dividendProjectionChart.destroy(); _dividendProjectionChart = null; }
 
-  const section = document.getElementById('dividendProjectionSection');
+  const section = scopedFind(null, 'dividendProjectionSection');
   if (!monthly || monthly.length === 0) { section.style.display = 'none'; return; }
 
   // Aggregate by year
@@ -449,19 +449,19 @@ function _buildDividendProjection(monthly) {
   }
 
   // Summary cards
-  document.getElementById('divProjectionTitle').textContent = t('div.projection.title');
-  document.getElementById('divProjectionDesc').textContent =
+  scopedFind(null, 'divProjectionTitle').textContent = t('div.projection.title');
+  scopedFind(null, 'divProjectionDesc').textContent =
     t('div.projection.desc', {years: numYears, cagr: fmt(cagr * 100, 1)});
 
   var year5 = projectedValues[projectionYears];
-  document.getElementById('divProjectionCards').innerHTML = [
+  scopedFind(null, 'divProjectionCards').innerHTML = [
     [t('div.projection.ttm'), fmtCcy(ttmIncome), ''],
     [t('div.projection.growth_rate'), (cagr >= 0 ? '+' : '') + fmt(cagr * 100, 1) + '% ' + t('div.projection.cagr'), cagr >= 0 ? 'pos' : 'neg'],
     [t('div.projection.year5'), fmtCcy(year5), ''],
   ].map(function(row) {
     return '<div class="metric-card"><div class="label">' + row[0] + '</div><div class="value ' + row[2] + '">' + row[1] + '</div></div>';
   }).join('');
-  document.getElementById('divProjectionBandNote').textContent =
+  scopedFind(null, 'divProjectionBandNote').textContent =
     t('div.projection.band_note', {years: numYears, cagr: fmt(cagr * 100, 1)});
 
   // Chart: historical bars + projected line with confidence band
@@ -490,7 +490,7 @@ function _buildDividendProjection(monthly) {
     return idx >= 0 ? projectedHigh[idx] : null;
   });
 
-  var canvas = document.getElementById('dividendProjectionChart');
+  var canvas = scopedFind(null, 'dividendProjectionChart');
   _dividendProjectionChart = new Chart(canvas.getContext('2d'), {
     type: 'bar',
     data: {

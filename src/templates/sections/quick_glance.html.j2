@@ -1,33 +1,33 @@
-<div id="quickGlance" class="quick-glance" style="display:none">
+<div data-role="quickGlance" class="quick-glance" style="display:none">
   <div class="qg-main">
-    <div class="qg-value" id="qgValue">--</div>
+    <div class="qg-value" data-role="qgValue">--</div>
     <div class="qg-label">Portfolio Value</div>
-    <div class="qg-change" id="qgChange">
-      <span class="qg-change-amount" id="qgChangeAmount">--</span>
-      <span class="qg-change-pct" id="qgChangePct">--</span>
+    <div class="qg-change" data-role="qgChange">
+      <span class="qg-change-amount" data-role="qgChangeAmount">--</span>
+      <span class="qg-change-pct" data-role="qgChangePct">--</span>
     </div>
     <div class="qg-sparkline-wrap">
-      <canvas id="qgSparkline" height="40"></canvas>
+      <canvas data-role="qgSparkline" height="40"></canvas>
     </div>
   </div>
 
-  <div class="qg-movers" id="qgMovers">
+  <div class="qg-movers" data-role="qgMovers">
     <div class="qg-section-label">Top Movers</div>
-    <div class="qg-movers-list" id="qgMoversList"></div>
+    <div class="qg-movers-list" data-role="qgMoversList"></div>
   </div>
 
-  <div class="qg-actions" id="qgActions" style="display:none">
-    <div class="qg-actions-badge" id="qgActionsBadge">0</div>
+  <div class="qg-actions" data-role="qgActions" style="display:none">
+    <div class="qg-actions-badge" data-role="qgActionsBadge">0</div>
     <div class="qg-actions-label">Pending actions</div>
   </div>
 
-  <button class="qg-expand-btn" id="qgExpandBtn" aria-label="Show full dashboard">
+  <button class="qg-expand-btn" data-role="qgExpandBtn" aria-label="Show full dashboard">
     <svg viewBox="0 0 16 16" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="4,6 8,10 12,6"/></svg>
     <span>Full Dashboard</span>
   </button>
 
-  <label class="qg-toggle-label" id="qgToggleLabel">
-    <input type="checkbox" id="qgAlwaysToggle">
+  <label class="qg-toggle-label" data-role="qgToggleLabel">
+    <input type="checkbox" data-role="qgAlwaysToggle">
     <span>Always show Quick Glance on mobile</span>
   </label>
 </div>

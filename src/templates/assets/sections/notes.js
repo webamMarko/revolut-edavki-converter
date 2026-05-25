@@ -91,8 +91,8 @@
   }
 
   function renderAll() {
-    var list = document.getElementById('notesList');
-    var empty = document.getElementById('notesEmpty');
+    var list = scopedFind(null, 'notesList');
+    var empty = scopedFind(null, 'notesEmpty');
     // Remove old cards
     list.querySelectorAll('.note-card').forEach(function(c){ c.remove(); });
     if (_notes.length === 0) {
@@ -107,41 +107,41 @@
 
   // --- Modal ---
   window.openNoteModal = function(note) {
-    document.getElementById('noteModalTitle').textContent = note ? 'Edit note' : 'Add note';
-    document.getElementById('noteEditId').value = note ? note.id : '';
-    document.getElementById('nfTitle').value      = note ? (note.title      || '') : '';
-    document.getElementById('nfSummary').value    = note ? (note.summary    || '') : '';
-    document.getElementById('nfTickers').value    = note ? (note.tickers    || '') : '';
-    document.getElementById('nfConviction').value = note ? (note.conviction || 'medium') : 'medium';
-    document.getElementById('nfAction').value     = note ? (note.action     || 'watch')  : 'watch';
-    document.getElementById('nfBody').value       = note ? (note.body       || '') : '';
-    document.getElementById('noteModalError').textContent = '';
-    document.getElementById('btnSaveNote').disabled = false;
-    document.getElementById('noteModal').style.display = 'flex';
-    document.getElementById('nfTitle').focus();
+    scopedFind(null, 'noteModalTitle').textContent = note ? 'Edit note' : 'Add note';
+    scopedFind(null, 'noteEditId').value = note ? note.id : '';
+    scopedFind(null, 'nfTitle').value      = note ? (note.title      || '') : '';
+    scopedFind(null, 'nfSummary').value    = note ? (note.summary    || '') : '';
+    scopedFind(null, 'nfTickers').value    = note ? (note.tickers    || '') : '';
+    scopedFind(null, 'nfConviction').value = note ? (note.conviction || 'medium') : 'medium';
+    scopedFind(null, 'nfAction').value     = note ? (note.action     || 'watch')  : 'watch';
+    scopedFind(null, 'nfBody').value       = note ? (note.body       || '') : '';
+    scopedFind(null, 'noteModalError').textContent = '';
+    scopedFind(null, 'btnSaveNote').disabled = false;
+    scopedFind(null, 'noteModal').style.display = 'flex';
+    scopedFind(null, 'nfTitle').focus();
   };
 
   window.closeNoteModal = function() {
-    document.getElementById('noteModal').style.display = 'none';
+    scopedFind(null, 'noteModal').style.display = 'none';
   };
 
   window.saveNote = function() {
-    var id     = document.getElementById('noteEditId').value;
-    var title  = document.getElementById('nfTitle').value.trim();
-    var summary= document.getElementById('nfSummary').value.trim();
+    var id     = scopedFind(null, 'noteEditId').value;
+    var title  = scopedFind(null, 'nfTitle').value.trim();
+    var summary= scopedFind(null, 'nfSummary').value.trim();
     if (!title || !summary) {
-      document.getElementById('noteModalError').textContent = 'Title and summary are required.';
+      scopedFind(null, 'noteModalError').textContent = 'Title and summary are required.';
       return;
     }
     var payload = {
       title:      title,
       summary:    summary,
-      tickers:    document.getElementById('nfTickers').value.trim(),
-      conviction: document.getElementById('nfConviction').value,
-      action:     document.getElementById('nfAction').value,
-      body:       document.getElementById('nfBody').value,
+      tickers:    scopedFind(null, 'nfTickers').value.trim(),
+      conviction: scopedFind(null, 'nfConviction').value,
+      action:     scopedFind(null, 'nfAction').value,
+      body:       scopedFind(null, 'nfBody').value,
     };
-    var btn = document.getElementById('btnSaveNote');
+    var btn = scopedFind(null, 'btnSaveNote');
     btn.disabled = true;
 
     var url    = id ? '/api/notes/' + id : '/api/notes';
@@ -166,7 +166,7 @@
       closeNoteModal();
     })
     .catch(function(e) {
-      document.getElementById('noteModalError').textContent = e.message;
+      scopedFind(null, 'noteModalError').textContent = e.message;
       btn.disabled = false;
     });
   };
@@ -196,7 +196,7 @@
 
   // Show Add button only for editable users
   if (!_canEdit) {
-    var btn = document.getElementById('btnAddNote');
+    var btn = scopedFind(null, 'btnAddNote');
     if (btn) btn.style.display = 'none';
   }
 

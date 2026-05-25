@@ -4,7 +4,7 @@
   var WINDOW_DAYS = 14;
   var MS_PER_DAY = 1000 * 60 * 60 * 24;
 
-  var container = document.getElementById('dividendNudgeWidget');
+  var container = scopedFind(null, 'dividendNudgeWidget');
   if (!container) return;
 
   var cal = D.dividend_calendar;

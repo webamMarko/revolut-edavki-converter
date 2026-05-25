@@ -1,6 +1,6 @@
 // --- Year-End Tax Action Calendar ---
 (function() {
-  var section = document.getElementById('yearEndCalendarSection');
+  var section = scopedFind(null, 'yearEndCalendarSection');
   if (!section) return;
 
   var today = new Date();
@@ -135,7 +135,7 @@
   }
 
   function renderTimeline(actions) {
-    var container = document.getElementById('yearEndTimeline');
+    var container = scopedFind(null, 'yearEndTimeline');
     if (!container) return;
     if (actions.length === 0) { container.style.display = 'none'; return; }
 
@@ -220,26 +220,26 @@
   function render() {
     var actions = buildActions();
 
-    document.getElementById('yearEndCalendarTitle').textContent = t('calendar.title');
-    document.getElementById('yearEndCalendarDesc').textContent = t('calendar.desc');
-    document.getElementById('yearEndCalendarEmptyMsg').textContent = t('calendar.empty');
-    document.getElementById('yearEndTimelineTitle').textContent = t('calendar.timeline.title');
+    scopedFind(null, 'yearEndCalendarTitle').textContent = t('calendar.title');
+    scopedFind(null, 'yearEndCalendarDesc').textContent = t('calendar.desc');
+    scopedFind(null, 'yearEndCalendarEmptyMsg').textContent = t('calendar.empty');
+    scopedFind(null, 'yearEndTimelineTitle').textContent = t('calendar.timeline.title');
 
     if (actions.length === 0) {
-      document.getElementById('yearEndCalendarEmpty').style.display = '';
-      document.getElementById('yearEndTimelineSection').style.display = 'none';
-      document.getElementById('yearEndActionsSection').style.display = 'none';
+      scopedFind(null, 'yearEndCalendarEmpty').style.display = '';
+      scopedFind(null, 'yearEndTimelineSection').style.display = 'none';
+      scopedFind(null, 'yearEndActionsSection').style.display = 'none';
       return;
     }
 
-    document.getElementById('yearEndCalendarEmpty').style.display = 'none';
-    document.getElementById('yearEndActionsSection').style.display = '';
+    scopedFind(null, 'yearEndCalendarEmpty').style.display = 'none';
+    scopedFind(null, 'yearEndActionsSection').style.display = '';
 
     var totalImpact = actions.reduce(function(s, a) { return s + a.impact; }, 0);
     var bracketCount = actions.filter(function(a) { return a.type === 'hold'; }).length;
 
     // Summary cards
-    var highlight = document.getElementById('yearEndCalendarHighlight');
+    var highlight = scopedFind(null, 'yearEndCalendarHighlight');
     highlight.innerHTML = [
       [t('calendar.days_left'), daysUntilYearEnd + 'd', daysUntilYearEnd <= 30 ? 'neg' : ''],
       [t('calendar.actions_total'), actions.length.toString(), ''],
@@ -263,9 +263,9 @@
     for (var gi = 0; gi < groups.length; gi++) {
       var g = groups[gi];
       var items = actions.filter(g.filter);
-      var groupEl = document.getElementById('yearEndGroup' + g.el);
-      var tableEl = document.getElementById('yearEndTable' + g.el);
-      var titleEl = document.getElementById('yearEndGroup' + g.el + 'Title');
+      var groupEl = scopedFind(null, 'yearEndGroup' + g.el);
+      var tableEl = scopedFind(null, 'yearEndTable' + g.el);
+      var titleEl = scopedFind(null, 'yearEndGroup' + g.el + 'Title');
       if (!groupEl) continue;
       if (items.length === 0) {
         groupEl.style.display = 'none';
@@ -278,7 +278,7 @@
 
     // Hold group (don't sell before) — already covered in urgent/soon/yearend above
     // but show an explicit "hold" group if none of the above caught them
-    var holdGroup = document.getElementById('yearEndGroupHold');
+    var holdGroup = scopedFind(null, 'yearEndGroupHold');
     if (holdGroup) holdGroup.style.display = 'none';
   }
 

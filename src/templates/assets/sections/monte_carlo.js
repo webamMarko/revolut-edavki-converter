@@ -1,6 +1,6 @@
 // --- Monte Carlo portfolio projection ---
 (function() {
-  var section = document.getElementById('monteCarloSection');
+  var section = scopedFind(null, 'monteCarloSection');
   if (!section || !ds || !ds.value_eur || ds.value_eur.length < 60) return;
 
   // Compute daily log returns from portfolio value
@@ -24,7 +24,7 @@
   var _mcChart = null;
 
   // Build horizon selector buttons
-  var bar = document.getElementById('mcHorizonBar');
+  var bar = scopedFind(null, 'mcHorizonBar');
   [1, 3, 5, 10].forEach(function(yr) {
     var btn = document.createElement('button');
     btn.className = 'range-btn' + (yr === currentHorizon ? ' active' : '');
@@ -83,11 +83,11 @@
     var worstCase = percentile(finalVals, 10);
 
     // Summary cards
-    document.getElementById('mcTitle').textContent = t('mc.title');
-    document.getElementById('mcDesc').textContent =
+    scopedFind(null, 'mcTitle').textContent = t('mc.title');
+    scopedFind(null, 'mcDesc').textContent =
       t('mc.desc', {sims: NUM_SIMULATIONS, years: currentHorizon});
 
-    document.getElementById('mcCards').innerHTML = [
+    scopedFind(null, 'mcCards').innerHTML = [
       [t('mc.median_outcome'), fmtCcy(medianFinal), medianFinal >= currentValue ? 'pos' : 'neg'],
       [t('mc.best_case'), fmtCcy(bestCase), 'pos', '90th ' + t('mc.percentile')],
       [t('mc.worst_case'), fmtCcy(worstCase), worstCase >= currentValue ? '' : 'neg', '10th ' + t('mc.percentile')],
@@ -107,7 +107,7 @@
 
     // Build fan chart
     if (_mcChart) { _mcChart.destroy(); _mcChart = null; }
-    var canvas = document.getElementById('mcChart');
+    var canvas = scopedFind(null, 'mcChart');
     _mcChart = new Chart(canvas.getContext('2d'), {
       type: 'line',
       data: {
@@ -186,7 +186,7 @@
 // --- FIRE section on Projections page ---
 var _fireChart = null;
 function updateFire() {
-  var fireSection = document.getElementById('fireSection');
+  var fireSection = scopedFind(null, 'fireSection');
   if (!fireSection || D.fire == null) return;
 
   var s = getActiveSummary();
@@ -194,11 +194,11 @@ function updateFire() {
 
   fireSection.style.display = '';
 
-  var expensesInput = document.getElementById('projFireExpenses');
-  var incomeInput = document.getElementById('projFireIncome');
-  var withdrawalInput = document.getElementById('projFireWithdrawal');
-  var inflInput = document.getElementById('projFireInflation');
-  var contribInput = document.getElementById('projFireContrib');
+  var expensesInput = scopedFind(null, 'projFireExpenses');
+  var incomeInput = scopedFind(null, 'projFireIncome');
+  var withdrawalInput = scopedFind(null, 'projFireWithdrawal');
+  var inflInput = scopedFind(null, 'projFireInflation');
+  var contribInput = scopedFind(null, 'projFireContrib');
 
   var expenses = expensesInput ? parseFloat(expensesInput.value) || 0 : 0;
   var income = incomeInput ? parseFloat(incomeInput.value) || 0 : 0;
@@ -240,13 +240,13 @@ function updateFire() {
     cards.push(['Est. Year', String(fireYear), '']);
   }
 
-  document.getElementById('fireCards').innerHTML = cards.map(function(row) {
+  scopedFind(null, 'fireCards').innerHTML = cards.map(function(row) {
     return '<div class="metric-card"><div class="label">' + row[0] + '</div><div class="value ' + (row[2] || '') + '">' + row[1] + '</div></div>';
   }).join('');
 
   // --- FIRE projection chart ---
   if (_fireChart) { _fireChart.destroy(); _fireChart = null; }
-  var canvas = document.getElementById('fireChart');
+  var canvas = scopedFind(null, 'fireChart');
   if (!canvas) return;
 
   var inflRate = infl / 100;
@@ -321,12 +321,12 @@ function updateFire() {
 
 // Initialize FIRE section
 (function() {
-  if (!document.getElementById('fireSection') || D.fire == null) return;
+  if (!scopedFind(null, 'fireSection') || D.fire == null) return;
   var fire = D.fire;
   var ids = ['projFireExpenses', 'projFireIncome', 'projFireWithdrawal', 'projFireInflation', 'projFireContrib'];
   var defaults = [fire.annual_expenses || 0, fire.annual_income || 0, fire.withdrawal_rate || 4, fire.inflation_rate || 2.5, 0];
   ids.forEach(function(id, i) {
-    var el = document.getElementById(id);
+    var el = scopedFind(null, id);
     if (el) {
       el.value = defaults[i];
       el.addEventListener('change', updateFire);

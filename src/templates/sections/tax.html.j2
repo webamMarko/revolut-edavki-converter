@@ -1,50 +1,50 @@
-<section class="card" id="taxSection" style="display:none">
+<section class="card" data-role="taxSection" style="display:none">
   <div class="chart-header">
     <h2>Tax Summary</h2>
     <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-left:auto">
-      <div class="range-bar" id="taxYearBar"></div>
-      <button id="taxCompareToggle" class="range-btn" title="Compare tax regimes side-by-side">&#8646; Compare</button>
+      <div class="range-bar" data-role="taxYearBar"></div>
+      <button data-role="taxCompareToggle" class="range-btn" title="Compare tax regimes side-by-side">&#8646; Compare</button>
     </div>
   </div>
-  <div id="taxCompareBar" style="display:none;align-items:center;gap:0.5rem;padding:0.5rem 0;flex-wrap:wrap">
+  <div data-role="taxCompareBar" style="display:none;align-items:center;gap:0.5rem;padding:0.5rem 0;flex-wrap:wrap">
     <span style="font-size:0.75rem;color:var(--muted);font-weight:600">Compare with:</span>
-    <select id="taxCompareSelect" class="regime-select" style="width:auto;min-width:160px"></select>
+    <select data-role="taxCompareSelect" class="regime-select" style="width:auto;min-width:160px"></select>
   </div>
-  <div id="taxCards" class="card-grid small"></div>
-  <div id="taxCompareTable" style="display:none;margin-bottom:1rem"></div>
-  <div id="taxExportBar" class="tax-export-bar" style="display:none">
-    <select id="taxExportSelect" class="tax-export-select">
+  <div data-role="taxCards" class="card-grid small"></div>
+  <div data-role="taxCompareTable" style="display:none;margin-bottom:1rem"></div>
+  <div data-role="taxExportBar" class="tax-export-bar" style="display:none">
+    <select data-role="taxExportSelect" class="tax-export-select">
       <option value="edavki">eDavki XML (Doh-KDVP)</option>
       <option value="fifo-csv">FIFO Transactions CSV</option>
       <option value="tax-pdf">Tax Summary PDF</option>
     </select>
-    <button id="taxExportBtn" class="tax-export-btn">Export</button>
+    <button data-role="taxExportBtn" class="tax-export-btn">Export</button>
   </div>
   <div class="table-scroll">
-    <table id="taxTable" class="data-table sortable"></table>
+    <table data-role="taxTable" class="data-table sortable"></table>
   </div>
 </section>
 
-<section class="card" id="dividendTaxSection" style="display:none">
+<section class="card" data-role="dividendTaxSection" style="display:none">
   <div class="chart-header">
     <h2>Dividend Tax (Doh-Div)</h2>
-    <div class="range-bar" id="divTaxYearBar"></div>
+    <div class="range-bar" data-role="divTaxYearBar"></div>
   </div>
-  <div id="divTaxCards" class="card-grid small"></div>
-  <div id="divTaxExportBar" class="tax-export-bar" style="display:none">
-    <button id="divTaxExportBtn" class="tax-export-btn">Export Doh-Div XML</button>
+  <div data-role="divTaxCards" class="card-grid small"></div>
+  <div data-role="divTaxExportBar" class="tax-export-bar" style="display:none">
+    <button data-role="divTaxExportBtn" class="tax-export-btn">Export Doh-Div XML</button>
   </div>
-  <div id="divTaxCountryBreakdown" class="table-scroll">
-    <table id="divTaxTable" class="data-table"></table>
+  <div data-role="divTaxCountryBreakdown" class="table-scroll">
+    <table data-role="divTaxTable" class="data-table"></table>
   </div>
-  <div id="divTaxGuidance" class="tax-guidance" style="margin-top:1rem"></div>
+  <div data-role="divTaxGuidance" class="tax-guidance" style="margin-top:1rem"></div>
 </section>
 
-<section class="card" id="harvestSection" style="display:none">
-  <h2 id="harvestTitle">Tax-Loss Harvesting Opportunities</h2>
-  <p id="harvestDesc" style="color:var(--muted);font-size:0.8rem;margin:-0.5rem 0 1rem"></p>
-  <div id="harvestCards" class="card-grid small"></div>
+<section class="card" data-role="harvestSection" style="display:none">
+  <h2 data-role="harvestTitle">Tax-Loss Harvesting Opportunities</h2>
+  <p data-role="harvestDesc" style="color:var(--muted);font-size:0.8rem;margin:-0.5rem 0 1rem"></p>
+  <div data-role="harvestCards" class="card-grid small"></div>
   <div class="table-scroll">
-    <table id="harvestTable" class="data-table sortable"></table>
+    <table data-role="harvestTable" class="data-table sortable"></table>
   </div>
 </section>

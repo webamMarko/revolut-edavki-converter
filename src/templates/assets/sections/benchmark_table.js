@@ -3,7 +3,7 @@ function _fmtMetric(v) { return v != null ? v.toFixed(2) : '—'; }
 
 function updateBenchmarkTable() {
   if (bKeys.length === 0) return;
-  const bt = document.getElementById('benchmarkTable');
+  const bt = scopedFind(null, 'benchmarkTable');
   const portSharpe = D.summary && D.summary.risk_metrics ? D.summary.risk_metrics.sharpe_ratio : null;
   const portDD = D.summary ? D.summary.max_drawdown_pct : null;
   const hdr = '<thead><tr><th>Benchmark</th><th>Return</th><th>Portfolio</th><th>Alpha</th><th>Sharpe</th><th>Port. Sharpe</th><th>Max DD</th><th>Port. DD</th></tr></thead>';

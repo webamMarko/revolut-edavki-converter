@@ -1,34 +1,34 @@
 <div class="page-stack">
-  <section class="card" id="monteCarloSection" style="display:none">
+  <section class="card" data-role="monteCarloSection" style="display:none">
     <div class="chart-header">
-      <h2 id="mcTitle">Monte Carlo Projection</h2>
-      <div class="range-bar" id="mcHorizonBar"></div>
+      <h2 data-role="mcTitle">Monte Carlo Projection</h2>
+      <div class="range-bar" data-role="mcHorizonBar"></div>
     </div>
-    <p id="mcDesc" style="color:var(--muted);font-size:0.8rem;margin:-0.25rem 0 0.75rem"></p>
-    <div id="mcCards" class="card-grid small" style="margin-bottom:0.75rem"></div>
-    <div class="chart-wrap" style="height:300px"><canvas id="mcChart"></canvas></div>
+    <p data-role="mcDesc" style="color:var(--muted);font-size:0.8rem;margin:-0.25rem 0 0.75rem"></p>
+    <div data-role="mcCards" class="card-grid small" style="margin-bottom:0.75rem"></div>
+    <div class="chart-wrap" style="height:300px"><canvas data-role="mcChart"></canvas></div>
   </section>
 
-  <section class="card" id="fireSection" style="display:none">
+  <section class="card" data-role="fireSection" style="display:none">
     <h2>FIRE Projection</h2>
-    <div id="fireCards" class="card-grid small" style="margin-bottom:1rem"></div>
+    <div data-role="fireCards" class="card-grid small" style="margin-bottom:1rem"></div>
     <div class="fire-config" style="display:flex;gap:0.75rem 1.25rem;flex-wrap:wrap;align-items:center;font-size:0.82rem;color:var(--muted);margin-bottom:1rem">
       <label style="display:flex;align-items:center;gap:0.35rem">Annual expenses
-        <input id="projFireExpenses" type="number" class="fire-input" step="500" min="0" style="width:90px">
+        <input data-role="projFireExpenses" type="number" class="fire-input" step="500" min="0" style="width:90px">
       </label>
       <label style="display:flex;align-items:center;gap:0.35rem">Annual income
-        <input id="projFireIncome" type="number" class="fire-input" step="500" min="0" style="width:90px">
+        <input data-role="projFireIncome" type="number" class="fire-input" step="500" min="0" style="width:90px">
       </label>
       <label style="display:flex;align-items:center;gap:0.35rem">Withdrawal rate %
-        <input id="projFireWithdrawal" type="number" class="fire-input" step="0.1" min="0.1" max="20" style="width:70px">
+        <input data-role="projFireWithdrawal" type="number" class="fire-input" step="0.1" min="0.1" max="20" style="width:70px">
       </label>
       <label style="display:flex;align-items:center;gap:0.35rem">Inflation %
-        <input id="projFireInflation" type="number" class="fire-input" step="0.1" min="0" max="20" style="width:70px">
+        <input data-role="projFireInflation" type="number" class="fire-input" step="0.1" min="0" max="20" style="width:70px">
       </label>
       <label style="display:flex;align-items:center;gap:0.35rem">Monthly investment
-        <input id="projFireContrib" type="number" class="fire-input" step="50" min="0" style="width:90px">
+        <input data-role="projFireContrib" type="number" class="fire-input" step="50" min="0" style="width:90px">
       </label>
     </div>
-    <div class="chart-wrap" style="height:300px"><canvas id="fireChart"></canvas></div>
+    <div class="chart-wrap" style="height:300px"><canvas data-role="fireChart"></canvas></div>
   </section>
 </div>

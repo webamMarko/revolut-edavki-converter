@@ -28,7 +28,7 @@ function makeSortable(table) {
 
 // --- Range buttons ---
 (function() {
-  const bar = document.getElementById('rangeBar');
+  const bar = scopedFind(null, 'rangeBar');
   if (!bar) return;
   bar.addEventListener('click', function(e) {
     const btn = e.target.closest('.range-btn');

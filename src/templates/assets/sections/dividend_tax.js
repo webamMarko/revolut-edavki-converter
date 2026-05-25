@@ -6,11 +6,11 @@
 
   let currentYear = years[years.length - 1];
 
-  const section = document.getElementById('dividendTaxSection');
+  const section = scopedFind(null, 'dividendTaxSection');
   if (!section) return;
   section.style.display = '';
 
-  const bar = document.getElementById('divTaxYearBar');
+  const bar = scopedFind(null, 'divTaxYearBar');
   if (bar) {
     years.forEach(function(yr) {
       const btn = document.createElement('button');
@@ -26,8 +26,8 @@
     });
   }
 
-  const exportBar = document.getElementById('divTaxExportBar');
-  const exportBtn = document.getElementById('divTaxExportBtn');
+  const exportBar = scopedFind(null, 'divTaxExportBar');
+  const exportBtn = scopedFind(null, 'divTaxExportBtn');
   if (exportBtn) {
     exportBtn.addEventListener('click', function() {
       window.location.href = '/export/doh-div?year=' + currentYear;
@@ -45,7 +45,7 @@
     if (exportBar) exportBar.style.display = '';
 
     // Summary cards
-    const cards = document.getElementById('divTaxCards');
+    const cards = scopedFind(null, 'divTaxCards');
     if (cards) {
       cards.innerHTML = `
         <div class="metric-card">
@@ -76,7 +76,7 @@
     }
 
     // Country breakdown table
-    const table = document.getElementById('divTaxTable');
+    const table = scopedFind(null, 'divTaxTable');
     if (table && data.by_country) {
       const countries = Object.entries(data.by_country).sort((a, b) => b[1].gross_eur - a[1].gross_eur);
       let html = `<thead><tr>
@@ -99,7 +99,7 @@
     }
 
     // Reclaim guidance
-    const guidance = document.getElementById('divTaxGuidance');
+    const guidance = scopedFind(null, 'divTaxGuidance');
     if (guidance && data.by_country) {
       const reclaimable = Object.entries(data.by_country)
         .filter(([, c]) => c.reclaimable_eur > 0.01);

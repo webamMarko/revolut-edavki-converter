@@ -4,7 +4,7 @@ let _dcaDetailChart = null;
 
 function updateDCAStrategy() {
   const dca = D.dca_strategy;
-  const navEl = document.getElementById('navDCA');
+  const navEl = scopedFind(null, 'navDCA');
   if (!dca || !dca.tickers || dca.tickers.length === 0) {
     if (navEl) navEl.style.display = 'none';
     return;
@@ -19,7 +19,7 @@ function updateDCAStrategy() {
   const avgConsistency = tickers.reduce((s, t) => s + t.consistency_score, 0) / tickers.length;
   const dcaWins = tickers.filter(t => t.lump_sum && t.lump_sum.dca_advantage_pct > 0).length;
 
-  document.getElementById('dcaCards').innerHTML = [
+  scopedFind(null, 'dcaCards').innerHTML = [
     ['dca.patterns', 'DCA Patterns', tickers.length + ' tickers', ''],
     ['dca.consistency', 'Avg Consistency', fmt(avgConsistency, 0) + '%', avgConsistency >= 70 ? 'positive' : ''],
     ['dca.total_return', 'DCA Return', fmtCcy(totalReturn), totalReturn >= 0 ? 'positive' : 'negative'],
@@ -34,10 +34,10 @@ function updateDCAStrategy() {
 }
 
 function _buildDCATable(tickers) {
-  const section = document.getElementById('dcaTableSection');
+  const section = scopedFind(null, 'dcaTableSection');
   section.style.display = '';
 
-  const table = document.getElementById('dcaTable');
+  const table = scopedFind(null, 'dcaTable');
   table.innerHTML = '<thead><tr>'
     + '<th>Ticker</th>'
     + '<th>Purchases</th>'
@@ -72,12 +72,12 @@ function _buildDCATable(tickers) {
 }
 
 function _buildDCAOverviewChart(tickers) {
-  const section = document.getElementById('dcaChartSection');
+  const section = scopedFind(null, 'dcaChartSection');
   section.style.display = '';
 
   if (_dcaChart) { _dcaChart.destroy(); _dcaChart = null; }
 
-  const canvas = document.getElementById('dcaChart');
+  const canvas = scopedFind(null, 'dcaChart');
   if (!canvas) return;
 
   const labels = tickers.map(t => t.ticker);
@@ -128,13 +128,13 @@ function _showDCADetail(ticker) {
   const t = dca.tickers.find(x => x.ticker === ticker);
   if (!t) return;
 
-  const section = document.getElementById('dcaDetailSection');
+  const section = scopedFind(null, 'dcaDetailSection');
   section.style.display = '';
-  document.getElementById('dcaDetailTitle').textContent = ticker + ' — Purchase History';
+  scopedFind(null, 'dcaDetailTitle').textContent = ticker + ' — Purchase History';
 
   if (_dcaDetailChart) { _dcaDetailChart.destroy(); _dcaDetailChart = null; }
 
-  const canvas = document.getElementById('dcaDetailChart');
+  const canvas = scopedFind(null, 'dcaDetailChart');
   if (!canvas) return;
 
   const history = t.purchase_history || [];
@@ -186,7 +186,7 @@ function _showDCADetail(ticker) {
     },
   });
 
-  const table = document.getElementById('dcaDetailTable');
+  const table = scopedFind(null, 'dcaDetailTable');
   table.innerHTML = '<thead><tr>'
     + '<th>Date</th><th>Price</th><th>Amount</th><th>Shares</th><th>Avg Cost</th>'
     + '</tr></thead><tbody>'

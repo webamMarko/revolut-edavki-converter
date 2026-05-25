@@ -3,7 +3,7 @@
   var positions = D.positions || [];
   var lots = D.position_lots || {};
   var regime = D.regime || {};
-  var section = document.getElementById('smartSellSection');
+  var section = scopedFind(null, 'smartSellSection');
   if (!section) return;
 
   var today = new Date();
@@ -47,22 +47,22 @@
   }
 
   function init() {
-    document.getElementById('smartSellTitle').textContent = t('smart_sell.title');
-    document.getElementById('smartSellDesc').textContent = t('smart_sell.desc');
-    document.getElementById('smartSellTickerLabel').textContent = t('smart_sell.ticker_label');
-    document.getElementById('smartSellQtyLabel').textContent = t('smart_sell.qty_label');
-    document.getElementById('smartSellCalc').textContent = t('smart_sell.analyze');
-    document.getElementById('smartSellLotsTitle').textContent = t('smart_sell.lots_title');
-    document.getElementById('smartSellWaitTitle').textContent = t('smart_sell.wait_title');
-    document.getElementById('smartSellWaitDesc').textContent = t('smart_sell.wait_desc');
-    document.getElementById('smartSellEmptyMsg').textContent = t('smart_sell.empty');
+    scopedFind(null, 'smartSellTitle').textContent = t('smart_sell.title');
+    scopedFind(null, 'smartSellDesc').textContent = t('smart_sell.desc');
+    scopedFind(null, 'smartSellTickerLabel').textContent = t('smart_sell.ticker_label');
+    scopedFind(null, 'smartSellQtyLabel').textContent = t('smart_sell.qty_label');
+    scopedFind(null, 'smartSellCalc').textContent = t('smart_sell.analyze');
+    scopedFind(null, 'smartSellLotsTitle').textContent = t('smart_sell.lots_title');
+    scopedFind(null, 'smartSellWaitTitle').textContent = t('smart_sell.wait_title');
+    scopedFind(null, 'smartSellWaitDesc').textContent = t('smart_sell.wait_desc');
+    scopedFind(null, 'smartSellEmptyMsg').textContent = t('smart_sell.empty');
 
     populateTicker();
   }
 
   function populateTicker() {
-    var sel = document.getElementById('smartSellTicker');
-    var qtyInput = document.getElementById('smartSellQty');
+    var sel = scopedFind(null, 'smartSellTicker');
+    var qtyInput = scopedFind(null, 'smartSellQty');
 
     var filteredPositions = isDefaultSelection()
       ? positions
@@ -82,15 +82,15 @@
         qtyInput.value = pos.quantity;
         qtyInput.max = pos.quantity;
       }
-      document.getElementById('smartSellResult').style.display = 'none';
+      scopedFind(null, 'smartSellResult').style.display = 'none';
     };
   }
 
   function analyze() {
-    var ticker = document.getElementById('smartSellTicker').value;
-    var qtyToSell = parseFloat(document.getElementById('smartSellQty').value);
-    var resultDiv = document.getElementById('smartSellResult');
-    var emptyDiv = document.getElementById('smartSellEmpty');
+    var ticker = scopedFind(null, 'smartSellTicker').value;
+    var qtyToSell = parseFloat(scopedFind(null, 'smartSellQty').value);
+    var resultDiv = scopedFind(null, 'smartSellResult');
+    var emptyDiv = scopedFind(null, 'smartSellEmpty');
 
     if (!ticker || !qtyToSell || qtyToSell <= 0) {
       resultDiv.style.display = 'none';
@@ -180,7 +180,7 @@
     var lotsWithSaving = lotResults.filter(function(l) { return l.saving && l.saving > 0; });
 
     // Render summary cards
-    var cardsDiv = document.getElementById('smartSellCards');
+    var cardsDiv = scopedFind(null, 'smartSellCards');
     cardsDiv.innerHTML = [
       [t('smart_sell.proceeds'), fmtCcy(totalProceeds), ''],
       [t('smart_sell.cost_basis'), fmtCcy(totalCost), ''],
@@ -193,7 +193,7 @@
     }).join('');
 
     // Per-lot breakdown table
-    var table = document.getElementById('smartSellLotsTable');
+    var table = scopedFind(null, 'smartSellLotsTable');
     table.innerHTML =
       '<thead><tr>' +
       '<th>#</th>' +
@@ -222,9 +222,9 @@
       '</tbody>';
 
     // Wait suggestions section
-    var waitSection = document.getElementById('smartSellWaitSection');
-    var waitTable = document.getElementById('smartSellWaitTable');
-    var waitNote = document.getElementById('smartSellWaitNote');
+    var waitSection = scopedFind(null, 'smartSellWaitSection');
+    var waitTable = scopedFind(null, 'smartSellWaitTable');
+    var waitNote = scopedFind(null, 'smartSellWaitNote');
 
     if (lotsWithSaving.length > 0) {
       waitSection.style.display = '';
@@ -269,16 +269,16 @@
     emptyDiv.style.display = 'none';
   }
 
-  document.getElementById('smartSellCalc').addEventListener('click', analyze);
+  scopedFind(null, 'smartSellCalc').addEventListener('click', analyze);
 
   // Also trigger on Enter in qty input
-  document.getElementById('smartSellQty').addEventListener('keydown', function(e) {
+  scopedFind(null, 'smartSellQty').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') analyze();
   });
 
   window.updateSmartSell = function() {
     populateTicker();
-    document.getElementById('smartSellResult').style.display = 'none';
+    scopedFind(null, 'smartSellResult').style.display = 'none';
   };
 
   init();

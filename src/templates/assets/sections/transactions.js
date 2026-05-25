@@ -1,10 +1,10 @@
 // --- Transaction history ---
 const PAGE_SIZE = 50;
 let txPage = 0, txFiltered = [], txDateFiltered = [];
-const txTable = document.getElementById('txTable');
-const txPag = document.getElementById('txPagination');
-const txCountEl = document.getElementById('txCount');
-const txFilterEl = document.getElementById('txFilter');
+const txTable = scopedFind(null, 'txTable');
+const txPag = scopedFind(null, 'txPagination');
+const txCountEl = scopedFind(null, 'txCount');
+const txFilterEl = scopedFind(null, 'txFilter');
 
 function getDateFilteredTx() {
   let txs = D.transactions;
@@ -27,7 +27,7 @@ function applyTxFilter() {
 }
 
 function updateTxStats() {
-  const section = document.getElementById('txStatsSection');
+  const section = scopedFind(null, 'txStatsSection');
   const txs = getDateFilteredTx();
   const trades = txs.filter(t => t.type === 'BUY' || t.type === 'SELL');
   if (trades.length < 2) { section.style.display = 'none'; return; }
@@ -58,7 +58,7 @@ function updateTxStats() {
   const divTypes = new Set(['DIVIDEND', 'BOND COUPON', 'INTEREST PAID', 'STAKING REWARD', 'LEARN REWARD']);
   const dividends = txs.filter(t => divTypes.has(t.type));
 
-  const el = document.getElementById('txStats');
+  const el = scopedFind(null, 'txStats');
   const cards = [
     [t('tx.total_trades'), trades.length, ''],
     [t('tx.buys_sells'), buys.length + ' / ' + sells.length, ''],

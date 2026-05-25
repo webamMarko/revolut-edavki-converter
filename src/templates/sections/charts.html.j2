@@ -2,40 +2,40 @@
   <div class="two-col heatmap-row">
     <section class="card">
       <h2>Monthly Performance</h2>
-      <div class="heatmap-wrap"><div id="heatmap"></div></div>
+      <div class="heatmap-wrap"><div data-role="heatmap"></div></div>
     </section>
     <section class="card">
       <h2>Yearly Performance</h2>
-      <div class="heatmap-wrap"><div id="yearly-heatmap"></div></div>
+      <div class="heatmap-wrap"><div data-role="yearly-heatmap"></div></div>
     </section>
   </div>
 
-  <section class="card" id="yearlyTableSection">
+  <section class="card" data-role="yearlyTableSection">
     <h2>Annual Summary</h2>
     <div class="table-scroll">
-      <table id="yearlyTable" class="data-table sortable"></table>
+      <table data-role="yearlyTable" class="data-table sortable"></table>
     </div>
   </section>
 
-  <section class="chart-section" id="benchmarkSection" style="display:none">
-    <h2 id="benchmarkSectionTitle">Performance vs Benchmarks</h2>
-    <div class="chart-wrap"><canvas id="benchmarkChart"></canvas></div>
+  <section class="chart-section" data-role="benchmarkSection" style="display:none">
+    <h2 data-role="benchmarkSectionTitle">Performance vs Benchmarks</h2>
+    <div class="chart-wrap"><canvas data-role="benchmarkChart"></canvas></div>
   </section>
 
   {% include "sections/whatif.html.j2" %}
 
-  <section class="card chart-section" id="rollingReturnsSection" style="display:none">
+  <section class="card chart-section" data-role="rollingReturnsSection" style="display:none">
     <h2>Rolling 1-Year Returns</h2>
-    <div class="chart-wrap" style="height:240px"><canvas id="rollingReturnsChart"></canvas></div>
+    <div class="chart-wrap" style="height:240px"><canvas data-role="rollingReturnsChart"></canvas></div>
   </section>
 
-  <section id="chartsRiskMetricsSection" class="card" style="display:none">
+  <section data-role="chartsRiskMetricsSection" class="card" style="display:none">
     <h2>Risk Metrics</h2>
-    <div id="riskMetrics" class="card-grid"></div>
+    <div data-role="riskMetrics" class="card-grid"></div>
   </section>
 
-  <section class="card chart-section" id="drawdownSection" style="display:none">
+  <section class="card chart-section" data-role="drawdownSection" style="display:none">
     <h2>Drawdown from Peak</h2>
-    <div class="chart-wrap" style="height:200px"><canvas id="drawdownChart"></canvas></div>
+    <div class="chart-wrap" style="height:200px"><canvas data-role="drawdownChart"></canvas></div>
   </section>
 </div>

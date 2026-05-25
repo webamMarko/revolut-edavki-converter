@@ -7,7 +7,7 @@
   let currentYear = years[years.length - 1]; // default to most recent
 
   // Build year selector buttons
-  const bar = document.getElementById('taxYearBar');
+  const bar = scopedFind(null, 'taxYearBar');
   if (bar) {
     years.forEach(function(yr) {
       const btn = document.createElement('button');
@@ -89,10 +89,10 @@
   let _compareMode = false;
   let _compareRegime = null;
 
-  const _compareToggle = document.getElementById('taxCompareToggle');
-  const _compareBar = document.getElementById('taxCompareBar');
-  const _compareSelect = document.getElementById('taxCompareSelect');
-  const _comparePanel = document.getElementById('taxCompareTable');
+  const _compareToggle = scopedFind(null, 'taxCompareToggle');
+  const _compareBar = scopedFind(null, 'taxCompareBar');
+  const _compareSelect = scopedFind(null, 'taxCompareSelect');
+  const _comparePanel = scopedFind(null, 'taxCompareTable');
   const _allRegimes = D.available_regimes || [];
   const _currentCode = D.country || 'SI';
 
@@ -200,7 +200,7 @@
     const ty = tby[currentYear];
     if (!ty) return;
 
-    document.getElementById('taxSection').style.display = '';
+    scopedFind(null, 'taxSection').style.display = '';
 
     // Filter sales by active asset classes
     const sales = isDefaultSelection()
@@ -219,7 +219,7 @@
            ℹ️ ${t('tax.crypto_exempt', {threshold: fmt(exemptionThreshold, 0), currency: _currency})}${exemptionRef ? ' (' + exemptionRef + ')' : ''}
          </div>` : '';
 
-    document.getElementById('taxCards').innerHTML = [
+    scopedFind(null, 'taxCards').innerHTML = [
       [t('tax.year'),          currentYear,                                               ''],
       [t('tax.realized_gain'), signCcy(totalGain),                                         cls(totalGain)],
       [t('tax.realized_tax'),  fmtCcy(totalTax),                                          ''],
@@ -232,7 +232,7 @@
 
     renderCompare(sales);
 
-    const tt = document.getElementById('taxTable');
+    const tt = scopedFind(null, 'taxTable');
     if (sales.length > 0) {
       tt.innerHTML =
         '<thead><tr><th>'+t('tax.col.ticker')+'</th><th>'+t('tax.col.date')+'</th><th>'+t('tax.col.qty')+'</th><th>'+t('tax.col.proceeds')+'</th>' +
@@ -259,9 +259,9 @@
   }
 
   // --- Export functionality (client-side, works in standalone HTML too) ---
-  const exportBar = document.getElementById('taxExportBar');
-  const exportBtn = document.getElementById('taxExportBtn');
-  const exportSel = document.getElementById('taxExportSelect');
+  const exportBar = scopedFind(null, 'taxExportBar');
+  const exportBtn = scopedFind(null, 'taxExportBtn');
+  const exportSel = scopedFind(null, 'taxExportSelect');
   if (exportBar) {
     exportBar.style.display = '';
     exportBtn.addEventListener('click', function() {
@@ -327,7 +327,7 @@
     if (!ty) return;
 
     const candidates = ty.harvest_candidates || [];
-    const section = document.getElementById('harvestSection');
+    const section = scopedFind(null, 'harvestSection');
     if (!section) return;
 
     // Filter by active asset classes
@@ -341,13 +341,13 @@
     }
 
     section.style.display = '';
-    document.getElementById('harvestTitle').textContent = t('tax.harvest.title');
+    scopedFind(null, 'harvestTitle').textContent = t('tax.harvest.title');
 
     const washCount = filtered.filter(c => c.wash_sale_risk).length;
     const descText = washCount > 0
       ? t('tax.harvest.desc') + ` (${washCount} with wash-sale risk)`
       : t('tax.harvest.desc');
-    document.getElementById('harvestDesc').textContent = descText;
+    scopedFind(null, 'harvestDesc').textContent = descText;
 
     const totalSaving = filtered.reduce((s, c) => s + c.potential_tax_saving_eur, 0);
     const totalLoss = filtered.reduce((s, c) => s + c.unrealized_loss_eur, 0);
@@ -361,12 +361,12 @@
     if (totalNetBenefit > 0 && totalNetBenefit < totalSaving) {
       cards.push(['Net Benefit (offsets gains)', fmtCcy(totalNetBenefit), 'pos']);
     }
-    document.getElementById('harvestCards').innerHTML = cards.map(([l, v, c]) =>
+    scopedFind(null, 'harvestCards').innerHTML = cards.map(([l, v, c]) =>
       `<div class="metric-card"><div class="label">${l}</div><div class="value ${c}">${v}</div></div>`
     ).join('');
 
     const hasNetBenefit = filtered.some(c => c.net_benefit_eur != null);
-    const ht = document.getElementById('harvestTable');
+    const ht = scopedFind(null, 'harvestTable');
     ht.innerHTML =
       '<thead><tr>' +
       '<th>'+t('tax.harvest.col.ticker')+'</th>' +

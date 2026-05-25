@@ -1,18 +1,18 @@
 <div class="page-stack">
-<section class="card" id="txStatsSection" style="display:none">
+<section class="card" data-role="txStatsSection" style="display:none">
   <h2>Trading Activity</h2>
-  <div id="txStats" class="card-grid"></div>
+  <div data-role="txStats" class="card-grid"></div>
 </section>
 
 <section class="card">
   <h2>Transaction History</h2>
   <div class="toolbar">
-    <input type="text" id="txFilter" placeholder="Filter by ticker or type…">
-    <span id="txCount"></span>
+    <input type="text" data-role="txFilter" placeholder="Filter by ticker or type…">
+    <span data-role="txCount"></span>
   </div>
   <div class="table-scroll">
-    <table id="txTable" class="data-table sortable"></table>
+    <table data-role="txTable" class="data-table sortable"></table>
   </div>
-  <div id="txPagination" class="pagination"></div>
+  <div data-role="txPagination" class="pagination"></div>
 </section>
 </div>

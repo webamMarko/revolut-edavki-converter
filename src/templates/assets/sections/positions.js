@@ -8,7 +8,7 @@ const _ALLOC_COLORS = [
 
 function updateAllocation() {
   const positions = getActivePositions();
-  const section = document.getElementById('allocationSection');
+  const section = scopedFind(null, 'allocationSection');
   if (positions.length === 0) { section.style.display = 'none'; return; }
   section.style.display = '';
 
@@ -31,7 +31,7 @@ function updateAllocation() {
 
   // Build chart
   if (_allocationChart) { _allocationChart.destroy(); _allocationChart = null; }
-  const canvas = document.getElementById('allocationChart');
+  const canvas = scopedFind(null, 'allocationChart');
   _allocationChart = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
     data: {
@@ -60,7 +60,7 @@ function updateAllocation() {
   });
 
   // Build legend
-  const legend = document.getElementById('allocationLegend');
+  const legend = scopedFind(null, 'allocationLegend');
   legend.innerHTML = items.map((item, i) =>
     `<div class="alloc-item">`
     + `<span class="alloc-dot" style="background:${_ALLOC_COLORS[i % _ALLOC_COLORS.length]}"></span>`
@@ -75,13 +75,13 @@ let _currencyChart = null;
 const _CURRENCY_COLORS = ['#6366f1','#f59e0b','#34d399','#f87171','#a78bfa','#38bdf8','#fb923c'];
 
 function updateCurrencyExposure() {
-  const section = document.getElementById('currencySection');
+  const section = scopedFind(null, 'currencySection');
   const data = D.currency_exposure;
   if (!data || data.length === 0) { section.style.display = 'none'; return; }
   section.style.display = '';
 
   if (_currencyChart) { _currencyChart.destroy(); _currencyChart = null; }
-  const canvas = document.getElementById('currencyChart');
+  const canvas = scopedFind(null, 'currencyChart');
 
   _currencyChart = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
@@ -110,7 +110,7 @@ function updateCurrencyExposure() {
     },
   });
 
-  const legend = document.getElementById('currencyLegend');
+  const legend = scopedFind(null, 'currencyLegend');
   legend.innerHTML = data.map((d, i) =>
     `<div class="alloc-item">`
     + `<span class="alloc-dot" style="background:${_CURRENCY_COLORS[i % _CURRENCY_COLORS.length]}"></span>`
@@ -157,7 +157,7 @@ function _renderLots(ticker, currentPrice) {
 // --- Diversification metrics ---
 function updateConcentration() {
   const positions = getActivePositions();
-  const section = document.getElementById('concentrationSection');
+  const section = scopedFind(null, 'concentrationSection');
   if (positions.length < 3) { section.style.display = 'none'; return; }
   section.style.display = '';
 
@@ -183,7 +183,7 @@ function updateConcentration() {
     : null;
   const largestPct = largest ? (largest.market_value_eur / totalMV * 100) : 0;
 
-  const el = document.getElementById('concentrationCards');
+  const el = scopedFind(null, 'concentrationCards');
   el.innerHTML = [
     [t('concentration.positions'), positions.length, ''],
     [t('concentration.effective'), effectiveN, '', t('concentration.effective_sub')],
@@ -400,7 +400,7 @@ function _makePositionsSortable(table, positions) {
 
 function updateAttribution() {
   const positions = getActivePositions();
-  const section = document.getElementById('attributionSection');
+  const section = scopedFind(null, 'attributionSection');
   if (positions.length < 2) { section.style.display = 'none'; return; }
   section.style.display = '';
 
@@ -414,7 +414,7 @@ function updateAttribution() {
     return { ...p, totalPL, contribution };
   }).sort((a, b) => b.contribution - a.contribution);
 
-  const at = document.getElementById('attributionTable');
+  const at = scopedFind(null, 'attributionTable');
   at.innerHTML = '<thead><tr>'
     + '<th>' + t('pos.ticker') + '</th>'
     + '<th>' + t('pos.weight') + '</th>'
@@ -445,11 +445,11 @@ function updateAttribution() {
 
 function updatePositions() {
   const positions = getActivePositions();
-  const section = document.getElementById('positionsSection');
+  const section = scopedFind(null, 'positionsSection');
   if (positions.length === 0) { section.style.display = 'none'; return; }
   section.style.display = '';
 
-  const pt = document.getElementById('positionsTable');
+  const pt = scopedFind(null, 'positionsTable');
 
   // Destroy all existing mini-charts before rebuilding
   Object.keys(_posCharts).forEach(_destroyPosChart);
@@ -585,11 +585,11 @@ function updatePositions() {
 
 function updateClosedPositions() {
   const closed = getActiveClosedPositions();
-  const section = document.getElementById('closedPositionsSection');
+  const section = scopedFind(null, 'closedPositionsSection');
   if (closed.length === 0) { section.style.display = 'none'; return; }
   section.style.display = '';
 
-  const ct = document.getElementById('closedPositionsTable');
+  const ct = scopedFind(null, 'closedPositionsTable');
   ct.innerHTML = '<thead><tr>'
     + '<th>' + t('pos.ticker') + '</th>'
     + '<th>' + t('pos.cost_basis') + '</th>'
@@ -613,7 +613,7 @@ function updateClosedPositions() {
 
 // --- Export positions to CSV ---
 (function() {
-  const btn = document.getElementById('exportPositionsBtn');
+  const btn = scopedFind(null, 'exportPositionsBtn');
   if (!btn) return;
   btn.addEventListener('click', function() {
     const positions = getActivePositions();
@@ -648,26 +648,26 @@ function updateClosedPositions() {
   let _simChart = null;
   const _simAdjustments = {};
 
-  document.getElementById('simulateBtn').textContent = t('sim.simulate');
-  document.getElementById('simResetBtn').textContent = t('sim.reset');
-  document.getElementById('simCloseBtn').textContent = t('sim.close');
+  scopedFind(null, 'simulateBtn').textContent = t('sim.simulate');
+  scopedFind(null, 'simResetBtn').textContent = t('sim.reset');
+  scopedFind(null, 'simCloseBtn').textContent = t('sim.close');
   var _simTaxEfficient = true;
-  document.getElementById('simulateBtn').addEventListener('click', function() {
-    var section = document.getElementById('simulatorSection');
+  scopedFind(null, 'simulateBtn').addEventListener('click', function() {
+    var section = scopedFind(null, 'simulatorSection');
     section.style.display = section.style.display === 'none' ? '' : 'none';
     if (section.style.display !== 'none') _renderSimulator();
   });
-  document.getElementById('simCloseBtn').addEventListener('click', function() {
-    document.getElementById('simulatorSection').style.display = 'none';
+  scopedFind(null, 'simCloseBtn').addEventListener('click', function() {
+    scopedFind(null, 'simulatorSection').style.display = 'none';
   });
-  document.getElementById('simResetBtn').addEventListener('click', function() {
+  scopedFind(null, 'simResetBtn').addEventListener('click', function() {
     for (var k in _simAdjustments) delete _simAdjustments[k];
     _renderSimulator();
   });
-  var taxEffToggle = document.getElementById('simTaxEfficientToggle');
+  var taxEffToggle = scopedFind(null, 'simTaxEfficientToggle');
   if (taxEffToggle) {
     taxEffToggle.checked = _simTaxEfficient;
-    document.getElementById('simTaxEfficientLabel').textContent = t('sim.tax_efficient');
+    scopedFind(null, 'simTaxEfficientLabel').textContent = t('sim.tax_efficient');
     taxEffToggle.addEventListener('change', function() {
       _simTaxEfficient = this.checked;
       _renderSimulator();
@@ -720,9 +720,9 @@ function updateClosedPositions() {
     var positions = getActivePositions();
     if (positions.length === 0) return;
 
-    document.getElementById('simTitle').textContent = t('sim.title');
-    document.getElementById('simDesc').textContent = t('sim.desc');
-    document.getElementById('simAllocTitle').textContent = t('sim.alloc_title');
+    scopedFind(null, 'simTitle').textContent = t('sim.title');
+    scopedFind(null, 'simDesc').textContent = t('sim.desc');
+    scopedFind(null, 'simAllocTitle').textContent = t('sim.alloc_title');
 
     var sorted = positions.slice().sort(function(a, b) { return b.market_value_eur - a.market_value_eur; });
     var totalCurrent = sorted.reduce(function(s, p) { return s + p.market_value_eur; }, 0);
@@ -743,7 +743,7 @@ function updateClosedPositions() {
     }
     var hasSales = Object.keys(taxByTicker).length > 0;
 
-    document.getElementById('simCards').innerHTML = [
+    scopedFind(null, 'simCards').innerHTML = [
       [t('sim.current_value'), fmtCcy(totalCurrent), ''],
       [t('sim.simulated_value'), fmtCcy(totalAdj), ''],
       [t('sim.change'), signCcy(totalChange), cls(totalChange)],
@@ -779,7 +779,7 @@ function updateClosedPositions() {
         + '</tr>';
     }
     html += '</tbody>';
-    document.getElementById('simTable').innerHTML = html;
+    scopedFind(null, 'simTable').innerHTML = html;
 
     // Attach input handlers
     document.querySelectorAll('.sim-input').forEach(function(input) {
@@ -815,7 +815,7 @@ function updateClosedPositions() {
     }
     if (otherVal > 0) items.push({ticker: t('alloc.other'), value: otherVal, pct: otherVal / totalAdj * 100});
 
-    var canvas = document.getElementById('simChart');
+    var canvas = scopedFind(null, 'simChart');
     _simChart = new Chart(canvas.getContext('2d'), {
       type: 'doughnut',
       data: {
@@ -839,7 +839,7 @@ function updateClosedPositions() {
       },
     });
 
-    var legend = document.getElementById('simLegend');
+    var legend = scopedFind(null, 'simLegend');
     legend.innerHTML = items.map(function(item, i) {
       return '<div class="alloc-item">'
         + '<span class="alloc-dot" style="background:' + _ALLOC_COLORS[i % _ALLOC_COLORS.length] + '"></span>'
@@ -851,15 +851,15 @@ function updateClosedPositions() {
 
   // --- Correlation matrix ---
   window.updateCorrelation = function() {
-    const section = document.getElementById('correlationSection');
+    const section = scopedFind(null, 'correlationSection');
     const corr = D.correlation;
     if (!corr || !corr.tickers || corr.tickers.length < 2) {
       if (section) section.style.display = 'none';
       return;
     }
     section.style.display = '';
-    document.getElementById('correlationTitle').textContent = t('correlation.title');
-    document.getElementById('correlationDesc').textContent =
+    scopedFind(null, 'correlationTitle').textContent = t('correlation.title');
+    scopedFind(null, 'correlationDesc').textContent =
       t('correlation.desc', {days: corr.data_points});
 
     const tickers = corr.tickers;
@@ -892,7 +892,7 @@ function updateClosedPositions() {
       html += '</tr>';
     }
     html += '</tbody></table>';
-    document.getElementById('correlationGrid').innerHTML = html;
+    scopedFind(null, 'correlationGrid').innerHTML = html;
   };
 
   // --- Sector allocation ---
@@ -905,7 +905,7 @@ function updateClosedPositions() {
 
   window.updateSectorAllocation = function() {
     const sa = D.sector_allocation;
-    const row = document.getElementById('sectorRow');
+    const row = scopedFind(null, 'sectorRow');
     if (!sa || !sa.sectors || sa.sectors.length === 0) {
       if (row) row.style.display = 'none';
       return;
@@ -919,12 +919,12 @@ function updateClosedPositions() {
     }
     row.style.display = '';
 
-    document.getElementById('sectorTitle').textContent = t('sector.title');
-    document.getElementById('industryTitle').textContent = t('sector.industry_title');
+    scopedFind(null, 'sectorTitle').textContent = t('sector.title');
+    scopedFind(null, 'industryTitle').textContent = t('sector.industry_title');
 
     // Sector donut chart
     if (_sectorChart) { _sectorChart.destroy(); _sectorChart = null; }
-    const canvas = document.getElementById('sectorChart');
+    const canvas = scopedFind(null, 'sectorChart');
     _sectorChart = new Chart(canvas.getContext('2d'), {
       type: 'doughnut',
       data: {
@@ -953,7 +953,7 @@ function updateClosedPositions() {
     });
 
     // Sector legend
-    const legend = document.getElementById('sectorLegend');
+    const legend = scopedFind(null, 'sectorLegend');
     legend.innerHTML = sectors.map((s, i) =>
       `<div class="alloc-item">`
       + `<span class="alloc-dot" style="background:${_SECTOR_COLORS[i % _SECTOR_COLORS.length]}"></span>`
@@ -964,7 +964,7 @@ function updateClosedPositions() {
 
     // Industry table
     const industries = (sa.industries || []).filter(i => i.pct > 0);
-    const it = document.getElementById('industryTable');
+    const it = scopedFind(null, 'industryTable');
     if (industries.length > 0) {
       it.innerHTML =
         '<thead><tr><th>'+t('sector.col.industry')+'</th><th>'+t('sector.col.value')+'</th><th>'+t('sector.col.pct')+'</th></tr></thead><tbody>' +

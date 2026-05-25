@@ -1,9 +1,9 @@
 // --- Quick Glance (mobile) ---
 (function() {
   var QG_PREF_KEY = 'qg_always_mobile';
-  var qgEl = document.getElementById('quickGlance');
-  var qgToggle = document.getElementById('qgAlwaysToggle');
-  var qgExpandBtn = document.getElementById('qgExpandBtn');
+  var qgEl = scopedFind(null, 'quickGlance');
+  var qgToggle = scopedFind(null, 'qgAlwaysToggle');
+  var qgExpandBtn = scopedFind(null, 'qgExpandBtn');
   if (!qgEl) return;
 
   var sparkChart = null;
@@ -43,11 +43,11 @@
     var changePct = prevValue > 0 ? (change / prevValue) * 100 : 0;
 
     // Portfolio value
-    document.getElementById('qgValue').textContent = fmtCcy(currentValue);
+    scopedFind(null, 'qgValue').textContent = fmtCcy(currentValue);
 
     // Today's change
-    var amountEl = document.getElementById('qgChangeAmount');
-    var pctEl = document.getElementById('qgChangePct');
+    var amountEl = scopedFind(null, 'qgChangeAmount');
+    var pctEl = scopedFind(null, 'qgChangePct');
     amountEl.textContent = signCcy(change);
     amountEl.className = 'qg-change-amount ' + cls(change);
     pctEl.textContent = '(' + sign(changePct) + '%)';
@@ -64,7 +64,7 @@
   }
 
   function renderSparkline(data) {
-    var canvas = document.getElementById('qgSparkline');
+    var canvas = scopedFind(null, 'qgSparkline');
     if (!canvas) return;
 
     if (sparkChart) {
@@ -105,7 +105,7 @@
   }
 
   function renderMovers() {
-    var list = document.getElementById('qgMoversList');
+    var list = scopedFind(null, 'qgMoversList');
     if (!list) return;
 
     var positions = getActivePositions();
@@ -144,8 +144,8 @@
   }
 
   function renderActions() {
-    var actionsEl = document.getElementById('qgActions');
-    var badgeEl = document.getElementById('qgActionsBadge');
+    var actionsEl = scopedFind(null, 'qgActions');
+    var badgeEl = scopedFind(null, 'qgActionsBadge');
     if (!actionsEl || !badgeEl) return;
 
     // Count notifications from the badge system

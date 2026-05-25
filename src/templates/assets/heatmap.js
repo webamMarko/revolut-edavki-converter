@@ -1,6 +1,6 @@
 // --- Monthly heatmap ---
 function buildHeatmap() {
-  const el = document.getElementById('heatmap');
+  const el = scopedFind(null, 'heatmap');
   if (!el || ds.dates.length === 0) return;
   const dates = ds.dates;
   const hasPerfIdx = ds.perf_index && ds.perf_index.length === dates.length;
@@ -65,8 +65,8 @@ let _drawdownChart = null;
 function buildDrawdownChart() {
   if (_drawdownChart) { _drawdownChart.destroy(); _drawdownChart = null; }
 
-  const section = document.getElementById('drawdownSection');
-  const canvas = document.getElementById('drawdownChart');
+  const section = scopedFind(null, 'drawdownSection');
+  const canvas = scopedFind(null, 'drawdownChart');
   if (!canvas || !ds.dates || ds.dates.length < 10) { section.style.display = 'none'; return; }
 
   const pi = (ds.perf_index && ds.perf_index.length === ds.dates.length) ? ds.perf_index : ds.value_eur;
@@ -137,7 +137,7 @@ function buildDrawdownChart() {
 
 // --- Yearly heatmap ---
 function buildYearlyHeatmap() {
-  const el = document.getElementById('yearly-heatmap');
+  const el = scopedFind(null, 'yearly-heatmap');
   if (!el || ds.dates.length === 0) return;
   const dates = ds.dates;
   const hasPerfIdx = ds.perf_index && ds.perf_index.length === dates.length;
@@ -216,9 +216,9 @@ function buildYearlyHeatmap() {
 
 // --- Annual Summary Table ---
 function buildYearlyTable() {
-  const el = document.getElementById('yearlyTable');
+  const el = scopedFind(null, 'yearlyTable');
   if (!el || ds.dates.length === 0) return;
-  const section = document.getElementById('yearlyTableSection');
+  const section = scopedFind(null, 'yearlyTableSection');
 
   const dates = ds.dates;
   const hasPerfIdx = ds.perf_index && ds.perf_index.length === dates.length;
@@ -297,8 +297,8 @@ let _rollingChart = null;
 function buildRollingReturns() {
   if (_rollingChart) { _rollingChart.destroy(); _rollingChart = null; }
 
-  const section = document.getElementById('rollingReturnsSection');
-  const canvas = document.getElementById('rollingReturnsChart');
+  const section = scopedFind(null, 'rollingReturnsSection');
+  const canvas = scopedFind(null, 'rollingReturnsChart');
   if (!canvas || !ds.dates || ds.dates.length < 252) { section.style.display = 'none'; return; }
 
   const pi = (ds.perf_index && ds.perf_index.length === ds.dates.length) ? ds.perf_index : ds.value_eur;

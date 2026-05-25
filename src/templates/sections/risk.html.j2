@@ -1,54 +1,54 @@
 <div class="page-stack">
-<section class="card" id="riskWarningsSection" style="display:none">
+<section class="card" data-role="riskWarningsSection" style="display:none">
   <h2>Concentration Warnings</h2>
   <p style="color:var(--muted);font-size:0.8rem;margin:-0.5rem 0 0.75rem">Positions exceeding 20% of portfolio value</p>
-  <div id="riskWarnings"></div>
+  <div data-role="riskWarnings"></div>
 </section>
 
-<section class="card" id="riskMetricsSection" style="display:none">
+<section class="card" data-role="riskMetricsSection" style="display:none">
   <h2>Concentration Metrics</h2>
-  <div id="riskMetricsCards" class="card-grid"></div>
+  <div data-role="riskMetricsCards" class="card-grid"></div>
 </section>
 
-<div class="two-col" id="riskGeoRow" style="display:none">
-  <section class="card" id="geoSection">
+<div class="two-col" data-role="riskGeoRow" style="display:none">
+  <section class="card" data-role="geoSection">
     <h2>Geographic Exposure</h2>
     <div class="allocation-wrap">
       <div class="allocation-chart-col">
-        <canvas id="geoChart"></canvas>
+        <canvas data-role="geoChart"></canvas>
       </div>
-      <div class="allocation-legend" id="geoLegend"></div>
+      <div class="allocation-legend" data-role="geoLegend"></div>
     </div>
   </section>
-  <section class="card" id="geoTableSection">
+  <section class="card" data-role="geoTableSection">
     <h2>Country Breakdown</h2>
     <div class="table-scroll">
-      <table id="geoTable" class="data-table sortable"></table>
+      <table data-role="geoTable" class="data-table sortable"></table>
     </div>
   </section>
 </div>
 
-<div class="two-col" id="riskSectorRow" style="display:none">
-  <section class="card" id="riskSectorSection">
+<div class="two-col" data-role="riskSectorRow" style="display:none">
+  <section class="card" data-role="riskSectorSection">
     <h2>Sector Concentration</h2>
     <div class="allocation-wrap">
       <div class="allocation-chart-col">
-        <canvas id="riskSectorChart"></canvas>
+        <canvas data-role="riskSectorChart"></canvas>
       </div>
-      <div class="allocation-legend" id="riskSectorLegend"></div>
+      <div class="allocation-legend" data-role="riskSectorLegend"></div>
     </div>
   </section>
-  <section class="card" id="riskIndustrySection">
+  <section class="card" data-role="riskIndustrySection">
     <h2>Industry Breakdown</h2>
     <div class="table-scroll">
-      <table id="riskIndustryTable" class="data-table sortable"></table>
+      <table data-role="riskIndustryTable" class="data-table sortable"></table>
     </div>
   </section>
 </div>
 
-<section class="card" id="riskCorrelationSection" style="display:none">
+<section class="card" data-role="riskCorrelationSection" style="display:none">
   <h2>Correlation Heatmap</h2>
-  <p style="color:var(--muted);font-size:0.8rem;margin:-0.5rem 0 0.75rem" id="riskCorrelationDesc"></p>
-  <div class="table-scroll" id="riskCorrelationGrid"></div>
+  <p style="color:var(--muted);font-size:0.8rem;margin:-0.5rem 0 0.75rem" data-role="riskCorrelationDesc"></p>
+  <div class="table-scroll" data-role="riskCorrelationGrid"></div>
 </section>
 </div>

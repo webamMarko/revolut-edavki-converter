@@ -2,8 +2,8 @@
 let _gainsChart = null;
 
 function updateGains() {
-  const gt = document.getElementById('gainsTable');
-  const wrap = document.getElementById('gainsChartWrap');
+  const gt = scopedFind(null, 'gainsTable');
+  const wrap = scopedFind(null, 'gainsChartWrap');
   if (isZoomed) {
     const m = computePeriodMetrics(selStart, selEnd);
     const unrealized = m.endVal - m.endInv - ds.realized_gain_eur[selEnd];
@@ -34,8 +34,8 @@ function updateGains() {
 
 function _buildGainsChart(items) {
   if (_gainsChart) { _gainsChart.destroy(); _gainsChart = null; }
-  const wrap = document.getElementById('gainsChartWrap');
-  const canvas = document.getElementById('gainsChart');
+  const wrap = scopedFind(null, 'gainsChartWrap');
+  const canvas = scopedFind(null, 'gainsChart');
   if (!canvas || items.length === 0) { wrap.style.display = 'none'; return; }
 
   // Filter out near-zero items

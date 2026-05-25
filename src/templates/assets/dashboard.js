@@ -2,6 +2,46 @@
  * Custom Dashboard - Gridstack.js initialization and event handlers
  */
 
+/**
+ * Maps widget IDs to their section init functions.
+ * Each init function receives the widget's inner container element so that
+ * scopedFind(container, role) resolves elements within that widget clone,
+ * not the hidden #widgetTemplates pool or the predefined page elements.
+ *
+ * Functions must be defined after section JS is loaded; this object is
+ * populated lazily on first access via getWidgetInitFn().
+ */
+const WIDGET_INIT_MAP = {
+  'quick-glance':  function(c) { if (typeof renderQuickGlanceWidget === 'function') renderQuickGlanceWidget(c); },
+  'health-score':  function(c) { if (typeof initHealthScore === 'function') initHealthScore(c); },
+  'summary':       function(c) { if (typeof updateSummary === 'function') updateSummary(c); if (typeof updateTopMovers === 'function') updateTopMovers(c); if (typeof updateMilestones === 'function') updateMilestones(c); },
+  'charts':        function(c) { if (typeof buildPortfolioChartIn === 'function') buildPortfolioChartIn(c); },
+  'positions':     function(c) { if (typeof updateAllocation === 'function') updateAllocation(c); if (typeof updatePositions === 'function') updatePositions(c); },
+  'dividends':     function(c) { if (typeof updateDividends === 'function') updateDividends(c); },
+  'projections':   function(c) { if (typeof updateFire === 'function') updateFire(c); },
+  'notes':         function(c) { if (typeof initNotesWidget === 'function') initNotesWidget(c); },
+  'real-estate':   function(c) { if (typeof updateRealEstate === 'function') updateRealEstate(c); },
+  'risk':          function(c) { if (typeof updateRiskPage === 'function') updateRiskPage(c); },
+  'dca-strategy':  function(c) { if (typeof updateDCAStrategy === 'function') updateDCAStrategy(c); },
+  'tax-summary':   function(c) { if (typeof updateTaxTable === 'function') updateTaxTable(c); },
+  'tax-calendar':  function(c) { if (typeof updateYearEndCalendar === 'function') updateYearEndCalendar(c); },
+  'smart-sell':    function(c) { if (typeof updateSmartSell === 'function') updateSmartSell(c); },
+  'tax-wizard':    function(c) { if (typeof initTaxWizardWidget === 'function') initTaxWizardWidget(c); },
+  'transactions':  function(c) { if (typeof updateTransactions === 'function') updateTransactions(c); },
+};
+
+/**
+ * Destroy any Chart.js instances living inside a widget container.
+ * Called before removeWidget to prevent memory leaks.
+ */
+function destroyWidgetCharts(container) {
+  if (!container || typeof Chart === 'undefined') return;
+  container.querySelectorAll('canvas').forEach(function(canvas) {
+    var chart = Chart.getChart(canvas);
+    if (chart) chart.destroy();
+  });
+}
+
 const WIDGET_REGISTRY = {
   'quick-glance': { label: 'Quick Glance', minW: 3, minH: 2 },
   'health-score': { label: 'Health Score', minW: 3, minH: 2 },
@@ -173,6 +213,14 @@ function renderWidgets(widgets) {
 
     // Add to grid
     gridstack.addWidget(item);
+
+    // Initialize section inside the widget clone so charts/tables bind
+    // to this specific container rather than the hidden #widgetTemplates pool.
+    const initFn = WIDGET_INIT_MAP[id];
+    if (initFn) {
+      // Use requestAnimationFrame so the widget is visible/sized before init
+      requestAnimationFrame(function() { initFn(innerDiv); });
+    }
   });
 }
 
@@ -296,6 +344,12 @@ function addWidget(widgetId) {
 
   // Add to grid
   gridstack.addWidget(item);
+
+  // Initialize section content in this new widget clone
+  const initFn = WIDGET_INIT_MAP[widgetId];
+  if (initFn) {
+    requestAnimationFrame(function() { initFn(innerDiv); });
+  }
 }
 
 /**
@@ -306,6 +360,8 @@ function removeWidget(widgetId) {
 
   const item = document.querySelector(`[data-widget-id="${widgetId}"]`);
   if (item) {
+    // Destroy any Chart.js instances before removing to free memory
+    destroyWidgetCharts(item);
     gridstack.removeWidget(item);
   }
 }

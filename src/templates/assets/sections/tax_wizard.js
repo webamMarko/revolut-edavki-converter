@@ -1,6 +1,6 @@
 // --- Tax Wizard ---
 (function() {
-  var wizard = document.getElementById('wizardStepper');
+  var wizard = scopedFind(null, 'wizardStepper');
   if (!wizard) return;
 
   var STORAGE_KEY = 'taxWizardState';
@@ -49,7 +49,7 @@
 
   // Render year grid
   function renderYearGrid() {
-    var grid = document.getElementById('wizardYearGrid');
+    var grid = scopedFind(null, 'wizardYearGrid');
     if (!grid) return;
     grid.innerHTML = '';
     allYears.forEach(function(yr) {
@@ -69,8 +69,8 @@
 
   // Render capital gains summary for step 2
   function renderCapGains() {
-    var cards = document.getElementById('wizCapGainsCards');
-    var detail = document.getElementById('wizCapGainsDetail');
+    var cards = scopedFind(null, 'wizCapGainsCards');
+    var detail = scopedFind(null, 'wizCapGainsDetail');
     if (!cards) return;
 
     var ty = tby[selectedYear];
@@ -116,8 +116,8 @@
 
   // Render dividend summary for step 3
   function renderDividends() {
-    var cards = document.getElementById('wizDivCards');
-    var detail = document.getElementById('wizDivDetail');
+    var cards = scopedFind(null, 'wizDivCards');
+    var detail = scopedFind(null, 'wizDivDetail');
     if (!cards) return;
 
     var data = dtby[selectedYear];
@@ -151,10 +151,10 @@
 
   // Step 4: Doh-KDVP download
   function renderDownloadKdvp() {
-    var yearEl = document.getElementById('wizKdvpYear');
+    var yearEl = scopedFind(null, 'wizKdvpYear');
     if (yearEl) yearEl.textContent = selectedYear;
 
-    var btn = document.getElementById('wizDownloadKdvp');
+    var btn = scopedFind(null, 'wizDownloadKdvp');
     if (btn && !btn._wired) {
       btn._wired = true;
       btn.addEventListener('click', function() {
@@ -173,12 +173,12 @@
 
   // Step 5: Doh-Div download
   function renderDownloadDohDiv() {
-    var yearEl = document.getElementById('wizDivYear');
+    var yearEl = scopedFind(null, 'wizDivYear');
     if (yearEl) yearEl.textContent = selectedYear;
 
     var hasDiv = !!dtby[selectedYear];
-    var btn = document.getElementById('wizDownloadDohDiv');
-    var noData = document.getElementById('wizNoDivData');
+    var btn = scopedFind(null, 'wizDownloadDohDiv');
+    var noData = scopedFind(null, 'wizNoDivData');
 
     if (!hasDiv) {
       if (btn) btn.style.display = 'none';
@@ -220,9 +220,9 @@
   }
 
   // Navigation
-  var btnNext = document.getElementById('wizBtnNext');
-  var btnBack = document.getElementById('wizBtnBack');
-  var progressText = document.getElementById('wizProgressText');
+  var btnNext = scopedFind(null, 'wizBtnNext');
+  var btnBack = scopedFind(null, 'wizBtnBack');
+  var progressText = scopedFind(null, 'wizProgressText');
 
   function goToStep(step) {
     if (step < 1) step = 1;
@@ -238,14 +238,14 @@
 
     // Show/hide panels
     for (var i = 1; i <= totalSteps; i++) {
-      var panel = document.getElementById('wizStep' + i);
+      var panel = scopedFind(null, 'wizStep' + i);
       if (panel) panel.style.display = (i === step) ? '' : 'none';
     }
-    var donePanel = document.getElementById('wizStepDone');
+    var donePanel = scopedFind(null, 'wizStepDone');
     if (donePanel) donePanel.style.display = (step > totalSteps) ? '' : 'none';
 
     // Footer
-    var footer = document.getElementById('wizardFooter');
+    var footer = scopedFind(null, 'wizardFooter');
     if (footer) footer.style.display = (step > totalSteps) ? 'none' : '';
     if (btnBack) btnBack.style.display = (step <= 1) ? 'none' : '';
     if (btnNext) {
@@ -272,12 +272,12 @@
   }
 
   function renderDone() {
-    var el = document.getElementById('wizDoneYear');
+    var el = scopedFind(null, 'wizDoneYear');
     if (el) el.textContent = selectedYear;
     localStorage.setItem('tax_wizard_completed', new Date().toISOString().slice(0, 10));
     if (typeof updateAchievements === 'function') updateAchievements();
     if (typeof showAchievementToasts === 'function') showAchievementToasts();
-    var btn = document.getElementById('wizDoneBtn');
+    var btn = scopedFind(null, 'wizDoneBtn');
     if (btn && !btn._wired) {
       btn._wired = true;
       btn.addEventListener('click', function() {
@@ -308,13 +308,13 @@
   });
 
   // Close button returns to Summary sub-tab
-  var closeBtn = document.getElementById('wizardCloseBtn');
+  var closeBtn = scopedFind(null, 'wizardCloseBtn');
   if (closeBtn) closeBtn.addEventListener('click', function() {
     if (window.switchTaxSubtab) window.switchTaxSubtab('summary');
   });
 
   // Done button
-  var doneBtn = document.getElementById('wizDoneBtn');
+  var doneBtn = scopedFind(null, 'wizDoneBtn');
 
   // Initialize
   loadState();

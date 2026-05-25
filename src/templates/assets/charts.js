@@ -21,7 +21,7 @@ const zoomOpts = {
 let portfolioChart, benchmarkChart;
 
 function buildPortfolioChart() {
-  const ctx1 = document.getElementById('portfolioChart').getContext('2d');
+  const ctx1 = scopedFind(null, 'portfolioChart').getContext('2d');
   let chartLabels = allDates.slice();
   let portfolioData = ds.value_eur.slice();
   let investedData  = ds.invested_eur.slice();
@@ -86,12 +86,12 @@ function _benchmarkDatasets() {
 }
 
 function buildBenchmarkChart() {
-  document.getElementById('benchmarkSection').style.display = '';
+  scopedFind(null, 'benchmarkSection').style.display = '';
   if (bKeys.length > 0) {
-    document.getElementById('benchmarkTableCard').style.display = '';
-    document.getElementById('benchmarkSectionTitle').textContent = 'Performance vs Benchmarks';
+    scopedFind(null, 'benchmarkTableCard').style.display = '';
+    scopedFind(null, 'benchmarkSectionTitle').textContent = 'Performance vs Benchmarks';
   }
-  const ctx2 = document.getElementById('benchmarkChart').getContext('2d');
+  const ctx2 = scopedFind(null, 'benchmarkChart').getContext('2d');
   return new Chart(ctx2, {
     type: 'line',
     data: { datasets: _benchmarkDatasets() },

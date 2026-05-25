@@ -2,10 +2,10 @@
   <section class="card tax-wizard-card">
     <div class="wizard-header">
       <h2>File My Taxes</h2>
-      <button class="wizard-close-btn" id="wizardCloseBtn" title="Back to Summary">&times;</button>
+      <button class="wizard-close-btn" data-role="wizardCloseBtn" title="Back to Summary">&times;</button>
     </div>
 
-    <div class="wizard-stepper" id="wizardStepper">
+    <div class="wizard-stepper" data-role="wizardStepper">
       <div class="wizard-step active" data-step="1">
         <div class="wizard-step-num">1</div>
         <span class="wizard-step-label">Tax Year</span>
@@ -39,117 +39,117 @@
 
     <div class="wizard-body">
       <!-- Step 1: Select tax year -->
-      <div class="wizard-panel active" id="wizStep1">
+      <div class="wizard-panel active" data-role="wizStep1">
         <h3>Select Tax Year</h3>
         <p class="wizard-desc">Choose the tax year you are filing for. This is typically the previous calendar year.</p>
-        <div class="wizard-year-grid" id="wizardYearGrid"></div>
+        <div class="wizard-year-grid" data-role="wizardYearGrid"></div>
       </div>
 
       <!-- Step 2: Capital gains review -->
-      <div class="wizard-panel" id="wizStep2" style="display:none">
+      <div class="wizard-panel" data-role="wizStep2" style="display:none">
         <h3>Capital Gains Summary</h3>
         <p class="wizard-desc">Review your realized gains and losses for the selected year. This is what gets reported on the Doh-KDVP form.</p>
-        <div id="wizCapGainsCards" class="card-grid small"></div>
-        <div id="wizCapGainsDetail" class="wizard-detail-table table-scroll"></div>
+        <div data-role="wizCapGainsCards" class="card-grid small"></div>
+        <div data-role="wizCapGainsDetail" class="wizard-detail-table table-scroll"></div>
       </div>
 
       <!-- Step 3: Dividends review -->
-      <div class="wizard-panel" id="wizStep3" style="display:none">
+      <div class="wizard-panel" data-role="wizStep3" style="display:none">
         <h3>Dividend Income Summary</h3>
         <p class="wizard-desc">Review your dividend income for the selected year. This is what gets reported on the Doh-Div form.</p>
-        <div id="wizDivCards" class="card-grid small"></div>
-        <div id="wizDivDetail" class="wizard-detail-table"></div>
+        <div data-role="wizDivCards" class="card-grid small"></div>
+        <div data-role="wizDivDetail" class="wizard-detail-table"></div>
       </div>
 
       <!-- Step 4: Download Doh-KDVP -->
-      <div class="wizard-panel" id="wizStep4" style="display:none">
+      <div class="wizard-panel" data-role="wizStep4" style="display:none">
         <h3>Download Doh-KDVP XML</h3>
         <p class="wizard-desc">This file contains your capital gains data in the format required by eDavki. Download it and save it somewhere accessible.</p>
         <div class="wizard-download-area">
           <div class="wizard-download-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           </div>
-          <button class="wizard-download-btn" id="wizDownloadKdvp">Download Doh-KDVP XML</button>
-          <p class="wizard-download-note">File: <code>Doh-KDVP_<span id="wizKdvpYear"></span>.xml</code></p>
+          <button class="wizard-download-btn" data-role="wizDownloadKdvp">Download Doh-KDVP XML</button>
+          <p class="wizard-download-note">File: <code>Doh-KDVP_<span data-role="wizKdvpYear"></span>.xml</code></p>
         </div>
       </div>
 
       <!-- Step 5: Download Doh-Div -->
-      <div class="wizard-panel" id="wizStep5" style="display:none">
+      <div class="wizard-panel" data-role="wizStep5" style="display:none">
         <h3>Download Doh-Div XML</h3>
         <p class="wizard-desc">This file contains your dividend income data. Download it for upload to eDavki.</p>
         <div class="wizard-download-area">
           <div class="wizard-download-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           </div>
-          <button class="wizard-download-btn" id="wizDownloadDohDiv">Download Doh-Div XML</button>
-          <p class="wizard-download-note">File: <code>Doh-Div_<span id="wizDivYear"></span>.xml</code></p>
+          <button class="wizard-download-btn" data-role="wizDownloadDohDiv">Download Doh-Div XML</button>
+          <p class="wizard-download-note">File: <code>Doh-Div_<span data-role="wizDivYear"></span>.xml</code></p>
         </div>
-        <div id="wizNoDivData" class="wizard-empty-note" style="display:none">
+        <div data-role="wizNoDivData" class="wizard-empty-note" style="display:none">
           <p>No dividend income recorded for this year. You can skip this step.</p>
         </div>
       </div>
 
       <!-- Step 6: eDavki upload checklist -->
-      <div class="wizard-panel" id="wizStep6" style="display:none">
+      <div class="wizard-panel" data-role="wizStep6" style="display:none">
         <h3>Upload to eDavki</h3>
         <p class="wizard-desc">Follow this checklist to complete your filing on the eDavki portal.</p>
         <div class="wizard-checklist">
           <label class="wizard-check-item">
-            <input type="checkbox" id="wizCheck1" class="wizard-checkbox">
+            <input type="checkbox" data-role="wizCheck1" class="wizard-checkbox">
             <span>Go to <strong>edavki.durs.si</strong> and log in with your digital certificate</span>
           </label>
           <label class="wizard-check-item">
-            <input type="checkbox" id="wizCheck2" class="wizard-checkbox">
+            <input type="checkbox" data-role="wizCheck2" class="wizard-checkbox">
             <span>Navigate to <strong>Dokumenti &rarr; Oddaj dokument &rarr; Napoved</strong></span>
           </label>
           <label class="wizard-check-item">
-            <input type="checkbox" id="wizCheck3" class="wizard-checkbox">
+            <input type="checkbox" data-role="wizCheck3" class="wizard-checkbox">
             <span>Select <strong>"Doh-KDVP - Napoved za odmero dohodnine od dobička od odsvojitve vrednostnih papirjev..."</strong></span>
           </label>
           <label class="wizard-check-item">
-            <input type="checkbox" id="wizCheck4" class="wizard-checkbox">
+            <input type="checkbox" data-role="wizCheck4" class="wizard-checkbox">
             <span>Click <strong>"Uvozi"</strong> and upload the <code>Doh-KDVP</code> XML file you downloaded</span>
           </label>
           <label class="wizard-check-item">
-            <input type="checkbox" id="wizCheck5" class="wizard-checkbox">
+            <input type="checkbox" data-role="wizCheck5" class="wizard-checkbox">
             <span>Review the imported data, verify totals match, then <strong>submit (Oddaj)</strong></span>
           </label>
           <label class="wizard-check-item">
-            <input type="checkbox" id="wizCheck6" class="wizard-checkbox">
+            <input type="checkbox" data-role="wizCheck6" class="wizard-checkbox">
             <span>Go back to <strong>Oddaj dokument &rarr; Napoved</strong></span>
           </label>
           <label class="wizard-check-item">
-            <input type="checkbox" id="wizCheck7" class="wizard-checkbox">
+            <input type="checkbox" data-role="wizCheck7" class="wizard-checkbox">
             <span>Select <strong>"Doh-Div - Napoved za odmero dohodnine od dividend"</strong></span>
           </label>
           <label class="wizard-check-item">
-            <input type="checkbox" id="wizCheck8" class="wizard-checkbox">
+            <input type="checkbox" data-role="wizCheck8" class="wizard-checkbox">
             <span>Click <strong>"Uvozi"</strong> and upload the <code>Doh-Div</code> XML file</span>
           </label>
           <label class="wizard-check-item">
-            <input type="checkbox" id="wizCheck9" class="wizard-checkbox">
+            <input type="checkbox" data-role="wizCheck9" class="wizard-checkbox">
             <span>Review imported dividends, then <strong>submit (Oddaj)</strong></span>
           </label>
         </div>
       </div>
 
       <!-- Completion screen -->
-      <div class="wizard-panel" id="wizStepDone" style="display:none">
+      <div class="wizard-panel" data-role="wizStepDone" style="display:none">
         <div class="wizard-done">
           <div class="wizard-done-icon">&#10003;</div>
           <h3>You're done!</h3>
-          <p>Your Slovenian tax filing for <strong><span id="wizDoneYear"></span></strong> is complete.</p>
+          <p>Your Slovenian tax filing for <strong><span data-role="wizDoneYear"></span></strong> is complete.</p>
           <p class="wizard-done-sub">Both Doh-KDVP (capital gains) and Doh-Div (dividends) have been submitted to eDavki. You should receive a confirmation email from FURS.</p>
-          <button class="wizard-download-btn" id="wizDoneBtn">Back to Dashboard</button>
+          <button class="wizard-download-btn" data-role="wizDoneBtn">Back to Dashboard</button>
         </div>
       </div>
     </div>
 
-    <div class="wizard-footer" id="wizardFooter">
-      <button class="wizard-btn wizard-btn-back" id="wizBtnBack" style="display:none">Back</button>
-      <div class="wizard-progress-text" id="wizProgressText">Step 1 of 6</div>
-      <button class="wizard-btn wizard-btn-next" id="wizBtnNext">Continue</button>
+    <div class="wizard-footer" data-role="wizardFooter">
+      <button class="wizard-btn wizard-btn-back" data-role="wizBtnBack" style="display:none">Back</button>
+      <div class="wizard-progress-text" data-role="wizProgressText">Step 1 of 6</div>
+      <button class="wizard-btn wizard-btn-next" data-role="wizBtnNext">Continue</button>
     </div>
   </section>
 </div>

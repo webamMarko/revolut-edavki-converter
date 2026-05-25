@@ -1,17 +1,17 @@
 // --- Portfolio Health Score ---
 (function() {
   var hs = D.health_score;
-  var section = document.getElementById('healthScoreSection');
+  var section = scopedFind(null, 'healthScoreSection');
   if (!hs || !section) return;
 
   section.style.display = '';
 
   // Overall badge
-  var grade = document.getElementById('healthScoreGrade');
-  var num   = document.getElementById('healthScoreNum');
-  var lbl   = document.getElementById('healthScoreLabel');
-  var fill  = document.getElementById('healthScoreBarFill');
-  var badge = document.getElementById('healthScoreBadge');
+  var grade = scopedFind(null, 'healthScoreGrade');
+  var num   = scopedFind(null, 'healthScoreNum');
+  var lbl   = scopedFind(null, 'healthScoreLabel');
+  var fill  = scopedFind(null, 'healthScoreBarFill');
+  var badge = scopedFind(null, 'healthScoreBadge');
 
   if (grade) grade.textContent = hs.grade;
   if (num)   num.textContent   = Math.round(hs.overall) + '/100';
@@ -27,7 +27,7 @@
   if (badge) badge.style.setProperty('--hs-color', barColor);
 
   // Sub-scores
-  var subEl = document.getElementById('healthSubScores');
+  var subEl = scopedFind(null, 'healthSubScores');
   if (subEl && hs.sub_scores) {
     var catIcons = {
       'Diversification':    '&#9635;',
@@ -53,8 +53,8 @@
   }
 
   // Actions
-  var actionsSection = document.getElementById('healthActions');
-  var actionsList    = document.getElementById('healthActionsList');
+  var actionsSection = scopedFind(null, 'healthActions');
+  var actionsList    = scopedFind(null, 'healthActionsList');
   if (actionsSection && actionsList && hs.actions && hs.actions.length > 0) {
     var catClass = {
       concentration: 'action-concentration',

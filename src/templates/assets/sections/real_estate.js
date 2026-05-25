@@ -2,7 +2,7 @@
 try {
   const RE = D.real_estate;
   if (RE && RE.properties && RE.properties.length > 0) {
-    document.getElementById('realEstateSection').style.display = '';
+    scopedFind(null, 'realEstateSection').style.display = '';
 
     const propTypeLabels = {
       stanovanje: 'Apartment', hisa: 'House', garaza: 'Garage',
@@ -16,7 +16,7 @@ try {
       ['Unrealized Gain', signCcy(RE.total_gain_eur), cls(RE.total_gain_eur),
        sign(RE.total_gain_pct) + '%'],
     ];
-    document.getElementById('reCards').innerHTML = reCards.map(([l, v, c, sub]) =>
+    scopedFind(null, 'reCards').innerHTML = reCards.map(([l, v, c, sub]) =>
       '<div class="metric-card"><div class="label">' + l + '</div><div class="value ' + (c||'') + '">' + v + '</div>' +
       (sub ? '<div class="sub ' + (c||'') + '">' + sub + '</div>' : '') + '</div>'
     ).join('');
@@ -36,7 +36,7 @@ try {
     }).filter(Boolean);
 
     if (reDatasets.length > 0 && typeof Chart !== 'undefined') {
-      const ctx = document.getElementById('reChart').getContext('2d');
+      const ctx = scopedFind(null, 'reChart').getContext('2d');
       new Chart(ctx, {
         type: 'line',
         data: { datasets: reDatasets },
@@ -52,7 +52,7 @@ try {
       });
     }
 
-    const pt = document.getElementById('reTable');
+    const pt = scopedFind(null, 'reTable');
     pt.innerHTML = '<thead><tr><th>Ticker</th><th>Name</th><th>Type</th><th>Area m²</th>' +
       '<th>Purchase Date</th><th>Purchase EUR</th><th>ETN Value EUR</th>' +
       '<th>Gain EUR</th><th>Gain %</th><th>ETN Date</th></tr></thead><tbody>' +

@@ -17,7 +17,7 @@ function updateRiskPage() {
 }
 
 function updateRiskWarnings() {
-  const section = document.getElementById('riskWarningsSection');
+  const section = scopedFind(null, 'riskWarningsSection');
   const cr = D.concentration_risk;
   if (!cr || !cr.warnings || cr.warnings.length === 0) {
     section.style.display = 'none';
@@ -25,7 +25,7 @@ function updateRiskWarnings() {
   }
   section.style.display = '';
 
-  const el = document.getElementById('riskWarnings');
+  const el = scopedFind(null, 'riskWarnings');
   el.innerHTML = cr.warnings.map(w =>
     `<div class="risk-warning-item">`
     + `<div class="risk-warning-icon">&#9888;</div>`
@@ -38,7 +38,7 @@ function updateRiskWarnings() {
 }
 
 function updateRiskMetrics() {
-  const section = document.getElementById('riskMetricsSection');
+  const section = scopedFind(null, 'riskMetricsSection');
   const cr = D.concentration_risk;
   if (!cr || !cr.metrics || !cr.metrics.total_positions) {
     section.style.display = 'none';
@@ -50,7 +50,7 @@ function updateRiskMetrics() {
   const hhiLabel = m.hhi < 1500 ? 'Well Diversified' : m.hhi < 2500 ? 'Moderate' : 'Concentrated';
   const hhiColor = m.hhi < 1500 ? 'pos' : m.hhi < 2500 ? '' : 'neg';
 
-  const el = document.getElementById('riskMetricsCards');
+  const el = scopedFind(null, 'riskMetricsCards');
   el.innerHTML = [
     ['Positions', m.total_positions, ''],
     ['Effective N', m.effective_n, '', 'Diversification-adjusted count'],
@@ -64,7 +64,7 @@ function updateRiskMetrics() {
 }
 
 function updateGeoAllocation() {
-  const row = document.getElementById('riskGeoRow');
+  const row = scopedFind(null, 'riskGeoRow');
   const ga = D.geographic_allocation;
   if (!ga || !ga.countries || ga.countries.length === 0) {
     row.style.display = 'none';
@@ -80,7 +80,7 @@ function updateGeoAllocation() {
 
   // Geo donut chart
   if (_geoChart) { _geoChart.destroy(); _geoChart = null; }
-  const canvas = document.getElementById('geoChart');
+  const canvas = scopedFind(null, 'geoChart');
   _geoChart = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
     data: {
@@ -109,7 +109,7 @@ function updateGeoAllocation() {
   });
 
   // Legend
-  const legend = document.getElementById('geoLegend');
+  const legend = scopedFind(null, 'geoLegend');
   legend.innerHTML = countries.map((c, i) =>
     `<div class="alloc-item">`
     + `<span class="alloc-dot" style="background:${_GEO_COLORS[i % _GEO_COLORS.length]}"></span>`
@@ -119,7 +119,7 @@ function updateGeoAllocation() {
   ).join('');
 
   // Country table
-  const table = document.getElementById('geoTable');
+  const table = scopedFind(null, 'geoTable');
   table.innerHTML = '<thead><tr><th>Country</th><th>Value</th><th>Weight</th></tr></thead><tbody>'
     + countries.map(c =>
       `<tr><td>${c.name}</td><td>${fmtCcy(c.value_eur)}</td><td>${fmt(c.pct, 1)}%</td></tr>`
@@ -129,7 +129,7 @@ function updateGeoAllocation() {
 }
 
 function updateRiskSector() {
-  const row = document.getElementById('riskSectorRow');
+  const row = scopedFind(null, 'riskSectorRow');
   const sa = D.sector_allocation;
   if (!sa || !sa.sectors || sa.sectors.length === 0) {
     row.style.display = 'none';
@@ -145,7 +145,7 @@ function updateRiskSector() {
 
   // Sector donut chart (for risk page)
   if (_riskSectorChart) { _riskSectorChart.destroy(); _riskSectorChart = null; }
-  const canvas = document.getElementById('riskSectorChart');
+  const canvas = scopedFind(null, 'riskSectorChart');
   _riskSectorChart = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
     data: {
@@ -174,7 +174,7 @@ function updateRiskSector() {
   });
 
   // Legend
-  const legend = document.getElementById('riskSectorLegend');
+  const legend = scopedFind(null, 'riskSectorLegend');
   legend.innerHTML = sectors.map((s, i) =>
     `<div class="alloc-item">`
     + `<span class="alloc-dot" style="background:${_GEO_COLORS[i % _GEO_COLORS.length]}"></span>`
@@ -185,7 +185,7 @@ function updateRiskSector() {
 
   // Industry table
   const industries = (sa.industries || []).filter(i => i.pct > 0);
-  const table = document.getElementById('riskIndustryTable');
+  const table = scopedFind(null, 'riskIndustryTable');
   table.innerHTML = '<thead><tr><th>Industry</th><th>Value</th><th>Weight</th></tr></thead><tbody>'
     + industries.map(ind =>
       `<tr><td>${ind.name}</td><td>${fmtCcy(ind.value_eur)}</td><td>${fmt(ind.pct, 1)}%</td></tr>`
@@ -195,14 +195,14 @@ function updateRiskSector() {
 }
 
 function updateRiskCorrelation() {
-  const section = document.getElementById('riskCorrelationSection');
+  const section = scopedFind(null, 'riskCorrelationSection');
   const corr = D.correlation;
   if (!corr || !corr.tickers || corr.tickers.length < 2) {
     section.style.display = 'none';
     return;
   }
   section.style.display = '';
-  document.getElementById('riskCorrelationDesc').textContent =
+  scopedFind(null, 'riskCorrelationDesc').textContent =
     'Pairwise return correlations over ' + corr.data_points + ' trading days (top holdings by market value)';
 
   const tickers = corr.tickers;
@@ -234,5 +234,5 @@ function updateRiskCorrelation() {
     html += '</tr>';
   }
   html += '</tbody></table>';
-  document.getElementById('riskCorrelationGrid').innerHTML = html;
+  scopedFind(null, 'riskCorrelationGrid').innerHTML = html;
 }

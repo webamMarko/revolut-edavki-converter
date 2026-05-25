@@ -2,7 +2,7 @@
 let _waterfallChart = null;
 
 function initWaterfall() {
-  const section = document.getElementById('returnWaterfallSection');
+  const section = scopedFind(null, 'returnWaterfallSection');
   if (!section) return;
 
   const items = (D.return_attribution || []);
@@ -17,7 +17,7 @@ function initWaterfall() {
 
 function _buildWaterfallChart(items) {
   if (_waterfallChart) { _waterfallChart.destroy(); _waterfallChart = null; }
-  const canvas = document.getElementById('waterfallChart');
+  const canvas = scopedFind(null, 'waterfallChart');
   if (!canvas) return;
 
   // Limit to top N by absolute impact, collapse remainder into "Others"
@@ -163,7 +163,7 @@ function _buildWaterfallChart(items) {
 
   // Show/hide FX masking note
   const hasMasked = displayed.some(i => i.fx_masks_loss);
-  const noteEl = document.getElementById('fxMaskingNote');
+  const noteEl = scopedFind(null, 'fxMaskingNote');
   if (noteEl) noteEl.style.display = hasMasked ? '' : 'none';
 }
 

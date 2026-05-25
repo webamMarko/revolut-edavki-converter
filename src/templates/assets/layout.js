@@ -149,7 +149,7 @@
 
   // --- Drag and drop for summary cards ---
   function initCardDrag() {
-    var grid = document.getElementById('summary');
+    var grid = scopedFind(null, 'summary');
     if (!grid) return;
 
     grid.addEventListener('dragstart', function(e) {
@@ -206,7 +206,7 @@
   }
 
   function saveCurrentCardOrder() {
-    var grid = document.getElementById('summary');
+    var grid = scopedFind(null, 'summary');
     if (!grid) return;
     var cards = grid.querySelectorAll('.metric-card[data-card-key]');
     var order = [];
@@ -234,12 +234,12 @@
   function setCustomizeMode(enabled) {
     customizeMode = enabled;
     document.body.classList.toggle('customize-mode', enabled);
-    var btn = document.getElementById('customizeToggle');
+    var btn = scopedFind(null, 'customizeToggle');
     if (btn) {
       btn.classList.toggle('active', enabled);
       btn.textContent = enabled ? 'Done' : 'Customize';
     }
-    var presetBar = document.getElementById('layoutPresets');
+    var presetBar = scopedFind(null, 'layoutPresets');
     if (presetBar) presetBar.style.display = enabled ? '' : 'none';
 
     // Show/hide card visibility toggles
@@ -302,7 +302,7 @@
     if (footer) sidebar.insertBefore(container, footer);
     else sidebar.appendChild(container);
 
-    document.getElementById('customizeToggle').addEventListener('click', function() {
+    scopedFind(null, 'customizeToggle').addEventListener('click', function() {
       setCustomizeMode(!customizeMode);
     });
 

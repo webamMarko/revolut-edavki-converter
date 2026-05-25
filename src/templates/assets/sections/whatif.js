@@ -2,10 +2,10 @@
 let whatifChart = null;
 
 (function() {
-  const section = document.getElementById('whatifSection');
-  const select = document.getElementById('whatifBenchmark');
-  const resultEl = document.getElementById('whatifResult');
-  const emptyEl = document.getElementById('whatifEmpty');
+  const section = scopedFind(null, 'whatifSection');
+  const select = scopedFind(null, 'whatifBenchmark');
+  const resultEl = scopedFind(null, 'whatifResult');
+  const emptyEl = scopedFind(null, 'whatifEmpty');
   if (!section || !select || !D.benchmark_series) return;
 
   const benchKeys = Object.keys(D.benchmark_series);
@@ -49,8 +49,8 @@ function runWhatIf(benchKey) {
   const bench = D.benchmark_series[benchKey];
   if (!bench || bench.dates.length < 2) return;
 
-  const resultEl = document.getElementById('whatifResult');
-  const emptyEl = document.getElementById('whatifEmpty');
+  const resultEl = scopedFind(null, 'whatifResult');
+  const emptyEl = scopedFind(null, 'whatifEmpty');
   resultEl.style.display = '';
   emptyEl.style.display = 'none';
 
@@ -118,7 +118,7 @@ function runWhatIf(benchKey) {
 }
 
 function renderWhatIfSummary(benchName, actual, hypo, diffAbs, diffPct, beat, invested) {
-  const card = document.getElementById('whatifSummaryCard');
+  const card = scopedFind(null, 'whatifSummaryCard');
   const icon = beat ? '&#9650;' : '&#9660;';
   const colorClass = beat ? 'pos' : 'neg';
   const verb = beat ? 'beat' : 'trailed';
@@ -148,7 +148,7 @@ function renderWhatIfSummary(benchName, actual, hypo, diffAbs, diffPct, beat, in
 }
 
 function renderWhatIfChart(benchName, hypotheticalDaily) {
-  const ctx = document.getElementById('whatifChart').getContext('2d');
+  const ctx = scopedFind(null, 'whatifChart').getContext('2d');
   if (whatifChart) whatifChart.destroy();
 
   const labels = allDates.slice(selStart, selEnd + 1);
@@ -204,8 +204,8 @@ function renderWhatIfChart(benchName, hypotheticalDaily) {
 }
 
 function renderWhatIfYearBreakdown(benchName, hypotheticalDaily) {
-  const section = document.getElementById('whatifYearBreakdown');
-  const table = document.getElementById('whatifYearTable');
+  const section = scopedFind(null, 'whatifYearBreakdown');
+  const table = scopedFind(null, 'whatifYearTable');
   if (!section || !table) return;
 
   // Group by year
@@ -247,6 +247,6 @@ function renderWhatIfYearBreakdown(benchName, hypotheticalDaily) {
 }
 
 function updateWhatIf() {
-  const select = document.getElementById('whatifBenchmark');
+  const select = scopedFind(null, 'whatifBenchmark');
   if (select && select.value) runWhatIf(select.value);
 }

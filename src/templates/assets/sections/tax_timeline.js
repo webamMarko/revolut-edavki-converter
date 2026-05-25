@@ -3,7 +3,7 @@
   var positions = D.positions || [];
   var lots = D.position_lots || {};
   var regime = D.regime || {};
-  var section = document.getElementById('taxTimelineSection');
+  var section = scopedFind(null, 'taxTimelineSection');
   if (!section) return;
 
   var today = new Date();
@@ -140,7 +140,7 @@
   }
 
   function buildChart(items) {
-    var canvas = document.getElementById('taxTimelineCanvas');
+    var canvas = scopedFind(null, 'taxTimelineCanvas');
     if (!canvas) return;
     var ctx = canvas.getContext('2d');
 
@@ -259,9 +259,9 @@
   }
 
   function showWhatIf(item) {
-    var panel = document.getElementById('taxTimelineWhatIf');
-    var cards = document.getElementById('taxTimelineWhatIfCards');
-    var note = document.getElementById('taxTimelineWhatIfNote');
+    var panel = scopedFind(null, 'taxTimelineWhatIf');
+    var cards = scopedFind(null, 'taxTimelineWhatIfCards');
+    var note = scopedFind(null, 'taxTimelineWhatIfNote');
 
     panel.style.display = '';
 
@@ -295,8 +295,8 @@
     }
   }
 
-  document.getElementById('taxTimelineWhatIfClose').addEventListener('click', function() {
-    document.getElementById('taxTimelineWhatIf').style.display = 'none';
+  scopedFind(null, 'taxTimelineWhatIfClose').addEventListener('click', function() {
+    scopedFind(null, 'taxTimelineWhatIf').style.display = 'none';
   });
 
   // Sort button handlers
@@ -318,8 +318,8 @@
     }
 
     section.style.display = '';
-    document.getElementById('taxTimelineTitle').textContent = t('tax_timeline.title') !== 'tax_timeline.title' ? t('tax_timeline.title') : 'Tax Bracket Timeline';
-    document.getElementById('taxTimelineDesc').textContent = t('tax_timeline.desc') !== 'tax_timeline.desc' ? t('tax_timeline.desc') : 'Visual timeline of positions colored by tax bracket. Click a bar for what-if analysis.';
+    scopedFind(null, 'taxTimelineTitle').textContent = t('tax_timeline.title') !== 'tax_timeline.title' ? t('tax_timeline.title') : 'Tax Bracket Timeline';
+    scopedFind(null, 'taxTimelineDesc').textContent = t('tax_timeline.desc') !== 'tax_timeline.desc' ? t('tax_timeline.desc') : 'Visual timeline of positions colored by tax bracket. Click a bar for what-if analysis.';
 
     var sorted = sortData(timelineData, currentSort);
     buildChart(sorted);

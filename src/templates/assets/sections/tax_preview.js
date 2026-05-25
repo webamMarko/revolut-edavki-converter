@@ -4,7 +4,7 @@
   const positions = D.positions || [];
   const lots = D.position_lots || {};
   const regime = D.regime || {};
-  const section = document.getElementById('taxPreviewSection');
+  const section = scopedFind(null, 'taxPreviewSection');
   if (!section || positions.length === 0) return;
 
   const currentYear = new Date().getFullYear();
@@ -188,8 +188,8 @@
 
   function renderPreview() {
     section.style.display = '';
-    document.getElementById('taxPreviewTitle').textContent = t('tax_preview.title');
-    document.getElementById('taxPreviewDesc').textContent = t('tax_preview.desc');
+    scopedFind(null, 'taxPreviewTitle').textContent = t('tax_preview.title');
+    scopedFind(null, 'taxPreviewDesc').textContent = t('tax_preview.desc');
 
     const yearTax = tby[currentYear];
     const sales = yearTax ? yearTax.realized_sales : [];
@@ -226,7 +226,7 @@
 
     const totalProjectedTax = realizedTax + unrealizedTax;
 
-    document.getElementById('taxPreviewCards').innerHTML = [
+    scopedFind(null, 'taxPreviewCards').innerHTML = [
       [t('tax_preview.ytd_realized'), signCcy(realizedGain), cls(realizedGain)],
       [t('tax_preview.ytd_tax'), fmtCcy(realizedTax), 'neg'],
       [t('tax_preview.unrealized_gain'), signCcy(unrealizedGain), cls(unrealizedGain)],
@@ -238,7 +238,7 @@
 
     // Bracket breakdown table
     const breakdown = computeYTDBracketBreakdown();
-    const bt = document.getElementById('taxBracketTable');
+    const bt = scopedFind(null, 'taxBracketTable');
     const allBrackets = breakdown.realized.concat(breakdown.unrealized.map(function(u) {
       return { label: u.label, rate: u.rate, gain: u.gain, tax: u.tax, count: u.count, unrealized: true };
     }));
@@ -269,13 +269,13 @@
 
   // --- What-If Simulator ---
   function renderWhatIf() {
-    const sel = document.getElementById('taxWhatIfTicker');
-    const slider = document.getElementById('taxWhatIfSlider');
-    const qtyLabel = document.getElementById('taxWhatIfQtyValue');
+    const sel = scopedFind(null, 'taxWhatIfTicker');
+    const slider = scopedFind(null, 'taxWhatIfSlider');
+    const qtyLabel = scopedFind(null, 'taxWhatIfQtyValue');
 
-    document.getElementById('taxWhatIfTitle').textContent = t('tax_preview.whatif.title');
-    document.getElementById('taxWhatIfTickerLabel').textContent = t('tax_preview.whatif.position');
-    document.getElementById('taxWhatIfQtyLabel').textContent = t('tax_preview.whatif.quantity');
+    scopedFind(null, 'taxWhatIfTitle').textContent = t('tax_preview.whatif.title');
+    scopedFind(null, 'taxWhatIfTickerLabel').textContent = t('tax_preview.whatif.position');
+    scopedFind(null, 'taxWhatIfQtyLabel').textContent = t('tax_preview.whatif.quantity');
 
     // Populate position selector
     const filteredPositions = isDefaultSelection()
@@ -299,12 +299,12 @@
   }
 
   // Calculate button handler
-  document.getElementById('taxWhatIfCalc').addEventListener('click', function() {
-    var ticker = document.getElementById('taxWhatIfTicker').value;
-    var pct = parseInt(document.getElementById('taxWhatIfSlider').value);
-    var resultDiv = document.getElementById('taxWhatIfResult');
-    var cardsDiv = document.getElementById('taxWhatIfCards');
-    var noteDiv = document.getElementById('taxWhatIfBracketNote');
+  scopedFind(null, 'taxWhatIfCalc').addEventListener('click', function() {
+    var ticker = scopedFind(null, 'taxWhatIfTicker').value;
+    var pct = parseInt(scopedFind(null, 'taxWhatIfSlider').value);
+    var resultDiv = scopedFind(null, 'taxWhatIfResult');
+    var cardsDiv = scopedFind(null, 'taxWhatIfCards');
+    var noteDiv = scopedFind(null, 'taxWhatIfBracketNote');
 
     if (!ticker) {
       resultDiv.style.display = 'none';

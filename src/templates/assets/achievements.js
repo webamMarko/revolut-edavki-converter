@@ -302,7 +302,7 @@
   // --- Milestones Section Rendering ---
 
   function renderAchievementsSection() {
-    var section = document.getElementById('achievementsSection');
+    var section = scopedFind(null, 'achievementsSection');
     if (!section) return;
 
     var earned = getEarnedAchievements();
@@ -310,7 +310,7 @@
     if (earnedIds.length === 0) { section.style.display = 'none'; return; }
 
     section.style.display = '';
-    var grid = document.getElementById('achievementsGrid');
+    var grid = scopedFind(null, 'achievementsGrid');
     if (!grid) return;
 
     var items = [];
@@ -480,7 +480,7 @@
   var milestoneMarkersPlugin = {
     id: 'milestoneMarkers',
     afterDraw: function(chart) {
-      if (!chart.canvas.id || chart.canvas.id !== 'portfolioChart') return;
+      if (chart.canvas.getAttribute('data-role') !== 'portfolioChart') return;
       var markers = _getChartMarkers();
       if (markers.length === 0) return;
 

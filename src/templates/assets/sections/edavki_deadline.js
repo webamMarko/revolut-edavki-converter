@@ -1,6 +1,6 @@
 // --- eDavki Filing Deadline Tracker Widget ---
 (function() {
-  var container = document.getElementById('edavkiDeadlineWidget');
+  var container = scopedFind(null, 'edavkiDeadlineWidget');
   if (!container) return;
 
   var meta = D.edavki_meta;

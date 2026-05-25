@@ -57,7 +57,7 @@ function _renderCard(key, l, v, c, sub, isCustomize, isHidden, rawValue) {
 }
 
 function updateSummary() {
-  const el = document.getElementById('summary');
+  const el = scopedFind(null, 'summary');
   var isCustomize = window._layoutIsCustomizeMode ? _layoutIsCustomizeMode() : false;
   var layoutCfg = window._layoutGetCardOrder ? _layoutGetCardOrder() : { order: [], hidden: [] };
   var hiddenCards = layoutCfg.hidden || [];
@@ -126,14 +126,14 @@ function updateSummary() {
 }
 
 function updateRiskMetrics() {
-  const section = document.getElementById('chartsRiskMetricsSection');
+  const section = scopedFind(null, 'chartsRiskMetricsSection');
   if (isZoomed) { section.style.display = 'none'; return; }
   const s = getActiveSummary();
   const rm = s.risk_metrics;
   if (!rm || rm.volatility_pct == null) { section.style.display = 'none'; return; }
   section.style.display = '';
 
-  const el = document.getElementById('riskMetrics');
+  const el = scopedFind(null, 'riskMetrics');
   const cards = [
     ['risk.volatility', t('risk.volatility'), pct(rm.volatility_pct), '', t('risk.volatility_sub'), rm.volatility_pct],
     ['risk.sharpe', t('risk.sharpe'), rm.sharpe_ratio != null ? fmt(rm.sharpe_ratio) : '—', rm.sharpe_ratio != null ? cls(rm.sharpe_ratio) : '', t('risk.sharpe_sub'), rm.sharpe_ratio],
@@ -157,7 +157,7 @@ function updateRiskMetrics() {
 
 function updateTopMovers() {
   const positions = getActivePositions();
-  const section = document.getElementById('topMoversSection');
+  const section = scopedFind(null, 'topMoversSection');
   if (positions.length < 2) { section.style.display = 'none'; return; }
   section.style.display = '';
 
@@ -187,12 +187,12 @@ function updateTopMovers() {
     }).join('');
   }
 
-  renderList(gainers, document.getElementById('topGainers'));
-  renderList(losers, document.getElementById('topLosers'));
+  renderList(gainers, scopedFind(null, 'topGainers'));
+  renderList(losers, scopedFind(null, 'topLosers'));
 }
 
 function updateMilestones() {
-  const section = document.getElementById('milestonesSection');
+  const section = scopedFind(null, 'milestonesSection');
   if (isZoomed || !ds.dates || ds.dates.length < 10) { section.style.display = 'none'; return; }
 
   const events = [];
@@ -281,14 +281,14 @@ function updateMilestones() {
   });
   var badges = (priority.length >= 3 ? priority : events).slice(0, 6);
 
-  var strip = document.getElementById('milestonesStrip');
+  var strip = scopedFind(null, 'milestonesStrip');
   strip.innerHTML = badges.map(function(e) {
     return '<span class="ms-badge">' + e.icon + ' ' + e.text + ' <span class="ms-date">' + shortDate(e.date) + '</span></span>';
   }).join('<span class="ms-sep">&middot;</span>')
     + (events.length > 6 ? ' <button class="ms-expand" id="msExpandBtn">Show all &#x25BE;</button>' : '');
 
   // Full expandable list
-  var el = document.getElementById('milestonesList');
+  var el = scopedFind(null, 'milestonesList');
   el.innerHTML = events.map(function(e) {
     return '<div class="milestone-item">'
       + '<div class="milestone-icon">' + e.icon + '</div>'
@@ -300,10 +300,10 @@ function updateMilestones() {
   }).join('');
 
   // Toggle expand
-  var expandBtn = document.getElementById('msExpandBtn');
+  var expandBtn = scopedFind(null, 'msExpandBtn');
   if (expandBtn) {
     expandBtn.addEventListener('click', function() {
-      var list = document.getElementById('milestonesList');
+      var list = scopedFind(null, 'milestonesList');
       var showing = list.style.display !== 'none';
       list.style.display = showing ? 'none' : '';
       expandBtn.innerHTML = showing ? 'Show all &#x25BE;' : 'Hide &#x25B4;';
@@ -313,7 +313,7 @@ function updateMilestones() {
 
 // --- Tax season banner (Jan-Mar) ---
 (function() {
-  var banner = document.getElementById('taxSeasonBanner');
+  var banner = scopedFind(null, 'taxSeasonBanner');
   if (!banner) return;
   var month = new Date().getMonth();
   var hasTaxData = D.tax_by_year && Object.keys(D.tax_by_year).length > 0;

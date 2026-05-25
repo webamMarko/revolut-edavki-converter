@@ -3,7 +3,7 @@
   var positions = D.positions || [];
   var lots = D.position_lots || {};
   var regime = D.regime || {};
-  var section = document.getElementById('holdingCountdownSection');
+  var section = scopedFind(null, 'holdingCountdownSection');
   if (!section) return;
 
   var today = new Date();
@@ -103,12 +103,12 @@
       return;
     }
     section.style.display = '';
-    document.getElementById('holdingCountdownTitle').textContent = t('holding.title');
-    document.getElementById('holdingCountdownDesc').textContent = t('holding.desc');
+    scopedFind(null, 'holdingCountdownTitle').textContent = t('holding.title');
+    scopedFind(null, 'holdingCountdownDesc').textContent = t('holding.desc');
 
     // Highlight cards: closest milestones, biggest savings
     var upcoming = items.filter(function(x) { return x.daysToNext <= 365; });
-    var highlightDiv = document.getElementById('holdingCountdownHighlight');
+    var highlightDiv = scopedFind(null, 'holdingCountdownHighlight');
 
     var totalSaving = items.reduce(function(s, x) { return s + x.taxSaving; }, 0);
     var soonest = items[0];
@@ -126,7 +126,7 @@
     }).join('');
 
     // Table
-    var table = document.getElementById('holdingCountdownTable');
+    var table = scopedFind(null, 'holdingCountdownTable');
     var thead = '<thead><tr>' +
       '<th>' + t('holding.col.ticker') + '</th>' +
       '<th>' + t('holding.col.acquired') + '</th>' +
