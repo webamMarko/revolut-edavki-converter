@@ -17,8 +17,11 @@ CREATE TABLE IF NOT EXISTS daily_prices (
 );
 
 CREATE TABLE IF NOT EXISTS fx_rates (
-    date    TEXT NOT NULL PRIMARY KEY,
-    eur_usd REAL NOT NULL
+    date          TEXT NOT NULL,
+    from_currency TEXT NOT NULL,
+    to_currency   TEXT NOT NULL,
+    rate          REAL NOT NULL,
+    PRIMARY KEY (date, from_currency, to_currency)
 );
 
 CREATE TABLE IF NOT EXISTS metadata (
@@ -40,6 +43,26 @@ def _default_prices_db_path() -> Path:
     return base / "_system" / "prices.db"
 
 
+def _migrate_fx_rates(conn: sqlite3.Connection):
+    """Migrate old single-column fx_rates (date, eur_usd) to multi-currency schema."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(fx_rates)")}
+    if "eur_usd" not in cols:
+        return
+    rows = conn.execute("SELECT date, eur_usd FROM fx_rates").fetchall()
+    conn.execute("DROP TABLE fx_rates")
+    conn.execute(
+        "CREATE TABLE fx_rates ("
+        "date TEXT NOT NULL, from_currency TEXT NOT NULL, to_currency TEXT NOT NULL, "
+        "rate REAL NOT NULL, PRIMARY KEY (date, from_currency, to_currency))"
+    )
+    if rows:
+        conn.executemany(
+            "INSERT OR IGNORE INTO fx_rates (date, from_currency, to_currency, rate) VALUES (?, 'USD', 'EUR', ?)",
+            [(r[0], r[1]) for r in rows],
+        )
+    conn.commit()
+
+
 def get_prices_connection(db_path: Path | None = None) -> sqlite3.Connection:
     """Open (or create) the shared prices database."""
     if db_path is not None:
@@ -54,6 +77,7 @@ def get_prices_connection(db_path: Path | None = None) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.row_factory = sqlite3.Row
     conn.executescript(PRICES_SCHEMA_SQL)
+    _migrate_fx_rates(conn)
     return conn
 
 
@@ -71,6 +95,8 @@ def get_prices_conn_or_none() -> sqlite3.Connection | None:
         conn = sqlite3.connect(str(path))
         conn.execute("PRAGMA journal_mode=WAL")
         conn.row_factory = sqlite3.Row
+        conn.executescript(PRICES_SCHEMA_SQL)
+        _migrate_fx_rates(conn)
         has_data = conn.execute("SELECT COUNT(*) FROM daily_prices").fetchone()[0]
         if not has_data:
             conn.close()
@@ -104,15 +130,28 @@ def migrate_prices_from_user_db(user_conn: sqlite3.Connection,
     except Exception:
         pass
 
-    # Copy fx_rates
+    # Copy fx_rates (new schema: date, from_currency, to_currency, rate)
     try:
-        rows = user_conn.execute("SELECT date, eur_usd FROM fx_rates").fetchall()
-        if rows:
-            prices_conn.executemany(
-                "INSERT OR IGNORE INTO fx_rates (date, eur_usd) VALUES (?, ?)",
-                [(r[0], r[1]) for r in rows],
-            )
-            migrated += len(rows)
+        fx_cols = {row[1] for row in user_conn.execute("PRAGMA table_info(fx_rates)")}
+        if "eur_usd" in fx_cols:
+            # Migrate old single-column schema to new multi-currency schema
+            rows = user_conn.execute("SELECT date, eur_usd FROM fx_rates").fetchall()
+            if rows:
+                prices_conn.executemany(
+                    "INSERT OR IGNORE INTO fx_rates (date, from_currency, to_currency, rate) VALUES (?, 'USD', 'EUR', ?)",
+                    [(r[0], r[1]) for r in rows],
+                )
+                migrated += len(rows)
+        else:
+            rows = user_conn.execute(
+                "SELECT date, from_currency, to_currency, rate FROM fx_rates"
+            ).fetchall()
+            if rows:
+                prices_conn.executemany(
+                    "INSERT OR IGNORE INTO fx_rates (date, from_currency, to_currency, rate) VALUES (?, ?, ?, ?)",
+                    [(r[0], r[1], r[2], r[3]) for r in rows],
+                )
+                migrated += len(rows)
     except Exception:
         pass
 
