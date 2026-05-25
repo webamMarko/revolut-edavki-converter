@@ -247,7 +247,7 @@ def _query_position_price_history(conn: sqlite3.Connection, tickers: list[str],
 
     # Get EUR/USD rates for conversion
     fx_rows = _pconn.execute(
-        "SELECT date, eur_usd FROM fx_rates ORDER BY date"
+        "SELECT date, rate AS eur_usd FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' ORDER BY date"
     ).fetchall()
     fx_map = {r[0]: r[1] for r in fx_rows}
 
@@ -540,7 +540,7 @@ def _compute_correlation_matrix(conn: sqlite3.Connection | None,
 
     # Load FX rates for USD→EUR conversion
     fx_rows = _pconn.execute(
-        "SELECT date, eur_usd FROM fx_rates WHERE date >= ? ORDER BY date",
+        "SELECT date, rate AS eur_usd FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' AND date >= ? ORDER BY date",
         (one_year_ago,)
     ).fetchall()
     fx_map = {r[0]: r[1] for r in fx_rows}
@@ -644,7 +644,7 @@ def _compute_return_attribution(
 
     # Most recent EUR/USD rate
     row = _pconn.execute(
-        "SELECT eur_usd FROM fx_rates ORDER BY date DESC LIMIT 1"
+        "SELECT rate FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' ORDER BY date DESC LIMIT 1"
     ).fetchone()
     fx_current = row[0] if row else 1.10
 
@@ -782,7 +782,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
     fx_display_rate = 1.0  # EUR→EUR
     if regime.currency != "EUR" and _pconn is not None:
         row = _pconn.execute(
-            "SELECT eur_usd FROM fx_rates ORDER BY date DESC LIMIT 1"
+            "SELECT rate FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' ORDER BY date DESC LIMIT 1"
         ).fetchone()
         if row:
             fx_display_rate = row[0]  # 1 EUR = X USD

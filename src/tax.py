@@ -567,7 +567,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
 
             # Get FX rate
             fx_row = _pconn.execute(
-                "SELECT eur_usd FROM fx_rates ORDER BY date DESC LIMIT 1"
+                "SELECT rate FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' ORDER BY date DESC LIMIT 1"
             ).fetchone()
             fx_rate = fx_row[0] if fx_row else 1.10
 
@@ -622,7 +622,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
 
         close, currency = row[0], row[1]
         fx_row = _pconn.execute(
-            "SELECT eur_usd FROM fx_rates ORDER BY date DESC LIMIT 1"
+            "SELECT rate FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' ORDER BY date DESC LIMIT 1"
         ).fetchone()
         fx_rate = fx_row[0] if fx_row else 1.10
         price_eur = close / fx_rate if currency != "EUR" else close

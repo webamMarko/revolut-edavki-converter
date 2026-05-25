@@ -10,7 +10,7 @@ from pathlib import Path
 DB_DIR = Path.home() / ".revolut-edavki"
 DB_PATH = DB_DIR / "portfolio.db"
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS transactions (
@@ -24,6 +24,10 @@ CREATE TABLE IF NOT EXISTS transactions (
     currency        TEXT NOT NULL,
     fx_rate         REAL NOT NULL DEFAULT 1.0,
     asset_class     TEXT NOT NULL DEFAULT 'stock',
+    commission      REAL,
+    withholding_tax REAL,
+    broker_source   TEXT,
+    correlation_id  TEXT,
     source_file     TEXT,
     imported_at     TEXT NOT NULL DEFAULT (datetime('now')),
     row_hash        TEXT UNIQUE
@@ -42,8 +46,11 @@ CREATE TABLE IF NOT EXISTS daily_prices (
 );
 
 CREATE TABLE IF NOT EXISTS fx_rates (
-    date    TEXT NOT NULL PRIMARY KEY,
-    eur_usd REAL NOT NULL
+    date          TEXT NOT NULL,
+    from_currency TEXT NOT NULL,
+    to_currency   TEXT NOT NULL,
+    rate          REAL NOT NULL,
+    PRIMARY KEY (date, from_currency, to_currency)
 );
 
 CREATE TABLE IF NOT EXISTS import_log (
@@ -324,6 +331,43 @@ def _init_schema(conn: sqlite3.Connection):
                     ADD COLUMN portfolio_id INTEGER NOT NULL DEFAULT 1
                 """)
 
+        conn.commit()
+
+    if current_version < 11:
+        # Add new columns to transactions (Phase 1 plugin architecture)
+        tx_cols = {row[1] for row in conn.execute("PRAGMA table_info(transactions)")}
+        for col, ddl in [
+            ("commission",      "REAL"),
+            ("withholding_tax", "REAL"),
+            ("broker_source",   "TEXT"),
+            ("correlation_id",  "TEXT"),
+        ]:
+            if col not in tx_cols:
+                conn.execute(f"ALTER TABLE transactions ADD COLUMN {col} {ddl}")
+
+        # Migrate fx_rates: old schema had (date PK, eur_usd); new schema is
+        # (date, from_currency, to_currency, rate) with composite PK.
+        # Detect old schema by checking for eur_usd column.
+        fx_cols = {row[1] for row in conn.execute("PRAGMA table_info(fx_rates)")}
+        if "eur_usd" in fx_cols:
+            # Migrate existing EUR/USD rows
+            old_rows = conn.execute("SELECT date, eur_usd FROM fx_rates").fetchall()
+            conn.execute("DROP TABLE fx_rates")
+            conn.execute("""
+                CREATE TABLE fx_rates (
+                    date          TEXT NOT NULL,
+                    from_currency TEXT NOT NULL,
+                    to_currency   TEXT NOT NULL,
+                    rate          REAL NOT NULL,
+                    PRIMARY KEY (date, from_currency, to_currency)
+                )
+            """)
+            if old_rows:
+                conn.executemany(
+                    "INSERT OR IGNORE INTO fx_rates (date, from_currency, to_currency, rate) "
+                    "VALUES (?, 'USD', 'EUR', ?)",
+                    [(r[0], r[1]) for r in old_rows],
+                )
         conn.commit()
 
     if current_version < SCHEMA_VERSION:

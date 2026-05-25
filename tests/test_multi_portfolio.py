@@ -539,10 +539,10 @@ class TestTaxPortfolioScoping:
         _insert_tx(conn, p2_id, "GOOGL", "BUY", "2024-02-01", 5, 200.0)
         _insert_tx(conn, p2_id, "GOOGL", "SELL", "2024-07-01", 5, 250.0)
         # Need fx_rates for the tax computation
-        conn.execute("INSERT OR IGNORE INTO fx_rates (date, eur_usd) VALUES ('2024-01-10', 1.10)")
-        conn.execute("INSERT OR IGNORE INTO fx_rates (date, eur_usd) VALUES ('2024-02-01', 1.10)")
-        conn.execute("INSERT OR IGNORE INTO fx_rates (date, eur_usd) VALUES ('2024-06-15', 1.10)")
-        conn.execute("INSERT OR IGNORE INTO fx_rates (date, eur_usd) VALUES ('2024-07-01', 1.10)")
+        conn.execute("INSERT OR IGNORE INTO fx_rates (date, from_currency, to_currency, rate) VALUES ('2024-01-10', 'USD', 'EUR', 1.10)")
+        conn.execute("INSERT OR IGNORE INTO fx_rates (date, from_currency, to_currency, rate) VALUES ('2024-02-01', 'USD', 'EUR', 1.10)")
+        conn.execute("INSERT OR IGNORE INTO fx_rates (date, from_currency, to_currency, rate) VALUES ('2024-06-15', 'USD', 'EUR', 1.10)")
+        conn.execute("INSERT OR IGNORE INTO fx_rates (date, from_currency, to_currency, rate) VALUES ('2024-07-01', 'USD', 'EUR', 1.10)")
         conn.commit()
         return p2_id
 

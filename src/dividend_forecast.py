@@ -64,7 +64,7 @@ def _get_held_positions(conn: sqlite3.Connection, portfolio_id: int | None = Non
 
 def _get_latest_fx_rate(conn: sqlite3.Connection) -> float:
     """Get most recent EUR/USD rate."""
-    row = conn.execute("SELECT eur_usd FROM fx_rates ORDER BY date DESC LIMIT 1").fetchone()
+    row = conn.execute("SELECT rate FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' ORDER BY date DESC LIMIT 1").fetchone()
     return row[0] if row else 1.08
 
 

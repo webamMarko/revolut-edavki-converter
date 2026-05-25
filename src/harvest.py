@@ -223,7 +223,7 @@ def compute_harvest_suggestions(
 
     # Get current prices for all held tickers
     fx_row = _pconn.execute(
-        "SELECT eur_usd FROM fx_rates ORDER BY date DESC LIMIT 1"
+        "SELECT rate FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' ORDER BY date DESC LIMIT 1"
     ).fetchone()
     fx_rate = fx_row[0] if fx_row else 1.10
 

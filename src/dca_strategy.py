@@ -218,9 +218,10 @@ def _compute_optimal_day(purchases: list[dict]) -> int | None:
 def _get_current_price_eur(ticker: str, prices_conn: sqlite3.Connection) -> float | None:
     """Get the most recent price in EUR for a ticker."""
     row = prices_conn.execute("""
-        SELECT dp.close, COALESCE(fx.eur_usd, 1.0)
+        SELECT dp.close, COALESCE(fx.rate, 1.0)
         FROM daily_prices dp
         LEFT JOIN fx_rates fx ON fx.date = dp.date
+            AND fx.from_currency = dp.currency AND fx.to_currency = 'EUR'
         WHERE dp.ticker = ?
         ORDER BY dp.date DESC LIMIT 1
     """, (ticker,)).fetchone()
@@ -233,9 +234,10 @@ def _get_current_price_eur(ticker: str, prices_conn: sqlite3.Connection) -> floa
 def _get_price_on_date(ticker: str, date: str, prices_conn: sqlite3.Connection) -> float | None:
     """Get price in EUR on a specific date (or nearest before)."""
     row = prices_conn.execute("""
-        SELECT dp.close, COALESCE(fx.eur_usd, 1.0)
+        SELECT dp.close, COALESCE(fx.rate, 1.0)
         FROM daily_prices dp
         LEFT JOIN fx_rates fx ON fx.date = dp.date
+            AND fx.from_currency = dp.currency AND fx.to_currency = 'EUR'
         WHERE dp.ticker = ? AND dp.date <= ?
         ORDER BY dp.date DESC LIMIT 1
     """, (ticker, date)).fetchone()

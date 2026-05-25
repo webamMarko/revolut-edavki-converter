@@ -148,15 +148,19 @@ def _store_prices(conn: sqlite3.Connection, revolut_ticker: str, df: pd.DataFram
     )
 
 
-def _store_fx_rates(conn: sqlite3.Connection, df: pd.DataFrame):
-    """Insert EUR/USD rates into fx_rates."""
+def _store_fx_rates(conn: sqlite3.Connection, df: pd.DataFrame,
+                    from_currency: str = "USD", to_currency: str = "EUR"):
+    """Insert exchange rates into the generic fx_rates table.
+
+    from_currency/to_currency: the direction of the rate stored (default USD→EUR,
+    i.e. how many EUR you get for 1 USD).
+    """
     rows = [
-        (idx.strftime("%Y-%m-%d"), float(row["close"]))
+        (idx.strftime("%Y-%m-%d"), from_currency, to_currency, float(row["close"]))
         for idx, row in df.iterrows()
-        if 0.8 < float(row["close"]) < 2.0
     ]
     conn.executemany(
-        "INSERT OR REPLACE INTO fx_rates (date, eur_usd) VALUES (?, ?)",
+        "INSERT OR REPLACE INTO fx_rates (date, from_currency, to_currency, rate) VALUES (?, ?, ?, ?)",
         rows,
     )
 
@@ -285,7 +289,11 @@ def sync_benchmarks(conn: sqlite3.Connection, start_date: datetime | None = None
 def sync_fx_rates(conn: sqlite3.Connection, start_date: datetime | None = None,
                   end_date: datetime | None = None, verbose: bool = False,
                   prices_conn: sqlite3.Connection | None = None):
-    """Fetch EUR/USD exchange rates."""
+    """Fetch FX rates for all currencies found in the transactions table.
+
+    Always fetches USD→EUR. Also fetches GBP→EUR, CHF→EUR, etc. for any
+    non-EUR, non-USD currencies that appear in transactions.
+    """
     target = prices_conn if prices_conn is not None else conn
 
     if end_date is None:
@@ -296,17 +304,42 @@ def sync_fx_rates(conn: sqlite3.Connection, start_date: datetime | None = None,
         row = conn.execute("SELECT MIN(date) FROM transactions").fetchone()
         start_date = datetime.fromisoformat(row[0][:10]) if row and row[0] else datetime(2019, 1, 1)
 
-    last = target.execute("SELECT MAX(date) FROM fx_rates").fetchone()
-    fetch_start = last[0] if last and last[0] else start_date.strftime("%Y-%m-%d")
+    # Discover all unique non-EUR currencies in transactions
+    currencies = {
+        row[0] for row in
+        conn.execute(
+            "SELECT DISTINCT currency FROM transactions WHERE currency != 'EUR' AND currency IS NOT NULL"
+        ).fetchall()
+        if row[0]  # skip None
+    }
+    currencies.add("USD")  # always sync USD/EUR
 
-    if verbose:
-        print(f"  EUR/USD: fetching from {fetch_start}...")
+    # yfinance ticker format for currency pairs: e.g. GBPEUR=X
+    updated_any = False
+    for currency in sorted(currencies):
+        if currency == "EUR":
+            continue
+        yf_pair = f"{currency}EUR=X"
+        last = target.execute(
+            "SELECT MAX(date) FROM fx_rates WHERE from_currency = ? AND to_currency = 'EUR'",
+            (currency,)
+        ).fetchone()
+        fetch_start = last[0] if last and last[0] else start_date.strftime("%Y-%m-%d")
 
-    df = _fetch_history(FX_TICKER, fetch_start, end_str)
-    if df is not None and not df.empty:
-        _store_fx_rates(target, df)
         if verbose:
-            print(f"    -> {len(df)} records")
+            print(f"  {currency}/EUR: fetching from {fetch_start}...")
+
+        df = _fetch_history(yf_pair, fetch_start, end_str)
+        if df is not None and not df.empty:
+            _store_fx_rates(target, df, from_currency=currency, to_currency="EUR")
+            if verbose:
+                print(f"    -> {len(df)} records")
+            updated_any = True
+        else:
+            if verbose:
+                print(f"    -> no data for {yf_pair}")
+
+    if updated_any:
         print("FX rates updated")
     else:
         print("FX rates: no data fetched")

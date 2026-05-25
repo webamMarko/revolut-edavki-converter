@@ -86,7 +86,7 @@ def _get_fx_rate(fx_cache: dict, date_str: str, conn: sqlite3.Connection,
         return fx_cache[date_str]
     source = prices_conn if prices_conn is not None else conn
     row = source.execute(
-        "SELECT eur_usd FROM fx_rates WHERE date <= ? ORDER BY date DESC LIMIT 1",
+        "SELECT rate FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' AND date <= ? ORDER BY date DESC LIMIT 1",
         (date_str,)
     ).fetchone()
     rate = row[0] if row else 1.10  # sensible fallback
