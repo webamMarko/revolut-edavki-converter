@@ -90,6 +90,7 @@ function initGridstack() {
   if (!container) return;
 
   // Create grid with 12 columns, auto-height, and mobile responsive
+  if (typeof GridStack === 'undefined') return;
   gridstack = GridStack.init({
     column: 12,
     float: true,
