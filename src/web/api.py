@@ -22,8 +22,16 @@ def api_get_analytics(handler, scope: str):
         json_response(handler, {"error": f"Invalid scope. Must be one of: {', '.join(valid_scopes)}"}, status=400)
         return
     session = get_session(handler)
-    portfolio_id = session.get("active_portfolio_id", 1)  # Default to portfolio 1
-    conn = portfolio_conn(session, get_session_token(handler))
+    session_token = get_session_token(handler)
+
+    # Force portfolio_id = 1 when viewing demo data (demo DB only has portfolio 1)
+    is_demo_view = session_token and _DEMO_VIEW.get(session_token, False)
+    if is_demo_view or not session:
+        portfolio_id = 1
+    else:
+        portfolio_id = session.get("active_portfolio_id", 1)
+
+    conn = portfolio_conn(session, session_token)
     from ..prices_db import get_prices_conn_or_none
     prices_conn = get_prices_conn_or_none()
     try:

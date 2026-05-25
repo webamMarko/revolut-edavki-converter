@@ -291,10 +291,18 @@ def serve_report(handler):
 
     session_token = get_session_token(handler)
     username = session["username"] if session else "_demo"
+
+    # Force portfolio_id = 1 when viewing demo data (demo DB only has portfolio 1)
+    is_demo_view = session_token and _DEMO_VIEW.get(session_token, False)
+    if is_demo_view or not session:
+        portfolio_id = 1
+    else:
+        portfolio_id = session.get("active_portfolio_id", 1)
+
     conn = portfolio_conn(session, session_token)
     prices_conn = get_prices_conn_or_none()
     try:
-        data_hash = compute_data_hash(conn, prices_conn)
+        data_hash = compute_data_hash(conn, prices_conn, portfolio_id=portfolio_id)
         etag = f'"{data_hash}"'
 
         if_none_match = handler.headers.get("If-None-Match", "")
@@ -314,11 +322,11 @@ def serve_report(handler):
             return
 
         def _cached_analytics(scope):
-            cached = get_cached(conn, scope, data_hash)
+            cached = get_cached(conn, scope, data_hash, portfolio_id=portfolio_id)
             if cached is not None:
                 return cached
-            result = compute_analytics(conn, scope=scope, prices_conn=prices_conn)
-            put_cache(conn, scope, data_hash, result)
+            result = compute_analytics(conn, scope=scope, prices_conn=prices_conn, portfolio_id=portfolio_id)
+            put_cache(conn, scope, data_hash, result, portfolio_id=portfolio_id)
             return result
 
         analytics = _cached_analytics("all")
@@ -328,7 +336,8 @@ def serve_report(handler):
             years_with_tx = [
                 int(r[0]) for r in conn.execute(
                     "SELECT DISTINCT strftime('%Y', date) FROM transactions "
-                    "WHERE asset_class != 'realestate' ORDER BY 1"
+                    "WHERE asset_class != 'realestate' AND portfolio_id = ? ORDER BY 1",
+                    (portfolio_id,)
                 ).fetchall()
             ]
             for yr in years_with_tx:
@@ -339,19 +348,19 @@ def serve_report(handler):
                     else:
                         report = compute_tax_report(conn, year=yr, include_unrealized=False,
                                                    scope="all", country=country,
-                                                   prices_conn=prices_conn)
+                                                   prices_conn=prices_conn, portfolio_id=portfolio_id)
                         put_tax_cache(conn, yr, "all", country, data_hash, report, current_year)
                         tax_by_year[yr] = report
                 except Exception:
                     pass
         except Exception:
             pass
-        transactions = query_transactions(conn)
+        transactions = query_transactions(conn, portfolio_id=portfolio_id)
         # Lazy-load: pass only class names; frontend fetches per-class data on demand
-        available_classes = [r[0] for r in conn.execute("SELECT DISTINCT asset_class FROM transactions").fetchall()]
-        re_data = query_real_estate(conn, prices_conn=prices_conn)
+        available_classes = [r[0] for r in conn.execute("SELECT DISTINCT asset_class FROM transactions WHERE portfolio_id = ?", (portfolio_id,)).fetchall()]
+        re_data = query_real_estate(conn, prices_conn=prices_conn, portfolio_id=portfolio_id)
         fire_cfg = query_fire_config(conn)
-        notes = query_investment_notes(conn)
+        notes = query_investment_notes(conn, portfolio_id=portfolio_id)
         html = generate_html_report(analytics, tax_by_year, transactions, per_class=None,
                                     available_classes=available_classes,
                                     real_estate=re_data, fire_config=fire_cfg,
