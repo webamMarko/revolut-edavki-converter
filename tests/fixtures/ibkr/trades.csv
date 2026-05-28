@@ -1,0 +1,4 @@
+Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,C. Price,Proceeds,Comm/Fee,Basis,Realized P/L,MTM P/L,Code,
+Trades,Data,Order,Stocks,USD,AAPL,2023-01-10 10:30:00,10,130.50,,-1305.00,-1.30,1306.30,,,
+Trades,Data,Order,Stocks,USD,MSFT,2023-03-15 14:00:00,-5,280.00,,1400.00,-1.40,1350.00,48.60,,
+Trades,Data,SubTotal,Stocks,USD,,,,,,,,,,,

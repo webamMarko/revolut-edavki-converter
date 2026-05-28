@@ -1,0 +1,5 @@
+AccountID;FinancialInstrument;SettlementDate;DateValue;TransactionTypeName;VolumeValue;Volume;PriceValue;Price
+ACC001;AAPL US;22. 01. 2021 15:49:00;22. 01. 2021 15:49:00;Nakup;10;10;130,50;130,50
+ACC001;MSFT US;15. 03. 2021 14:00:00;15. 03. 2021 14:00:00;Prodaja;5;5;280,00;280,00
+ACC001;ASTR US OLD;01. 08. 2022 00:00:00;01. 08. 2022 00:00:00;Reverse Split;-80;-80;;
+ACC001;ASTR US;01. 08. 2022 00:00:00;01. 08. 2022 00:00:00;Reverse Split;5;5;;

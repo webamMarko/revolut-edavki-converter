@@ -1,0 +1,3 @@
+Datum,Tijd,Product,ISIN,Beurs,Uitvoeringsplaats,Aantal,Koers,,Lokale waarde,,Waarde,,Wisselkoers,Transactiekosten en/of,,Totaal,,Order ID
+10-01-2023,10:30,Apple Inc,US0378331005,NASDAQ,NASDAQ,10,130.50,USD,-1305.00,USD,-1219.63,EUR,1.07,,USD,-1219.63,EUR,abc123
+15-03-2023,14:00,Microsoft Corp,US5949181045,NASDAQ,NASDAQ,-5,280.00,USD,1400.00,USD,1296.30,EUR,1.08,,USD,1296.30,EUR,def456

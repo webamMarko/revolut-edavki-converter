@@ -1,0 +1,4 @@
+Date,Symbol,Type,Quantity,Price,Value
+"Feb 21, 2020, 9:00:16 AM",BTC,Buy,0.01,"€9,200.00","€92.00"
+"Mar 15, 2021, 2:30:00 PM",ETH,Sell,0.5,"€1,800.00","€900.00"
+"Jan 10, 2022, 8:00:00 AM",DOT,Staking reward,5.0,"€20.00","€100.00"

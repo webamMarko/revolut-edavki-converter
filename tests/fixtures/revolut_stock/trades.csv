@@ -1,0 +1,5 @@
+Date,Ticker,Type,Quantity,Price per share,Total Amount,Currency,FX Rate
+2023-01-10,AAPL,BUY,10,130.00,1300.00,USD,1.07
+2023-03-15,MSFT,BUY,5,USD 280.00,USD 1400.00,USD,1.08
+2023-06-20,AAPL,SELL,5,182.50,912.50,USD,1.09
+2023-09-01,TSLA,stock split,2,,,,

@@ -1,0 +1,18 @@
+Trades,Header,DataDiscriminator,Asset Category,Currency,Symbol,Date/Time,Quantity,T. Price,C. Price,Proceeds,Comm/Fee,Basis,Realized P/L,MTM P/L,Code
+Trades,Data,Order,Stocks,USD,AAPL,2023-01-10 10:30:00,10,130.50,,-1305.00,-1.30,1306.30,,,
+Trades,Data,Order,Stocks,USD,MSFT,2023-03-15 14:00:00,-5,280.00,,1400.00,-1.40,1350.00,48.60,,
+Trades,Data,SubTotal,Stocks,USD,,,,,,,,,,
+Corporate Actions,Header,DataDiscriminator,Asset Category,Currency,Report Date,Date/Time,Description,Quantity,Proceeds,Value,Realized P/L,Code
+Corporate Actions,Data,Data,Stocks,USD,2023-02-01,2023-02-01 20:00:00,AAPL(US0378331005) SPLIT 4 FOR 1 (AAPL),300,0,0,0,
+Corporate Actions,Data,Data,Stocks,USD,2023-04-01,2023-04-01 20:00:00,AAPL(US0378331005) MERGER (ACQUISITION),-50,0,0,0,
+Corporate Actions,Data,Data,Stocks,USD,2023-04-01,2023-04-01 20:00:00,BETA(US0000000001) MERGER (FROM AAPL),25,0,0,0,
+Corporate Actions,Data,Data,Stocks,USD,2023-05-01,2023-05-01 20:00:00,AAPL(US0378331005) SPINOFF SPINCO 1 FOR 10,-5,0,0,0,
+Corporate Actions,Data,Data,Stocks,USD,2023-05-01,2023-05-01 20:00:00,SPINCO(US9999999999) SPINOFF (FROM AAPL),5,0,0,0,
+Corporate Actions,Data,Data,Stocks,USD,2023-06-01,2023-06-01 20:00:00,AAPL(US0378331005) RIGHTS ISSUE 1 FOR 10,10,0,0,0,
+Corporate Actions,Data,SubTotal,Stocks,USD,,,,,,,,
+Dividends,Header,Currency,Date,Description,Amount
+Dividends,Data,USD,2023-03-01,AAPL(US0378331005) Cash Dividend USD 0.23 per Share (Ordinary Dividend),23.00
+Dividends,Data,SubTotal,,,0.00
+Withholding Tax,Header,Currency,Date,Description,Amount,Code
+Withholding Tax,Data,USD,2023-03-01,AAPL(US0378331005) Cash Dividend USD 0.23 per Share - US Tax,-3.45,
+Withholding Tax,Data,SubTotal,,,0.00,
