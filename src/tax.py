@@ -188,6 +188,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
     realized_sales = []
     total_dividends = 0.0
     total_fees = 0.0
+    _fx_cache: dict[str, float] = {}
 
     for tx in transactions:
         tx_type = tx["type"]
@@ -197,6 +198,20 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
         fx = tx["fx_rate"] or 1.0
         pps = tx["price_per_share"] or 0
         date_str = normalize_date(tx["date"]) or ""
+
+        # Multi-currency: if fx_rate was stored as 1.0 but currency is not EUR,
+        # look up the actual rate from the fx_rates table.
+        _currency = tx.get("currency", "USD") or "USD"
+        if fx == 1.0 and _currency != "EUR" and date_str:
+            _ck = f"{_currency}_{date_str}"
+            if _ck not in _fx_cache:
+                _row = _pconn.execute(
+                    "SELECT rate FROM fx_rates WHERE from_currency = ? AND to_currency = 'EUR'"
+                    " AND date <= ? ORDER BY date DESC LIMIT 1",
+                    (_currency, date_str),
+                ).fetchone()
+                _fx_cache[_ck] = _row[0] if _row else fx
+            fx = _fx_cache[_ck] or fx
 
         # In 'all' scope, prefix CFD/crypto/savings tickers to avoid mixing with stocks
         is_cfd_tx = tx.get("asset_class") == "cfd"
@@ -499,6 +514,34 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                 # Use actual signed amount (negative = cost, positive = income)
                 fee_eur = amount / fx if fx > 0 else amount
                 total_fees += fee_eur
+
+        elif tx_type == "MERGER_IN" and ticker and qty:
+            # Receive new shares in a stock-for-stock merger at zero cost basis
+            holdings[ticker] += qty
+            fifo_lots[ticker].append((qty, 0.0, date_str))
+
+        elif tx_type == "SPINOFF_OUT" and ticker and qty:
+            # Shares reassigned to spun-off entity; reduce holdings proportionally
+            old_qty = holdings.get(ticker, 0.0)
+            reduction = min(qty, old_qty)
+            if old_qty > 0 and reduction > 0:
+                ratio = (old_qty - reduction) / old_qty
+                holdings[ticker] = old_qty - reduction
+                fifo_lots[ticker] = [
+                    (lq * ratio, lc, ld)
+                    for lq, lc, ld in fifo_lots.get(ticker, [])
+                ]
+
+        elif tx_type == "SPINOFF_IN" and ticker and qty:
+            # Receive new shares from spinoff at zero cost basis
+            holdings[ticker] += qty
+            fifo_lots[ticker].append((qty, 0.0, date_str))
+
+        elif tx_type == "RIGHTS_ISSUE" and ticker and qty:
+            # Exercise rights: new shares at subscription price
+            holdings[ticker] += qty
+            cost_per_share = amount_eur / qty if qty > 0 and amount_eur > 0 else 0.0
+            fifo_lots[ticker].append((qty, cost_per_share, date_str))
 
         elif "MERGER" in tx_type and ticker:
             holdings[ticker] = 0

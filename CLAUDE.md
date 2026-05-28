@@ -25,6 +25,12 @@ python -m src.cli tax --year 2025 [--scope stock|cfd|crypto|savings|all] [--incl
 python -m src.cli report [--scope stock|cfd|crypto|savings|all] [--output file.html]
 python -m src.cli status
 
+# Open Design (UX prototyping & design tool — requires Node 24)
+source ~/.nvm/nvm.sh && nvm use 24 --silent
+./scripts/open-design.sh run web          # Start daemon + web UI
+./scripts/open-design.sh status           # Check running status
+# See https://github.com/nexu-io/open-design for full docs
+
 # Run Playwright E2E tests (requires a running server on port 8080)
 pip install -r requirements-test.txt
 playwright install chromium

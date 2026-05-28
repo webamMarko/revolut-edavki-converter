@@ -80,17 +80,21 @@ class AnalyticsResult:
 
 
 def _get_fx_rate(fx_cache: dict, date_str: str, conn: sqlite3.Connection,
-                 prices_conn: sqlite3.Connection | None = None) -> float:
-    """Get EUR/USD rate for a date, with forward-fill from cache."""
-    if date_str in fx_cache:
-        return fx_cache[date_str]
+                 prices_conn: sqlite3.Connection | None = None,
+                 currency: str = "USD") -> float:
+    """Get from_currency→EUR rate for a date, with forward-fill from cache."""
+    if currency == "EUR":
+        return 1.0
+    cache_key = f"{currency}_{date_str}"
+    if cache_key in fx_cache:
+        return fx_cache[cache_key]
     source = prices_conn if prices_conn is not None else conn
     row = source.execute(
-        "SELECT rate FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' AND date <= ? ORDER BY date DESC LIMIT 1",
-        (date_str,)
+        "SELECT rate FROM fx_rates WHERE from_currency = ? AND to_currency = 'EUR' AND date <= ? ORDER BY date DESC LIMIT 1",
+        (currency, date_str)
     ).fetchone()
     rate = row[0] if row else 1.10  # sensible fallback
-    fx_cache[date_str] = rate
+    fx_cache[cache_key] = rate
     return rate
 
 
@@ -327,7 +331,7 @@ def _compute_analytics_inner(conn: sqlite3.Connection, year: int | None,
 
             # If fx_rate is 1.0 but currency is not EUR, look up actual FX rate
             if fx == 1.0 and currency != "EUR" and amount > 0:
-                db_fx = _get_fx_rate(fx_cache, date_str, conn, prices_conn)
+                db_fx = _get_fx_rate(fx_cache, date_str, conn, prices_conn, currency=currency)
                 if db_fx > 0:
                     fx = db_fx
 
@@ -628,6 +632,36 @@ def _compute_analytics_inner(conn: sqlite3.Connection, year: int | None,
 
             elif tx_type == "RETURN OF CAPITAL" and ticker and amount:
                 cost_basis[ticker] -= amount_eur
+
+            elif tx_type == "MERGER_IN" and ticker and qty:
+                # Receive new shares in a stock-for-stock merger at zero reported cost
+                holdings[ticker] += qty
+                fifo_lots[ticker].append((qty, 0.0, date_str))
+
+            elif tx_type == "SPINOFF_OUT" and ticker and qty:
+                # Outgoing shares reassigned to spun-off entity; reduce holdings
+                old_qty = holdings.get(ticker, 0.0)
+                reduction = min(qty, old_qty)
+                if old_qty > 0 and reduction > 0:
+                    ratio = (old_qty - reduction) / old_qty
+                    holdings[ticker] = old_qty - reduction
+                    fifo_lots[ticker] = [
+                        (lq * ratio, lc, ld)
+                        for lq, lc, ld in fifo_lots.get(ticker, [])
+                    ]
+
+            elif tx_type == "SPINOFF_IN" and ticker and qty:
+                # Receive new shares from spinoff at zero cost basis
+                holdings[ticker] += qty
+                fifo_lots[ticker].append((qty, 0.0, date_str))
+
+            elif tx_type == "RIGHTS_ISSUE" and ticker and qty:
+                # Exercise rights: add new shares at subscription price
+                holdings[ticker] += qty
+                cost_per_share = amount_eur / qty if qty > 0 and amount_eur > 0 else 0.0
+                fifo_lots[ticker].append((qty, cost_per_share, date_str))
+                if amount_eur > 0:
+                    total_invested += amount_eur
 
             elif "MERGER" in tx_type and ticker:
                 if "CASH" in tx_type:
