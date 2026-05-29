@@ -3,7 +3,7 @@
     <img src="/static/logo.png" alt="WealthEagle" class="brand-logo">
     <span class="brand-text">WealthEagle</span><span class="brand-accent">.</span>
   </a>
-  <nav class="app-nav">
+  <nav class="app-nav" aria-label="Main navigation">
     <a class="nav-link{% if active_page == 'home' %} active{% endif %}" href="/">Home</a>
     <a class="nav-link{% if active_page == 'report' %} active{% endif %}" href="/report">Report</a>
     {% if role == "guest" %}
@@ -33,7 +33,7 @@
       </div>
     </div>
     {% endif %}
-    <button class="theme-toggle" onclick="toggleTheme()"><span class="theme-icon"></span></button>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle light/dark theme"><span class="theme-icon" aria-hidden="true"></span></button>
     {% if username %}
       <span class="header-user">{{ username }}</span>
       <a class="header-link" href="/logout">Log out</a>

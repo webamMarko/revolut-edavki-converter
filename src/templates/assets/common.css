@@ -18,6 +18,15 @@
 body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
      background:var(--bg);color:var(--text);line-height:1.5;min-height:100vh}
 
+/* ---- Skip-to-content (WCAG 2.4.1) ---- */
+.skip-to-content{
+  position:absolute;top:-999px;left:1rem;z-index:99999;
+  background:var(--accent);color:#000;font-weight:700;font-size:0.9rem;
+  padding:0.6rem 1.25rem;border-radius:var(--radius-sm);text-decoration:none;
+  transition:top 0.1s
+}
+.skip-to-content:focus{top:1rem}
+
 /* ---- App header ---- */
 .app-header{
   width:100%;background:var(--surface);border-bottom:1px solid var(--border);
@@ -184,6 +193,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 .step.done{color:var(--green)}
 .step-num{width:20px;height:20px;border-radius:50%;border:2px solid currentColor;
           display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0}
+.step-icon{font-size:0.9rem;flex-shrink:0;margin-right:-0.15rem}
 .step-sep{flex:1;height:1px;background:var(--border);margin:0 0.25rem;max-width:40px}
 .ac-toggles{display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1.25rem}
 .ac-btn{padding:0.3rem 0.85rem;border-radius:12px;font-size:0.75rem;font-weight:700;
@@ -285,7 +295,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 @media (max-width:768px) {
   .app-header{padding:0.75rem 1rem;gap:0.75rem;flex-wrap:wrap}
   .app-nav{margin-left:0;gap:0.15rem}
-  .nav-link{padding:0.3rem 0.5rem;font-size:0.78rem}
+  /* WCAG 2.5.5: min 44×44px touch targets on mobile */
+  .nav-link{padding:0.7rem 0.75rem;font-size:0.82rem;min-height:44px;display:inline-flex;align-items:center}
+  .theme-toggle{min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center}
+  .header-link{padding:0.7rem 0.5rem;min-height:44px;display:inline-flex;align-items:center}
   .app-main{padding:1.25rem 0.75rem}
   .card{padding:1.25rem}
   .import-preview-card{padding:1.25rem}

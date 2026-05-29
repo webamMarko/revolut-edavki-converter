@@ -27,6 +27,8 @@
   {% block extra_css %}{% endblock %}
 </head>
 <body>
+  <a href="#main-content" class="skip-to-content">Skip to content</a>
+
   {# Offline Detection Banner #}
   <div id="offline-banner" class="offline-banner" style="display: none;">
     <div class="offline-banner-content">
@@ -41,7 +43,7 @@
       </svg>
       <span class="offline-text">You're offline. Some features may be unavailable.</span>
     </div>
-    <button class="offline-dismiss" onclick="dismissOfflineBanner()">×</button>
+    <button class="offline-dismiss" onclick="dismissOfflineBanner()" aria-label="Dismiss offline notice">×</button>
   </div>
 
   {% block header %}
@@ -50,7 +52,9 @@
     {% endif %}
   {% endblock %}
 
-  {% block content %}{% endblock %}
+  <main id="main-content">
+    {% block content %}{% endblock %}
+  </main>
 
   {% if show_drop_import %}
     {% include "partials/drop_import.html.j2" %}

@@ -13,15 +13,15 @@
 {% block content %}
 <div class="app-main">
   <!-- Progress bar -->
-  <div class="steps" id="steps">
-    <div class="step active" id="s1"><span class="step-num">1</span><span>Upload</span></div>
-    <div class="step-sep"></div>
-    <div class="step" id="s2"><span class="step-num">2</span><span>Map Columns</span></div>
-    <div class="step-sep"></div>
-    <div class="step" id="s3"><span class="step-num">3</span><span>Validate</span></div>
-    <div class="step-sep"></div>
-    <div class="step" id="s4"><span class="step-num">4</span><span>Import</span></div>
-  </div>
+  <nav class="steps" id="steps" aria-label="Import wizard progress">
+    <div class="step active" id="s1" aria-current="step"><span class="step-icon" aria-hidden="true">◑</span><span class="step-num" aria-hidden="true">1</span><span>Upload</span></div>
+    <div class="step-sep" aria-hidden="true"></div>
+    <div class="step" id="s2"><span class="step-icon" aria-hidden="true">○</span><span class="step-num" aria-hidden="true">2</span><span>Map Columns</span></div>
+    <div class="step-sep" aria-hidden="true"></div>
+    <div class="step" id="s3"><span class="step-icon" aria-hidden="true">○</span><span class="step-num" aria-hidden="true">3</span><span>Validate</span></div>
+    <div class="step-sep" aria-hidden="true"></div>
+    <div class="step" id="s4"><span class="step-icon" aria-hidden="true">○</span><span class="step-num" aria-hidden="true">4</span><span>Import</span></div>
+  </nav>
 
   <!-- Import History Card -->
   <div class="card" id="historyCard" style="display:none;margin-bottom:1rem;padding:.75rem 1rem;background:var(--bg-alt,#f8f9fa);border:1px solid var(--border,#e0e0e0)">
@@ -30,42 +30,45 @@
   </div>
 
   <!-- Step 1: Upload -->
-  <div class="card" id="step1">
-    <h2>Upload CSV file</h2>
+  <div class="card" id="step1" role="region" aria-labelledby="step1-heading">
+    <h2 id="step1-heading">Upload CSV file</h2>
     <div class="drop-zone" id="dropZone">
-      <div class="icon">&#128196;</div>
+      <div class="icon" aria-hidden="true">&#128196;</div>
       <div class="lbl">Drop CSV here or <strong>browse</strong></div>
       <div class="hint">CSV only &mdash; comma or semicolon separated</div>
-      <input type="file" id="fileInput" accept=".csv">
+      <input type="file" id="fileInput" accept=".csv" aria-label="Upload CSV file">
     </div>
-    <div class="chosen-file" id="chosenFile"></div>
-    <div class="error-msg" id="step1Err"></div>
+    <div class="chosen-file" id="chosenFile" aria-live="polite"></div>
+    <div class="error-msg" id="step1Err" aria-live="polite" aria-atomic="true"></div>
     <div class="btn-group">
       <button class="btn btn-primary" id="previewBtn" disabled>Next: Map Columns</button>
     </div>
   </div>
 
   <!-- Step 2: Map Columns (hidden initially) -->
-  <div class="card" id="step2" style="display:none">
-    <h2>Map columns</h2>
+  <div class="card" id="step2" style="display:none" role="region" aria-labelledby="step2-heading">
+    <h2 id="step2-heading">Map columns</h2>
 
-    <div style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">
+    <div id="ac-desc" style="font-size:.78rem;color:var(--muted);margin-bottom:.5rem">
       Asset class: select what type of transactions this file contains.
     </div>
-    <div class="ac-toggles" id="acToggles">
-      <button class="ac-btn" data-ac="stock">Stock</button>
-      <button class="ac-btn" data-ac="cfd">CFD</button>
-      <button class="ac-btn" data-ac="crypto">Crypto</button>
-      <button class="ac-btn" data-ac="savings">Savings</button>
+    <div id="ac-help" style="font-size:.75rem;color:var(--muted);margin-bottom:.75rem">
+      Stock: Company shares &nbsp;|&nbsp; CFD: Leveraged contracts &nbsp;|&nbsp; Crypto: Digital currencies &nbsp;|&nbsp; Savings: Interest-bearing accounts
+    </div>
+    <div class="ac-toggles" id="acToggles" role="group" aria-labelledby="ac-desc" aria-describedby="ac-help">
+      <button class="ac-btn" data-ac="stock" aria-pressed="false">Stock</button>
+      <button class="ac-btn" data-ac="cfd" aria-pressed="false">CFD</button>
+      <button class="ac-btn" data-ac="crypto" aria-pressed="false">Crypto</button>
+      <button class="ac-btn" data-ac="savings" aria-pressed="false">Savings</button>
     </div>
 
-    <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem">CSV preview (first 5 rows)</div>
-    <div class="preview-wrap"><table class="preview-table" id="previewTable"></table></div>
+    <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem" id="preview-label">CSV preview (first 5 rows)</div>
+    <div class="preview-wrap" role="region" aria-labelledby="preview-label"><table class="preview-table" id="previewTable"></table></div>
 
-    <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem">Column mapping</div>
-    <table class="map-table" id="mapTable"></table>
+    <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem" id="mapping-label">Column mapping</div>
+    <table class="map-table" id="mapTable" aria-labelledby="mapping-label"></table>
 
-    <div class="error-msg" id="step2Err"></div>
+    <div class="error-msg" id="step2Err" aria-live="polite" aria-atomic="true"></div>
     <div class="btn-group">
       <button class="btn btn-secondary" id="backBtn1">&#8592; Back</button>
       <button class="btn btn-primary" id="nextBtn2" disabled>Next: Validate</button>
@@ -73,19 +76,19 @@
   </div>
 
   <!-- Step 3: Validate (hidden initially) -->
-  <div class="card" id="step3" style="display:none">
-    <h2>Validation results</h2>
-    <div id="validationLoading" style="text-align:center;padding:2rem 0">
-      <span class="spin" style="display:inline-block;width:20px;height:20px"></span>
+  <div class="card" id="step3" style="display:none" role="region" aria-labelledby="step3-heading">
+    <h2 id="step3-heading">Validation results</h2>
+    <div id="validationLoading" style="text-align:center;padding:2rem 0" aria-live="polite">
+      <span class="spin" style="display:inline-block;width:20px;height:20px" aria-hidden="true"></span>
       <div style="margin-top:.5rem;font-size:.85rem;color:var(--muted)">Validating rows...</div>
     </div>
-    <div id="validationResults" style="display:none">
-      <div id="validationSummary" style="padding:.6rem .8rem;margin-bottom:.75rem;border-radius:6px;font-size:.85rem"></div>
+    <div id="validationResults" style="display:none" aria-live="polite" aria-atomic="false">
+      <div id="validationSummary" style="padding:.6rem .8rem;margin-bottom:.75rem;border-radius:6px;font-size:.85rem" role="status"></div>
       <div id="validationIssues"></div>
       <div id="validationMissingBuys"></div>
       <div id="validationDateGaps"></div>
     </div>
-    <div class="error-msg" id="step3Err"></div>
+    <div class="error-msg" id="step3Err" aria-live="polite" aria-atomic="true"></div>
     <div class="btn-group" id="step3Btns" style="display:none">
       <button class="btn btn-secondary" id="backBtn2">&#8592; Back to Mapping</button>
       <button class="btn btn-primary" id="nextBtn3">Continue to Import</button>
@@ -93,12 +96,12 @@
   </div>
 
   <!-- Step 4: Review & Import (hidden initially) -->
-  <div class="card" id="step4" style="display:none">
-    <h2>Review &amp; import</h2>
-    <div id="overlapWarning" style="display:none;padding:.6rem .8rem;margin-bottom:.75rem;border-radius:6px;background:#fff8e1;border:1px solid #ffe082;font-size:.82rem;color:#6d4c00"></div>
+  <div class="card" id="step4" style="display:none" role="region" aria-labelledby="step4-heading">
+    <h2 id="step4-heading">Review &amp; import</h2>
+    <div id="overlapWarning" style="display:none;padding:.6rem .8rem;margin-bottom:.75rem;border-radius:6px;background:#fff8e1;border:1px solid #ffe082;font-size:.82rem;color:#6d4c00" role="alert"></div>
     <div class="summary-list" id="summaryList"></div>
-    <div class="error-msg" id="step4Err"></div>
-    <div id="successBox" style="display:none"></div>
+    <div class="error-msg" id="step4Err" aria-live="polite" aria-atomic="true"></div>
+    <div id="successBox" style="display:none" aria-live="polite" role="status"></div>
     <div class="btn-group" id="step4Btns">
       <button class="btn btn-secondary" id="backBtn3">&#8592; Back</button>
       <button class="btn btn-primary" id="importBtn">Import</button>
@@ -166,9 +169,19 @@ function esc(s) { const d = document.createElement('div'); d.textContent = Strin
 function setStep(n) {
   [1,2,3,4].forEach(i => {
     const el = document.getElementById('s'+i);
+    const icon = el.querySelector('.step-icon');
     el.classList.remove('active','done');
-    if (i < n) el.classList.add('done');
-    else if (i === n) el.classList.add('active');
+    el.removeAttribute('aria-current');
+    if (i < n) {
+      el.classList.add('done');
+      if (icon) icon.textContent = '✓';
+    } else if (i === n) {
+      el.classList.add('active');
+      el.setAttribute('aria-current', 'step');
+      if (icon) icon.textContent = '◑';
+    } else {
+      if (icon) icon.textContent = '○';
+    }
   });
 }
 
@@ -233,10 +246,16 @@ function showStep2(detectedClass) {
   // Asset class buttons
   _assetClass = detectedClass || 'stock';
   document.querySelectorAll('.ac-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.ac === _assetClass);
+    const isActive = btn.dataset.ac === _assetClass;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     btn.addEventListener('click', () => {
       _assetClass = btn.dataset.ac;
-      document.querySelectorAll('.ac-btn').forEach(b => b.classList.toggle('active', b.dataset.ac === _assetClass));
+      document.querySelectorAll('.ac-btn').forEach(b => {
+        const active = b.dataset.ac === _assetClass;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
       buildMapTable();
       validateStep2();
     });
