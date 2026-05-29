@@ -768,3 +768,96 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
     font-size: 1.5rem;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+   Accordion import wizard (.wz-*)
+   ────────────────────────────────────────────────────────────────────── */
+
+/* Screen-reader-only utility */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Accordion container */
+.wz-accordion{display:flex;flex-direction:column;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+
+/* Individual step panel */
+.wz-step{border-bottom:1px solid var(--border)}
+.wz-step:last-child{border-bottom:none}
+
+/* Step header button */
+.wz-hdr{
+  width:100%;display:flex;align-items:center;gap:0.75rem;
+  padding:0.85rem 1.1rem;
+  background:var(--surface);
+  border:none;cursor:default;text-align:left;
+  font-family:inherit;font-size:0.85rem;
+  color:var(--muted);
+  transition:background 0.15s;
+}
+.wz-hdr:not([disabled]){cursor:pointer}
+.wz-hdr:not([disabled]):hover{background:var(--raised)}
+.wz-hdr:not([disabled]):focus-visible{
+  outline:2px solid var(--accent);outline-offset:-2px;
+}
+
+/* Step number / checkmark indicator */
+.wz-indicator{
+  flex-shrink:0;position:relative;
+  width:24px;height:24px;
+}
+.wz-num,.wz-check{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  width:24px;height:24px;border-radius:50%;
+  font-size:0.72rem;font-weight:700;
+  border:2px solid var(--border);
+  transition:opacity 0.2s;
+}
+.wz-num{background:var(--surface);color:var(--muted)}
+.wz-check{background:var(--green);border-color:var(--green);color:#000;opacity:0}
+
+/* Step label */
+.wz-title{font-weight:600;flex:1;font-size:0.88rem;color:var(--muted)}
+
+/* Status badge */
+.wz-badge{
+  flex-shrink:0;font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;
+  padding:0.15rem 0.55rem;border-radius:8px;
+  background:var(--raised);color:var(--muted);border:1px solid var(--border);
+}
+
+/* Summary text (shown for completed steps) */
+.wz-summary{
+  flex-shrink:0;font-size:0.75rem;color:var(--muted);
+  max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+/* ── Step states ─────────────────────────────────────────────── */
+
+/* Pending (locked future step) */
+.wz-step--pending .wz-hdr{opacity:0.6}
+.wz-step--pending .wz-num{color:var(--muted);border-color:var(--border)}
+
+/* Active (current expanded step) */
+.wz-step--active .wz-hdr{background:var(--raised);cursor:default}
+.wz-step--active .wz-num{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.wz-step--active .wz-title{color:var(--text)}
+.wz-step--active .wz-badge{background:var(--accent-dim);color:var(--accent);border-color:var(--accent)}
+
+/* Done (completed step — clickable) */
+.wz-step--done .wz-num{opacity:0}
+.wz-step--done .wz-check{opacity:1}
+.wz-step--done .wz-title{color:var(--text)}
+.wz-step--done .wz-badge{background:rgba(52,211,153,0.12);color:var(--green);border-color:rgba(52,211,153,0.3)}
+
+/* ── Body panel ──────────────────────────────────────────────── */
+
+.wz-body{overflow:hidden;background:var(--surface)}
+.wz-body[hidden]{display:none}
+.wz-body-inner{padding:1.25rem 1.25rem 1.5rem}
+
+/* ── Mobile: ensure no horizontal scroll, stacks naturally ──── */
+@media (max-width: 480px) {
+  .wz-hdr{padding:0.75rem 0.9rem;gap:0.6rem}
+  .wz-summary{display:none}
+  .wz-body-inner{padding:1rem 0.9rem 1.25rem}
+  .wz-accordion{border-radius:var(--radius-sm)}
+}

@@ -12,16 +12,8 @@
 
 {% block content %}
 <div class="app-main">
-  <!-- Progress bar -->
-  <nav class="steps" id="steps" aria-label="Import wizard progress">
-    <div class="step active" id="s1" aria-current="step"><span class="step-icon" aria-hidden="true">◑</span><span class="step-num" aria-hidden="true">1</span><span>Upload</span></div>
-    <div class="step-sep" aria-hidden="true"></div>
-    <div class="step" id="s2"><span class="step-icon" aria-hidden="true">○</span><span class="step-num" aria-hidden="true">2</span><span>Map Columns</span></div>
-    <div class="step-sep" aria-hidden="true"></div>
-    <div class="step" id="s3"><span class="step-icon" aria-hidden="true">○</span><span class="step-num" aria-hidden="true">3</span><span>Validate</span></div>
-    <div class="step-sep" aria-hidden="true"></div>
-    <div class="step" id="s4"><span class="step-icon" aria-hidden="true">○</span><span class="step-num" aria-hidden="true">4</span><span>Import</span></div>
-  </nav>
+  <!-- Announcement region for screen readers -->
+  <div id="stepAnnounce" aria-live="polite" aria-atomic="true" class="sr-only"></div>
 
   <!-- Import History Card -->
   <div class="card" id="historyCard" style="display:none;margin-bottom:1rem;padding:.75rem 1rem;background:var(--bg-alt,#f8f9fa);border:1px solid var(--border,#e0e0e0)">
@@ -29,84 +21,137 @@
     <div id="historyContent"></div>
   </div>
 
-  <!-- Step 1: Upload -->
-  <div class="card" id="step1" role="region" aria-labelledby="step1-heading">
-    <h2 id="step1-heading">Upload CSV file</h2>
-    <div class="drop-zone" id="dropZone">
-      <div class="icon" aria-hidden="true">&#128196;</div>
-      <div class="lbl">Drop CSV here or <strong>browse</strong></div>
-      <div class="hint">CSV only &mdash; comma or semicolon separated</div>
-      <input type="file" id="fileInput" accept=".csv" aria-label="Upload CSV file">
-    </div>
-    <div class="chosen-file" id="chosenFile" aria-live="polite"></div>
-    <div class="error-msg" id="step1Err" aria-live="polite" aria-atomic="true"></div>
-    <div class="btn-group">
-      <button class="btn btn-primary" id="previewBtn" disabled>Next: Map Columns</button>
-    </div>
-  </div>
+  <!-- Accordion wizard -->
+  <div class="wz-accordion" id="wizard">
 
-  <!-- Step 2: Map Columns (hidden initially) -->
-  <div class="card" id="step2" style="display:none" role="region" aria-labelledby="step2-heading">
-    <h2 id="step2-heading">Map columns</h2>
+    <!-- Step 1: Upload -->
+    <div class="wz-step wz-step--active" id="ws1">
+      <button class="wz-hdr" id="wh1" aria-expanded="true" aria-controls="wb1"
+              aria-label="Step 1 of 4: Upload CSV, current">
+        <span class="wz-indicator" aria-hidden="true">
+          <span class="wz-num">1</span>
+          <span class="wz-check">&#10003;</span>
+        </span>
+        <span class="wz-title">Upload CSV</span>
+        <span class="wz-badge">Current</span>
+        <span class="wz-summary" id="wsum1"></span>
+      </button>
+      <div class="wz-body" id="wb1" role="region" aria-labelledby="wh1">
+        <div class="wz-body-inner">
+          <div class="drop-zone" id="dropZone">
+            <div class="icon" aria-hidden="true">&#128196;</div>
+            <div class="lbl">Drop CSV here or <strong>browse</strong></div>
+            <div class="hint">CSV only &mdash; comma or semicolon separated</div>
+            <input type="file" id="fileInput" accept=".csv" aria-label="Upload CSV file">
+          </div>
+          <div class="chosen-file" id="chosenFile" aria-live="polite"></div>
+          <div class="error-msg" id="step1Err" aria-live="polite" aria-atomic="true"></div>
+          <div class="btn-group">
+            <button class="btn btn-primary" id="previewBtn" disabled>Next: Map Columns</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
-    <div id="ac-desc" style="font-size:.78rem;color:var(--muted);margin-bottom:.5rem">
-      Asset class: select what type of transactions this file contains.
-    </div>
-    <div id="ac-help" style="font-size:.75rem;color:var(--muted);margin-bottom:.75rem">
-      Stock: Company shares &nbsp;|&nbsp; CFD: Leveraged contracts &nbsp;|&nbsp; Crypto: Digital currencies &nbsp;|&nbsp; Savings: Interest-bearing accounts
-    </div>
-    <div class="ac-toggles" id="acToggles" role="group" aria-labelledby="ac-desc" aria-describedby="ac-help">
-      <button class="ac-btn" data-ac="stock" aria-pressed="false">Stock</button>
-      <button class="ac-btn" data-ac="cfd" aria-pressed="false">CFD</button>
-      <button class="ac-btn" data-ac="crypto" aria-pressed="false">Crypto</button>
-      <button class="ac-btn" data-ac="savings" aria-pressed="false">Savings</button>
+    <!-- Step 2: Map Columns -->
+    <div class="wz-step wz-step--pending" id="ws2">
+      <button class="wz-hdr" id="wh2" aria-expanded="false" aria-controls="wb2" disabled
+              aria-label="Step 2 of 4: Map Columns, not yet available">
+        <span class="wz-indicator" aria-hidden="true">
+          <span class="wz-num">2</span>
+          <span class="wz-check">&#10003;</span>
+        </span>
+        <span class="wz-title">Map Columns</span>
+        <span class="wz-badge">Pending</span>
+        <span class="wz-summary" id="wsum2"></span>
+      </button>
+      <div class="wz-body wz-body--collapsed" id="wb2" role="region" aria-labelledby="wh2" hidden>
+        <div class="wz-body-inner">
+          <div id="ac-desc" style="font-size:.78rem;color:var(--muted);margin-bottom:.5rem">
+            Asset class: select what type of transactions this file contains.
+          </div>
+          <div id="ac-help" style="font-size:.75rem;color:var(--muted);margin-bottom:.75rem">
+            Stock: Company shares &nbsp;|&nbsp; CFD: Leveraged contracts &nbsp;|&nbsp; Crypto: Digital currencies &nbsp;|&nbsp; Savings: Interest-bearing accounts
+          </div>
+          <div class="ac-toggles" id="acToggles" role="group" aria-labelledby="ac-desc" aria-describedby="ac-help">
+            <button class="ac-btn" data-ac="stock" aria-pressed="false">Stock</button>
+            <button class="ac-btn" data-ac="cfd" aria-pressed="false">CFD</button>
+            <button class="ac-btn" data-ac="crypto" aria-pressed="false">Crypto</button>
+            <button class="ac-btn" data-ac="savings" aria-pressed="false">Savings</button>
+          </div>
+
+          <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem" id="preview-label">CSV preview (first 5 rows)</div>
+          <div class="preview-wrap" role="region" aria-labelledby="preview-label"><table class="preview-table" id="previewTable"></table></div>
+
+          <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem" id="mapping-label">Column mapping</div>
+          <table class="map-table" id="mapTable" aria-labelledby="mapping-label"></table>
+
+          <div class="error-msg" id="step2Err" aria-live="polite" aria-atomic="true"></div>
+          <div class="btn-group">
+            <button class="btn btn-primary" id="nextBtn2" disabled>Next: Validate</button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem" id="preview-label">CSV preview (first 5 rows)</div>
-    <div class="preview-wrap" role="region" aria-labelledby="preview-label"><table class="preview-table" id="previewTable"></table></div>
+    <!-- Step 3: Validate -->
+    <div class="wz-step wz-step--pending" id="ws3">
+      <button class="wz-hdr" id="wh3" aria-expanded="false" aria-controls="wb3" disabled
+              aria-label="Step 3 of 4: Validate, not yet available">
+        <span class="wz-indicator" aria-hidden="true">
+          <span class="wz-num">3</span>
+          <span class="wz-check">&#10003;</span>
+        </span>
+        <span class="wz-title">Validate</span>
+        <span class="wz-badge">Pending</span>
+        <span class="wz-summary" id="wsum3"></span>
+      </button>
+      <div class="wz-body wz-body--collapsed" id="wb3" role="region" aria-labelledby="wh3" hidden>
+        <div class="wz-body-inner">
+          <div id="validationLoading" style="text-align:center;padding:2rem 0" aria-live="polite">
+            <span class="spin" style="display:inline-block;width:20px;height:20px" aria-hidden="true"></span>
+            <div id="validationProgressMsg" style="margin-top:.5rem;font-size:.85rem;color:var(--muted)">Validating rows...</div>
+          </div>
+          <div id="validationResults" style="display:none" aria-live="polite" aria-atomic="false">
+            <div id="validationSummary" style="padding:.6rem .8rem;margin-bottom:.75rem;border-radius:6px;font-size:.85rem" role="status"></div>
+            <div id="validationIssues"></div>
+            <div id="validationMissingBuys"></div>
+            <div id="validationDateGaps"></div>
+          </div>
+          <div class="error-msg" id="step3Err" aria-live="polite" aria-atomic="true"></div>
+          <div class="btn-group" id="step3Btns" style="display:none">
+            <button class="btn btn-primary" id="nextBtn3">Continue to Import</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
-    <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem" id="mapping-label">Column mapping</div>
-    <table class="map-table" id="mapTable" aria-labelledby="mapping-label"></table>
+    <!-- Step 4: Review & Import -->
+    <div class="wz-step wz-step--pending" id="ws4">
+      <button class="wz-hdr" id="wh4" aria-expanded="false" aria-controls="wb4" disabled
+              aria-label="Step 4 of 4: Import, not yet available">
+        <span class="wz-indicator" aria-hidden="true">
+          <span class="wz-num">4</span>
+          <span class="wz-check">&#10003;</span>
+        </span>
+        <span class="wz-title">Import</span>
+        <span class="wz-badge">Pending</span>
+        <span class="wz-summary" id="wsum4"></span>
+      </button>
+      <div class="wz-body wz-body--collapsed" id="wb4" role="region" aria-labelledby="wh4" hidden>
+        <div class="wz-body-inner">
+          <div id="overlapWarning" style="display:none;padding:.6rem .8rem;margin-bottom:.75rem;border-radius:6px;background:#fff8e1;border:1px solid #ffe082;font-size:.82rem;color:#6d4c00" role="alert"></div>
+          <div class="summary-list" id="summaryList"></div>
+          <div class="error-msg" id="step4Err" aria-live="polite" aria-atomic="true"></div>
+          <div id="successBox" style="display:none" aria-live="polite" role="status"></div>
+          <div class="btn-group" id="step4Btns">
+            <button class="btn btn-primary" id="importBtn">Import</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
-    <div class="error-msg" id="step2Err" aria-live="polite" aria-atomic="true"></div>
-    <div class="btn-group">
-      <button class="btn btn-secondary" id="backBtn1">&#8592; Back</button>
-      <button class="btn btn-primary" id="nextBtn2" disabled>Next: Validate</button>
-    </div>
-  </div>
-
-  <!-- Step 3: Validate (hidden initially) -->
-  <div class="card" id="step3" style="display:none" role="region" aria-labelledby="step3-heading">
-    <h2 id="step3-heading">Validation results</h2>
-    <div id="validationLoading" style="text-align:center;padding:2rem 0" aria-live="polite">
-      <span class="spin" style="display:inline-block;width:20px;height:20px" aria-hidden="true"></span>
-      <div style="margin-top:.5rem;font-size:.85rem;color:var(--muted)">Validating rows...</div>
-    </div>
-    <div id="validationResults" style="display:none" aria-live="polite" aria-atomic="false">
-      <div id="validationSummary" style="padding:.6rem .8rem;margin-bottom:.75rem;border-radius:6px;font-size:.85rem" role="status"></div>
-      <div id="validationIssues"></div>
-      <div id="validationMissingBuys"></div>
-      <div id="validationDateGaps"></div>
-    </div>
-    <div class="error-msg" id="step3Err" aria-live="polite" aria-atomic="true"></div>
-    <div class="btn-group" id="step3Btns" style="display:none">
-      <button class="btn btn-secondary" id="backBtn2">&#8592; Back to Mapping</button>
-      <button class="btn btn-primary" id="nextBtn3">Continue to Import</button>
-    </div>
-  </div>
-
-  <!-- Step 4: Review & Import (hidden initially) -->
-  <div class="card" id="step4" style="display:none" role="region" aria-labelledby="step4-heading">
-    <h2 id="step4-heading">Review &amp; import</h2>
-    <div id="overlapWarning" style="display:none;padding:.6rem .8rem;margin-bottom:.75rem;border-radius:6px;background:#fff8e1;border:1px solid #ffe082;font-size:.82rem;color:#6d4c00" role="alert"></div>
-    <div class="summary-list" id="summaryList"></div>
-    <div class="error-msg" id="step4Err" aria-live="polite" aria-atomic="true"></div>
-    <div id="successBox" style="display:none" aria-live="polite" role="status"></div>
-    <div class="btn-group" id="step4Btns">
-      <button class="btn btn-secondary" id="backBtn3">&#8592; Back</button>
-      <button class="btn btn-primary" id="importBtn">Import</button>
-    </div>
-  </div>
+  </div><!-- end .wz-accordion -->
 </div>
 {% endblock %}
 
@@ -134,9 +179,16 @@ const FIELD_ALIASES = {
   fx_rate:         ["fx rate","fxrate","fx_rate","exchange rate"],
 };
 
+const STEP_LABELS = ['Upload CSV', 'Map Columns', 'Validate', 'Import'];
+
 let _headers = [], _rows = [], _filename = '', _rowCount = 0;
 let _assetClass = null;
 let _statusData = null;
+let _currentStep = 1;
+let _validationData = null;
+
+// Summaries shown in completed step headers
+const _stepSummaries = { 1: '', 2: '', 3: '' };
 
 (async function loadHistory() {
   try {
@@ -165,27 +217,91 @@ let _statusData = null;
 
 function esc(s) { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
 
-// --- Step indicators ---
-function setStep(n) {
-  [1,2,3,4].forEach(i => {
-    const el = document.getElementById('s'+i);
-    const icon = el.querySelector('.step-icon');
-    el.classList.remove('active','done');
-    el.removeAttribute('aria-current');
-    if (i < n) {
-      el.classList.add('done');
-      if (icon) icon.textContent = '✓';
-    } else if (i === n) {
-      el.classList.add('active');
-      el.setAttribute('aria-current', 'step');
-      if (icon) icon.textContent = '◑';
-    } else {
-      if (icon) icon.textContent = '○';
-    }
-  });
+// ── Accordion state management ────────────────────────────────────────
+
+function announce(msg) {
+  const el = document.getElementById('stepAnnounce');
+  el.textContent = '';
+  requestAnimationFrame(() => { el.textContent = msg; });
 }
 
-// --- File pick ---
+function setStep(n) {
+  _currentStep = n;
+  [1, 2, 3, 4].forEach(i => {
+    const step = document.getElementById('ws' + i);
+    const hdr  = document.getElementById('wh' + i);
+    const body = document.getElementById('wb' + i);
+    const badge = hdr.querySelector('.wz-badge');
+    const sumEl = document.getElementById('wsum' + i);
+
+    step.classList.remove('wz-step--active', 'wz-step--done', 'wz-step--pending');
+
+    if (i < n) {
+      // Completed step
+      step.classList.add('wz-step--done');
+      hdr.disabled = false;
+      hdr.setAttribute('aria-expanded', 'false');
+      hdr.setAttribute('aria-label', 'Step ' + i + ' of 4: ' + STEP_LABELS[i-1] + ', completed — click to edit');
+      badge.textContent = 'Completed';
+      if (sumEl) sumEl.textContent = _stepSummaries[i] || '';
+      body.hidden = true;
+      body.classList.add('wz-body--collapsed');
+    } else if (i === n) {
+      // Active step
+      step.classList.add('wz-step--active');
+      hdr.disabled = true;
+      hdr.setAttribute('aria-expanded', 'true');
+      hdr.setAttribute('aria-label', 'Step ' + i + ' of 4: ' + STEP_LABELS[i-1] + ', current');
+      badge.textContent = 'Current';
+      if (sumEl) sumEl.textContent = '';
+      body.hidden = false;
+      body.classList.remove('wz-body--collapsed');
+    } else {
+      // Pending step
+      step.classList.add('wz-step--pending');
+      hdr.disabled = true;
+      hdr.setAttribute('aria-expanded', 'false');
+      hdr.setAttribute('aria-label', 'Step ' + i + ' of 4: ' + STEP_LABELS[i-1] + ', not yet available');
+      badge.textContent = 'Pending';
+      if (sumEl) sumEl.textContent = '';
+      body.hidden = true;
+      body.classList.add('wz-body--collapsed');
+    }
+  });
+
+  announce('Step ' + n + ' of 4: ' + STEP_LABELS[n-1]);
+}
+
+// Click handlers for completed step headers — navigate back
+[1, 2, 3, 4].forEach(i => {
+  document.getElementById('wh' + i).addEventListener('click', () => {
+    if (document.getElementById('wh' + i).disabled) return;
+    navigateToStep(i);
+  });
+});
+
+function navigateToStep(target) {
+  if (target >= _currentStep) return;
+  // Clear summaries for steps at and after target
+  for (let j = target; j <= 4; j++) _stepSummaries[j] = '';
+  if (target === 1) {
+    previewBtn.disabled = !_selectedFile;
+    previewBtn.textContent = 'Next: Map Columns';
+    document.getElementById('step1Err').textContent = '';
+  }
+  if (target <= 2) {
+    _validationData = null;
+    document.getElementById('validationResults').style.display = 'none';
+    document.getElementById('validationLoading').style.display = '';
+    document.getElementById('step3Btns').style.display = 'none';
+    document.getElementById('step3Err').textContent = '';
+    document.getElementById('validationProgressMsg').textContent = 'Validating rows...';
+  }
+  setStep(target);
+}
+
+// ── File pick ─────────────────────────────────────────────────────────
+
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const chosenFile = document.getElementById('chosenFile');
@@ -208,12 +324,14 @@ function setFile(f) {
     step1Err.textContent = 'Only CSV files are supported.'; return;
   }
   _selectedFile = f;
-  chosenFile.textContent = f.name + ' (' + (f.size > 1048576 ? (f.size/1048576).toFixed(1)+' MB' : Math.ceil(f.size/1024)+' KB') + ')';
+  const size = f.size > 1048576 ? (f.size/1048576).toFixed(1)+' MB' : Math.ceil(f.size/1024)+' KB';
+  chosenFile.textContent = f.name + ' (' + size + ')';
   previewBtn.disabled = false;
   step1Err.textContent = '';
 }
 
-// --- Step 1 → 2 ---
+// ── Step 1 → 2 ────────────────────────────────────────────────────────
+
 previewBtn.addEventListener('click', async () => {
   if (!_selectedFile) return;
   previewBtn.disabled = true;
@@ -229,6 +347,7 @@ previewBtn.addEventListener('click', async () => {
     _rows = data.rows;
     _rowCount = data.row_count;
     _filename = data.filename;
+    _stepSummaries[1] = _filename + ' (' + _rowCount.toLocaleString() + ' rows)';
     showStep2(data.detected_asset_class);
   } catch(e) {
     step1Err.textContent = 'Network error: ' + e.message;
@@ -237,29 +356,33 @@ previewBtn.addEventListener('click', async () => {
   }
 });
 
-// --- Step 2 setup ---
+// ── Step 2 setup ──────────────────────────────────────────────────────
+
+let _acListenersAdded = false;
+
 function showStep2(detectedClass) {
-  document.getElementById('step1').style.display = 'none';
-  document.getElementById('step2').style.display = '';
   setStep(2);
 
-  // Asset class buttons
   _assetClass = detectedClass || 'stock';
   document.querySelectorAll('.ac-btn').forEach(btn => {
-    const isActive = btn.dataset.ac === _assetClass;
-    btn.classList.toggle('active', isActive);
-    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    btn.addEventListener('click', () => {
-      _assetClass = btn.dataset.ac;
-      document.querySelectorAll('.ac-btn').forEach(b => {
-        const active = b.dataset.ac === _assetClass;
-        b.classList.toggle('active', active);
-        b.setAttribute('aria-pressed', active ? 'true' : 'false');
-      });
-      buildMapTable();
-      validateStep2();
-    });
+    btn.setAttribute('aria-pressed', btn.dataset.ac === _assetClass ? 'true' : 'false');
+    btn.classList.toggle('active', btn.dataset.ac === _assetClass);
   });
+
+  if (!_acListenersAdded) {
+    _acListenersAdded = true;
+    document.querySelectorAll('.ac-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _assetClass = btn.dataset.ac;
+        document.querySelectorAll('.ac-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.ac === _assetClass);
+          b.setAttribute('aria-pressed', b.dataset.ac === _assetClass ? 'true' : 'false');
+        });
+        buildMapTable();
+        validateStep2();
+      });
+    });
+  }
 
   buildPreviewTable();
   buildMapTable();
@@ -300,7 +423,7 @@ function buildMapTable() {
     html += `<tr>
       <td>${FIELD_LABELS[field] || field}</td>
       <td>${isReq ? '<span class="req-badge">Required</span>' : '<span class="opt-badge">Optional</span>'}</td>
-      <td><select data-field="${field}" data-req="${isReq ? '1' : '0'}">${opts.join('')}</select></td>
+      <td><select data-field="${field}" data-req="${isReq ? '1' : '0'}" aria-label="${FIELD_LABELS[field] || field} column mapping">${opts.join('')}</select></td>
     </tr>`;
   });
   t.innerHTML = html;
@@ -320,8 +443,12 @@ function validateStep2() {
   document.getElementById('step2Err').textContent = '';
 }
 
-// --- Step 2 → 3 (Validate) ---
+// ── Step 2 → 3 (Validate) ────────────────────────────────────────────
+
 document.getElementById('nextBtn2').addEventListener('click', () => {
+  const ac = _assetClass || 'stock';
+  const mappedCount = Object.keys(collectMapping()).length;
+  _stepSummaries[2] = ac.charAt(0).toUpperCase() + ac.slice(1) + ', ' + mappedCount + ' column' + (mappedCount === 1 ? '' : 's') + ' mapped';
   showStep3Validate();
 });
 
@@ -333,17 +460,33 @@ function collectMapping() {
   return mapping;
 }
 
-let _validationData = null;
+// Live progress messages during validation
+const VALIDATION_MSGS = [
+  'Reading CSV rows...',
+  'Checking date formats...',
+  'Validating transaction types...',
+  'Checking for missing data...',
+  'Analysing date gaps...',
+  'Almost done...',
+];
 
 async function showStep3Validate() {
-  document.getElementById('step2').style.display = 'none';
-  document.getElementById('step3').style.display = '';
   setStep(3);
 
   document.getElementById('validationLoading').style.display = '';
   document.getElementById('validationResults').style.display = 'none';
   document.getElementById('step3Btns').style.display = 'none';
   document.getElementById('step3Err').textContent = '';
+
+  // Cycle progress messages for live feedback
+  let msgIdx = 0;
+  const progEl = document.getElementById('validationProgressMsg');
+  const firstMsg = _rowCount > 0 ? 'Validating ' + _rowCount.toLocaleString() + ' rows...' : VALIDATION_MSGS[0];
+  progEl.textContent = firstMsg;
+  const progInterval = setInterval(() => {
+    msgIdx = (msgIdx + 1) % VALIDATION_MSGS.length;
+    progEl.textContent = VALIDATION_MSGS[msgIdx];
+  }, 900);
 
   const mapping = collectMapping();
   try {
@@ -352,6 +495,7 @@ async function showStep3Validate() {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ asset_class: _assetClass, mapping }),
     });
+    clearInterval(progInterval);
     const data = await resp.json();
     if (data.error) {
       document.getElementById('step3Err').textContent = data.error;
@@ -362,6 +506,7 @@ async function showStep3Validate() {
     _validationData = data;
     renderValidationResults(data);
   } catch(e) {
+    clearInterval(progInterval);
     document.getElementById('step3Err').textContent = 'Network error: ' + e.message;
     document.getElementById('validationLoading').style.display = 'none';
     document.getElementById('step3Btns').style.display = '';
@@ -373,26 +518,27 @@ function renderValidationResults(data) {
   document.getElementById('validationResults').style.display = '';
   document.getElementById('step3Btns').style.display = '';
 
-  // Summary banner
   const summary = document.getElementById('validationSummary');
   if (data.error_rows === 0 && data.warning_rows === 0) {
     summary.style.background = 'var(--bg-alt, #ecfdf5)';
     summary.style.border = '1px solid var(--green, #34d399)';
     summary.style.color = 'var(--green, #059669)';
     summary.innerHTML = '<strong>&#10003;</strong> ' + esc(data.summary);
+    _stepSummaries[3] = data.valid_rows.toLocaleString() + ' rows valid';
   } else if (data.error_rows > 0) {
     summary.style.background = '#fef2f2';
     summary.style.border = '1px solid var(--red, #f87171)';
     summary.style.color = '#991b1b';
     summary.innerHTML = '<strong>&#9888;</strong> ' + esc(data.summary);
+    _stepSummaries[3] = data.valid_rows + ' valid, ' + data.error_rows + ' errors';
   } else {
     summary.style.background = '#fff8e1';
     summary.style.border = '1px solid #ffe082';
     summary.style.color = '#6d4c00';
     summary.innerHTML = '<strong>&#9888;</strong> ' + esc(data.summary);
+    _stepSummaries[3] = data.valid_rows + ' valid, ' + data.warning_rows + ' warnings';
   }
 
-  // Issues table (show first 50)
   const issuesEl = document.getElementById('validationIssues');
   if (data.issues && data.issues.length > 0) {
     const shown = data.issues.slice(0, 50);
@@ -419,7 +565,6 @@ function renderValidationResults(data) {
     issuesEl.innerHTML = '';
   }
 
-  // Missing buys
   const mbEl = document.getElementById('validationMissingBuys');
   if (data.missing_buys && data.missing_buys.length > 0) {
     let html = '<div style="font-size:.8rem;font-weight:600;color:var(--muted);margin:.75rem 0 .4rem">Possible missing data</div>';
@@ -435,7 +580,6 @@ function renderValidationResults(data) {
     mbEl.innerHTML = '';
   }
 
-  // Date gaps
   const dgEl = document.getElementById('validationDateGaps');
   if (data.date_gaps && data.date_gaps.length > 0) {
     let html = '<div style="font-size:.8rem;font-weight:600;color:var(--muted);margin:.75rem 0 .4rem">Date gaps (&gt;1 year)</div>';
@@ -451,7 +595,6 @@ function renderValidationResults(data) {
     dgEl.innerHTML = '';
   }
 
-  // Update button text based on severity
   const nextBtn = document.getElementById('nextBtn3');
   if (data.error_rows > 0) {
     nextBtn.textContent = 'Import Anyway (' + data.valid_rows + ' valid rows)';
@@ -460,14 +603,13 @@ function renderValidationResults(data) {
   }
 }
 
-// --- Step 3 → 4 (Import) ---
+// ── Step 3 → 4 ────────────────────────────────────────────────────────
+
 document.getElementById('nextBtn3').addEventListener('click', () => {
   showStep4();
 });
 
 function showStep4() {
-  document.getElementById('step3').style.display = 'none';
-  document.getElementById('step4').style.display = '';
   setStep(4);
 
   const mapping = collectMapping();
@@ -484,7 +626,7 @@ function showStep4() {
 
   document.getElementById('summaryList').innerHTML = `
     <div class="summary-row"><span class="summary-lbl">File</span><span class="summary-val">${esc(_filename)}</span></div>
-    <div class="summary-row"><span class="summary-lbl">Rows</span><span class="summary-val">${_rowCount}</span></div>
+    <div class="summary-row"><span class="summary-lbl">Rows</span><span class="summary-val">${_rowCount.toLocaleString()}</span></div>
     <div class="summary-row"><span class="summary-lbl">Asset class</span><span class="summary-val" style="text-transform:capitalize">${esc(_assetClass)}</span></div>
     ${validInfo}
     <div class="summary-row" style="margin-top:.5rem"><span class="summary-lbl" style="color:var(--text)">Column mapping</span></div>
@@ -504,26 +646,8 @@ function showStep4() {
   document.getElementById('step4Btns').style.display = '';
 }
 
-// --- Back buttons ---
-document.getElementById('backBtn1').addEventListener('click', () => {
-  document.getElementById('step2').style.display = 'none';
-  document.getElementById('step1').style.display = '';
-  previewBtn.disabled = false;
-  previewBtn.textContent = 'Next: Map Columns';
-  setStep(1);
-});
-document.getElementById('backBtn2').addEventListener('click', () => {
-  document.getElementById('step3').style.display = 'none';
-  document.getElementById('step2').style.display = '';
-  setStep(2);
-});
-document.getElementById('backBtn3').addEventListener('click', () => {
-  document.getElementById('step4').style.display = 'none';
-  document.getElementById('step3').style.display = '';
-  setStep(3);
-});
+// ── Import ────────────────────────────────────────────────────────────
 
-// --- Import ---
 document.getElementById('importBtn').addEventListener('click', async () => {
   const btn = document.getElementById('importBtn');
   btn.disabled = true;
@@ -554,6 +678,15 @@ document.getElementById('importBtn').addEventListener('click', async () => {
         <button class="btn btn-secondary" onclick="location.href='/import'">Import Another</button>
       </div>
     </div>`;
+    // Mark all steps done visually
+    [1,2,3,4].forEach(i => {
+      const step = document.getElementById('ws' + i);
+      const hdr  = document.getElementById('wh' + i);
+      step.classList.remove('wz-step--active', 'wz-step--pending');
+      step.classList.add('wz-step--done');
+      hdr.setAttribute('aria-label', 'Step ' + i + ' of 4: ' + STEP_LABELS[i-1] + ', completed');
+    });
+    announce('Import complete. ' + data.new + ' new rows imported.');
   } catch(e) {
     document.getElementById('step4Err').textContent = 'Network error: ' + e.message;
     btn.disabled = false; btn.textContent = 'Import';
