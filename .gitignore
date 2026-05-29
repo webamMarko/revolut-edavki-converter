@@ -45,6 +45,7 @@ Thumbs.db
 !examples/*.csv
 !examples/*.xml
 !tests/fixtures/**/*.csv
+!tests/fixtures/**/*.xml
 
 # Docker / deployment
 .env

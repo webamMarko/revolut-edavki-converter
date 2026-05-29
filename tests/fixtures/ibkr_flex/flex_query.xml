@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="My Activity" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U12345678" fromDate="20230101" toDate="20231231"
+                   currency="USD" accountType="Individual">
+      <Trades>
+        <Trade assetCategory="STK" symbol="AAPL" conid="265598" currency="USD"
+               tradeDate="20230105" tradeTime="093000"
+               quantity="10" tradePrice="130.50" proceeds="-1305.00"
+               ibCommission="-1.30" ibCommissionCurrency="USD"
+               buySell="BUY" description="AAPL Stock Purchase"/>
+        <Trade assetCategory="STK" symbol="MSFT" conid="272093" currency="USD"
+               tradeDate="20230210" tradeTime="100000"
+               quantity="-5" tradePrice="250.00" proceeds="1250.00"
+               ibCommission="-1.40" ibCommissionCurrency="USD"
+               buySell="SELL" description="MSFT Stock Sale"/>
+        <Trade assetCategory="OPT" symbol="AAPL 20230101C130" conid="999999" currency="USD"
+               tradeDate="20230106" tradeTime="093000"
+               quantity="1" tradePrice="1.50" proceeds="-150.00"
+               ibCommission="-0.65" ibCommissionCurrency="USD"
+               buySell="BUY" description="Option trade - should be skipped"/>
+      </Trades>
+      <CashTransactions>
+        <CashTransaction assetCategory="STK" symbol="AAPL" conid="265598" currency="USD"
+                         dateTime="2023-03-01;120000" amount="23.00"
+                         type="Dividends"
+                         description="AAPL(US0378331005) Cash Dividend USD 0.23 per Share"/>
+        <CashTransaction assetCategory="STK" symbol="AAPL" conid="265598" currency="USD"
+                         dateTime="2023-03-01;120000" amount="-3.45"
+                         type="Withholding Tax"
+                         description="AAPL(US0378331005) Cash Dividend - WHT"/>
+      </CashTransactions>
+      <CorporateActions>
+        <CorporateAction assetCategory="STK" symbol="AAPL" conid="265598" currency="USD"
+                         dateTime="2023-06-01;000000" quantity="300"
+                         description="AAPL(US0378331005) SPLIT 4 for 1 (Adjusted)"/>
+        <CorporateAction assetCategory="STK" symbol="AAPL" conid="265598" currency="USD"
+                         dateTime="2023-07-15;000000" quantity="-50"
+                         description="AAPL(US0378331005) MERGED into BETA Corp"/>
+        <CorporateAction assetCategory="STK" symbol="BETA" conid="111111" currency="USD"
+                         dateTime="2023-07-15;000000" quantity="25"
+                         description="AAPL(US0378331005) MERGED into BETA Corp"/>
+        <CorporateAction assetCategory="STK" symbol="AAPL" conid="265598" currency="USD"
+                         dateTime="2023-08-01;000000" quantity="-5"
+                         description="AAPL(US0378331005) SPINOFF of SPINCO"/>
+        <CorporateAction assetCategory="STK" symbol="SPINCO" conid="222222" currency="USD"
+                         dateTime="2023-08-01;000000" quantity="5"
+                         description="AAPL(US0378331005) SPINOFF of SPINCO"/>
+      </CorporateActions>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

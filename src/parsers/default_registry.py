@@ -9,18 +9,21 @@ from .revolut_crypto import RevolutCryptoAdapter
 from .revolut_savings import RevolutSavingsAdapter
 from .ilirika import IlirikaAdapter
 from .ibkr import IbkrAdapter
+from .ibkr_flex import IbkrFlexAdapter
 from .trading212 import Trading212Adapter
 from .degiro import DegiroAdapter
 
 
 def build_default_registry() -> BrokerRegistry:
-    """Return a BrokerRegistry with all bundled CSV adapters pre-registered.
+    """Return a BrokerRegistry with all bundled CSV and XML adapters pre-registered.
 
     Ordering matters: more specific detectors (IBKR, Trading212, Degiro, Ilirika)
     are registered before the generic Revolut ones so they win when column sets overlap.
     """
     reg = BrokerRegistry()
-    # External brokers first (more specific column fingerprints)
+    # XML adapters
+    reg.register(IbkrFlexAdapter())
+    # External CSV brokers first (more specific column fingerprints)
     reg.register(IbkrAdapter())
     reg.register(Trading212Adapter())
     reg.register(DegiroAdapter())
