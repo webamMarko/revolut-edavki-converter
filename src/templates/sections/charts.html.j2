@@ -1,21 +1,29 @@
 <div class="page-stack">
-  <div class="two-col heatmap-row">
-    <section class="card">
-      <h2>Monthly Performance</h2>
-      <div class="heatmap-wrap"><div data-role="heatmap"></div></div>
-    </section>
-    <section class="card">
-      <h2>Yearly Performance</h2>
-      <div class="heatmap-wrap"><div data-role="yearly-heatmap"></div></div>
-    </section>
-  </div>
-
   <section class="card" data-role="yearlyTableSection">
     <h2>Annual Summary</h2>
     <div class="table-scroll">
       <table data-role="yearlyTable" class="data-table sortable"></table>
     </div>
   </section>
+
+  <div class="perf-detail-toggle-wrap">
+    <button class="perf-detail-toggle" id="perfDetailToggle" aria-expanded="false" aria-controls="perfDetailPanel">
+      <span>Monthly &amp; Yearly Heatmaps</span>
+      <svg class="perf-detail-toggle-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+  <div id="perfDetailPanel" class="perf-detail-panel" style="display:none">
+    <div class="two-col heatmap-row">
+      <section class="card">
+        <h2>Monthly Performance</h2>
+        <div class="heatmap-wrap"><div data-role="heatmap"></div></div>
+      </section>
+      <section class="card">
+        <h2>Yearly Performance</h2>
+        <div class="heatmap-wrap"><div data-role="yearly-heatmap"></div></div>
+      </section>
+    </div>
+  </div>
 
   <section class="chart-section" data-role="benchmarkSection" style="display:none">
     <h2 data-role="benchmarkSectionTitle">Performance vs Benchmarks</h2>

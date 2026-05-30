@@ -1551,6 +1551,15 @@ body {
 }
 .risk-warning-body { flex: 1; font-size: 0.85rem; }
 
+/* ---- Performance Detail Toggle ---- */
+.perf-detail-toggle-wrap { display: flex; justify-content: flex-start; margin: 0.25rem 0; }
+.perf-detail-toggle { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.45rem 1rem; border: 1px solid var(--border); border-radius: 6px; background: var(--raised); color: var(--muted); font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: color 0.15s, border-color 0.15s; }
+.perf-detail-toggle:hover { color: var(--text); border-color: var(--accent); }
+.perf-detail-toggle[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+.perf-detail-toggle[aria-expanded="true"] .perf-detail-toggle-icon { transform: rotate(180deg); }
+.perf-detail-toggle-icon { transition: transform 0.2s; flex-shrink: 0; }
+.perf-detail-panel { }
+
 /* ---- Tax Sub-tabs ---- */
 .tax-subtabs { display: flex; gap: 0; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); }
 .tax-subtab { padding: 0.6rem 1.25rem; border: none; background: none; color: var(--muted); font-size: 0.85rem; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }

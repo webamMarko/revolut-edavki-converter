@@ -370,3 +370,23 @@
 
   window.switchTaxSubtab = switchTaxSubtab;
 })();
+
+// --- Performance detail panel toggle ---
+(function() {
+  var btn = document.getElementById('perfDetailToggle');
+  var panel = document.getElementById('perfDetailPanel');
+  if (!btn || !panel) return;
+
+  function open() {
+    panel.style.display = '';
+    btn.setAttribute('aria-expanded', 'true');
+  }
+  function close() {
+    panel.style.display = 'none';
+    btn.setAttribute('aria-expanded', 'false');
+  }
+
+  btn.addEventListener('click', function() {
+    btn.getAttribute('aria-expanded') === 'true' ? close() : open();
+  });
+})();
