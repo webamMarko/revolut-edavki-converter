@@ -461,20 +461,28 @@ function updateDetectionBadgeAndWarning() {
   }
 }
 
+const AC_NAMES = { stock: 'Stock', cfd: 'CFD', crypto: 'Crypto', savings: 'Savings' };
+
+function _setAcRadio(ac) {
+  document.querySelectorAll('.ac-btn').forEach(b => {
+    const isActive = b.dataset.ac === ac;
+    b.classList.toggle('active', isActive);
+    b.setAttribute('aria-checked', isActive ? 'true' : 'false');
+    b.setAttribute('tabindex', isActive ? '0' : '-1');
+  });
+}
+
 function showStep2(detectedClass) {
   setStep(2);
 
   _assetClass = detectedClass || 'stock';
   _isOverridden = false;
-  document.querySelectorAll('.ac-btn').forEach(btn => {
-    btn.setAttribute('aria-pressed', btn.dataset.ac === _assetClass ? 'true' : 'false');
-    btn.classList.toggle('active', btn.dataset.ac === _assetClass);
-  });
+  _setAcRadio(_assetClass);
 
   updateDetectionBadgeAndWarning();
 
   if (detectedClass) {
-    announce('Detected asset class: ' + detectedClass + '. Click a different option to override.');
+    _announceDetect((AC_NAMES[detectedClass] || detectedClass) + ' detected based on your file headers. Use arrow keys to choose a different class.');
   }
 
   if (!_acListenersAdded) {
@@ -488,14 +496,39 @@ function showStep2(detectedClass) {
         } else {
           _isOverridden = false;
         }
-        document.querySelectorAll('.ac-btn').forEach(b => {
-          b.classList.toggle('active', b.dataset.ac === _assetClass);
-          b.setAttribute('aria-pressed', b.dataset.ac === _assetClass ? 'true' : 'false');
-        });
+        _setAcRadio(_assetClass);
+        if (_isOverridden && prev !== _assetClass) {
+          _announceOverride((AC_NAMES[_assetClass] || _assetClass) + ' selected. This overrides the detected ' + (AC_NAMES[_detectedClass] || _detectedClass) + ' class.');
+        }
         updateDetectionBadgeAndWarning();
         buildMapTable();
         validateStep2();
       });
+    });
+
+    // Roving tabindex arrow key navigation (WCAG radiogroup pattern)
+    document.getElementById('acToggles').addEventListener('keydown', function(e) {
+      const btns = Array.from(this.querySelectorAll('.ac-btn'));
+      const currentIdx = btns.indexOf(document.activeElement);
+      if (currentIdx === -1) return;
+      let nextIdx = -1;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        nextIdx = (currentIdx + 1) % btns.length;
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        nextIdx = (currentIdx - 1 + btns.length) % btns.length;
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        nextIdx = 0;
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        nextIdx = btns.length - 1;
+      }
+      if (nextIdx !== -1) {
+        btns[nextIdx].focus();
+        btns[nextIdx].click();
+      }
     });
   }
 

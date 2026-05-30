@@ -124,10 +124,11 @@ class TestToggleGroupStructure(unittest.TestCase):
 
     def test_toggle_group_has_role_group(self):
         content = _template()
-        self.assertIn(
-            'role="group"',
-            content,
-            "Toggle group should have role='group'",
+        # Phase 3 upgrade: radiogroup is the correct ARIA role for a single-select toggle set.
+        # Accept both role="radiogroup" (Phase 3) and role="group" (legacy).
+        self.assertTrue(
+            'role="radiogroup"' in content or 'role="group"' in content,
+            "Toggle group should have role='radiogroup' (or 'group' as fallback)",
         )
 
     def test_toggle_group_has_aria_labelledby(self):
