@@ -67,17 +67,34 @@
       </button>
       <div class="wz-body wz-body--collapsed" id="wb2" role="region" aria-labelledby="wh2" hidden>
         <div class="wz-body-inner">
-          <div id="ac-desc" style="font-size:.78rem;color:var(--muted);margin-bottom:.5rem">
-            Asset class: select what type of transactions this file contains.
-          </div>
-          <div id="ac-help" style="font-size:.75rem;color:var(--muted);margin-bottom:.75rem">
-            Stock: Company shares &nbsp;|&nbsp; CFD: Leveraged contracts &nbsp;|&nbsp; Crypto: Digital currencies &nbsp;|&nbsp; Savings: Interest-bearing accounts
-          </div>
-          <div class="ac-toggles" id="acToggles" role="group" aria-labelledby="ac-desc" aria-describedby="ac-help">
-            <button class="ac-btn" data-ac="stock" aria-pressed="false">Stock</button>
-            <button class="ac-btn" data-ac="cfd" aria-pressed="false">CFD</button>
-            <button class="ac-btn" data-ac="crypto" aria-pressed="false">Crypto</button>
-            <button class="ac-btn" data-ac="savings" aria-pressed="false">Savings</button>
+          <div class="detection-card" id="detectionCard">
+            <p class="detection-question" id="ac-question">What type of trades are in this file?</p>
+            <div class="ac-toggles" id="acToggles" role="group" aria-labelledby="ac-question">
+              <button class="ac-btn" data-ac="stock" aria-pressed="false"
+                      aria-label="Stock: Company shares">
+                <span class="ac-btn-icon" aria-hidden="true">&#128200;</span>
+                <span class="ac-btn-label">Stock</span>
+                <span class="ac-btn-desc">Company shares</span>
+              </button>
+              <button class="ac-btn" data-ac="cfd" aria-pressed="false"
+                      aria-label="CFD: Contracts for difference (leveraged trading)">
+                <span class="ac-btn-icon" aria-hidden="true">&#9889;</span>
+                <span class="ac-btn-label">CFD</span>
+                <span class="ac-btn-desc">Contracts for difference (leveraged trading)</span>
+              </button>
+              <button class="ac-btn" data-ac="crypto" aria-pressed="false"
+                      aria-label="Crypto: Bitcoin, Ethereum, etc.">
+                <span class="ac-btn-icon" aria-hidden="true">&#8383;</span>
+                <span class="ac-btn-label">Crypto</span>
+                <span class="ac-btn-desc">Bitcoin, Ethereum, etc.</span>
+              </button>
+              <button class="ac-btn" data-ac="savings" aria-pressed="false"
+                      aria-label="Savings: Money market funds &amp; savings accounts">
+                <span class="ac-btn-icon" aria-hidden="true">&#127974;</span>
+                <span class="ac-btn-label">Savings</span>
+                <span class="ac-btn-desc">Money market funds &amp; savings accounts</span>
+              </button>
+            </div>
           </div>
 
           <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem" id="preview-label">CSV preview (first 5 rows)</div>
