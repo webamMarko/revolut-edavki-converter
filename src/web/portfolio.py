@@ -47,29 +47,17 @@ def cleanup_staging(token: str):
         pass
 
 
-def detect_asset_class_from_headers(headers: list) -> Optional[str]:
-    """Detect asset class from CSV header list."""
-    cols = {h.strip() for h in headers}
-    # IBKR Activity Statement
-    if "Trades" in cols and "DataDiscriminator" in cols:
-        return "stock"
-    # Trading 212
-    if "Action" in cols and "No. of shares" in cols and "Price / share" in cols:
-        return "stock"
-    # Degiro
-    if "Datum" in cols and "Product" in cols and "ISIN" in cols:
-        return "stock"
-    if "FinancialInstrument" in cols and "TransactionTypeName" in cols:
-        return "stock"
-    if "Symbol" in cols and "Margin" in cols:
-        return "cfd"
-    if "Symbol" in cols and "Value" in cols and "Ticker" not in cols:
-        return "crypto"
-    if "Description" in cols and "Symbol" not in cols and "Ticker" not in cols:
-        return "savings"
-    if "Ticker" in cols or "Price per share" in cols:
-        return "stock"
-    return None
+def detect_asset_class_from_headers(
+    headers: list,
+    first_row: Optional[list] = None,
+) -> dict:
+    """Detect asset class using confidence-scored rules.
+
+    Returns a dict with detectedClass (str | None), confidence (float 0-1),
+    and per-class scores. detectedClass is None when confidence < 70%.
+    """
+    from .detection_rules import detect_asset_class
+    return detect_asset_class(headers, first_row)
 
 
 # ------------------------------------------------------------------

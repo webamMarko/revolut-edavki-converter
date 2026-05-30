@@ -231,6 +231,21 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 .success-links{display:flex;gap:0.6rem;justify-content:center;margin-top:1rem;flex-wrap:wrap}
 .chosen-file{margin-top:0.75rem;font-size:0.83rem;font-weight:500;color:var(--text)}
 
+/* ── Asset class detection (Phase 2) ────────────────────────── */
+.detected-badge{display:inline-flex;align-items:center;gap:.2rem;margin-top:.25rem;
+                font-size:.6rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+                padding:.1rem .4rem;border-radius:6px;
+                background:rgba(52,211,153,.18);color:var(--green,#059669);border:1px solid rgba(52,211,153,.35)}
+.override-warning{padding:.65rem .9rem;border-radius:6px;background:#fff8e1;
+                  border:1px solid #ffe082;color:#6d4c00;font-size:.82rem;margin-top:.85rem}
+.override-warning strong{font-weight:700}
+.col-diff{margin-top:.5rem;font-size:.79rem;display:flex;flex-direction:column;gap:.2rem}
+.col-diff-row{display:flex;align-items:center;gap:.4rem;padding:.15rem 0}
+.col-diff-arrow{color:var(--muted);font-size:.7rem}
+.col-diff-from{color:var(--text)}
+.col-diff-to{color:var(--green,#059669);font-weight:600}
+.col-diff-removed{color:var(--red,#dc2626);text-decoration:line-through}
+
 /* ---- Validation Issues ---- */
 .validation-issues-list{max-height:320px;overflow-y:auto;border:1px solid var(--border,#e0e0e0);
   border-radius:6px;font-size:0.78rem}

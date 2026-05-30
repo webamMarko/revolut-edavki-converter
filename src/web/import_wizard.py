@@ -99,7 +99,8 @@ def handle_import_preview(handler):
     preview_rows = [list(r) for r in rows_raw[1:6]]
     row_count = max(0, len(rows_raw) - 1)
 
-    detected = detect_asset_class_from_headers(headers)
+    first_row = list(rows_raw[1]) if len(rows_raw) > 1 else []
+    detection = detect_asset_class_from_headers(headers, first_row)
 
     # Stage the file
     token = get_session_token(handler)
@@ -119,7 +120,8 @@ def handle_import_preview(handler):
     json_response(handler, {
         "headers": headers,
         "rows": preview_rows,
-        "detected_asset_class": detected,
+        "detected_asset_class": detection["detectedClass"],
+        "detection_confidence": detection["confidence"],
         "row_count": row_count,
         "filename": filename,
     })

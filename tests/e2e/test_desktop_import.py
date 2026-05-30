@@ -156,3 +156,117 @@ class TestImportWizard:
         premium_desktop_page.locator("#importBtn").click()
         premium_desktop_page.wait_for_selector("#successBox", state="visible", timeout=15000)
         assert "Import complete" in premium_desktop_page.locator("#successBox").text_content()
+
+
+class TestDetectOverrideFlow:
+    """E2E tests: upload-detect-override flow (Phase 2 TDD task 23)."""
+
+    def _upload_and_advance(self, page, server_url, csv_path):
+        """Helper: upload CSV and advance to Step 2."""
+        page.goto(f"{server_url}/import")
+        page.wait_for_timeout(300)
+        page.locator("#fileInput").set_input_files(str(csv_path))
+        page.wait_for_timeout(200)
+        page.locator("#previewBtn").click()
+        # Wait for step 2 body to become visible
+        page.wait_for_selector("#wb2:not([hidden])", timeout=10000)
+        page.wait_for_timeout(500)
+
+    def test_detected_badge_appears_on_cfd_upload(self, premium_desktop_page, server_url):
+        """Upload a CFD CSV: Detected badge appears on the CFD toggle."""
+        csv_path = EXAMPLES_DIR / "cfds.csv"
+        if not csv_path.exists():
+            pytest.skip("cfds.csv not found")
+
+        self._upload_and_advance(premium_desktop_page, server_url, csv_path)
+
+        badge = premium_desktop_page.locator("#badge-cfd")
+        assert badge.is_visible(), "Detected badge should appear on CFD toggle"
+
+    def test_no_badge_when_detection_fallback(self, premium_desktop_page, server_url):
+        """Upload an ambiguous CSV: no Detected badges shown."""
+        csv_path = EXAMPLES_DIR / "sample_transactions.csv"
+        if not csv_path.exists():
+            pytest.skip("sample_transactions.csv not found")
+
+        self._upload_and_advance(premium_desktop_page, server_url, csv_path)
+
+        for ac in ["stock", "cfd", "crypto", "savings"]:
+            badge = premium_desktop_page.locator(f"#badge-{ac}")
+            assert not badge.is_visible(), f"No badge expected for {ac} on ambiguous file"
+
+    def test_override_warning_appears_when_user_selects_different_class(
+        self, premium_desktop_page, server_url
+    ):
+        """Upload CFD CSV, then click Stock: override warning appears."""
+        csv_path = EXAMPLES_DIR / "cfds.csv"
+        if not csv_path.exists():
+            pytest.skip("cfds.csv not found")
+
+        self._upload_and_advance(premium_desktop_page, server_url, csv_path)
+
+        # Verify CFD was auto-selected
+        cfd_btn = premium_desktop_page.locator('.ac-btn[data-ac="cfd"]')
+        assert cfd_btn.get_attribute("aria-pressed") == "true", "CFD should be auto-selected"
+
+        # Click Stock to override
+        stock_btn = premium_desktop_page.locator('.ac-btn[data-ac="stock"]')
+        stock_btn.click()
+        premium_desktop_page.wait_for_timeout(200)
+
+        # Override warning should appear
+        warn = premium_desktop_page.locator("#overrideWarning")
+        assert warn.is_visible(), "Override warning should be visible"
+        warn_text = warn.text_content()
+        assert "stock" in warn_text.lower(), "Warning should mention selected class"
+        assert "cfd" in warn_text.lower(), "Warning should mention detected class"
+
+    def test_override_warning_hidden_when_user_selects_detected_class(
+        self, premium_desktop_page, server_url
+    ):
+        """After override, clicking back to detected class hides the warning."""
+        csv_path = EXAMPLES_DIR / "cfds.csv"
+        if not csv_path.exists():
+            pytest.skip("cfds.csv not found")
+
+        self._upload_and_advance(premium_desktop_page, server_url, csv_path)
+
+        # Override
+        premium_desktop_page.locator('.ac-btn[data-ac="stock"]').click()
+        premium_desktop_page.wait_for_timeout(200)
+        assert premium_desktop_page.locator("#overrideWarning").is_visible()
+
+        # Go back to detected class
+        premium_desktop_page.locator('.ac-btn[data-ac="cfd"]').click()
+        premium_desktop_page.wait_for_timeout(200)
+        assert not premium_desktop_page.locator("#overrideWarning").is_visible(), \
+            "Warning should hide when user selects detected class"
+
+    def test_re_upload_resets_detection(self, premium_desktop_page, server_url):
+        """Going back to Step 1 and re-uploading resets detection state."""
+        cfd_path = EXAMPLES_DIR / "cfds.csv"
+        ambiguous_path = EXAMPLES_DIR / "sample_transactions.csv"
+        if not cfd_path.exists() or not ambiguous_path.exists():
+            pytest.skip("Required CSV fixtures not found")
+
+        # First upload: CFD → badge appears
+        self._upload_and_advance(premium_desktop_page, server_url, cfd_path)
+        assert premium_desktop_page.locator("#badge-cfd").is_visible()
+
+        # Navigate back to Step 1 (click step header)
+        premium_desktop_page.locator("#wh1").click()
+        premium_desktop_page.wait_for_timeout(300)
+
+        # Re-upload ambiguous CSV
+        premium_desktop_page.locator("#fileInput").set_input_files(str(ambiguous_path))
+        premium_desktop_page.wait_for_timeout(200)
+        premium_desktop_page.locator("#previewBtn").click()
+        premium_desktop_page.wait_for_selector("#wb2:not([hidden])", timeout=10000)
+        premium_desktop_page.wait_for_timeout(500)
+
+        # No badges should be visible for new ambiguous file
+        for ac in ["stock", "cfd", "crypto", "savings"]:
+            assert not premium_desktop_page.locator(f"#badge-{ac}").is_visible(), \
+                f"Badge for {ac} should be reset after re-upload"
+        assert not premium_desktop_page.locator("#overrideWarning").is_visible(), \
+            "Override warning should be cleared after re-upload"

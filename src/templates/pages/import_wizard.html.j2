@@ -14,6 +14,8 @@
 <div class="app-main">
   <!-- Announcement region for screen readers -->
   <div id="stepAnnounce" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+  <div id="acDetectAnnounce" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+  <div id="acOverrideAnnounce" aria-live="polite" aria-atomic="true" class="sr-only"></div>
 
   <!-- Import History Card -->
   <div class="card" id="historyCard" style="display:none;margin-bottom:1rem;padding:.75rem 1rem;background:var(--bg-alt,#f8f9fa);border:1px solid var(--border,#e0e0e0)">
@@ -69,31 +71,39 @@
         <div class="wz-body-inner">
           <div class="detection-card" id="detectionCard">
             <p class="detection-question" id="ac-question">What type of trades are in this file?</p>
-            <div class="ac-toggles" id="acToggles" role="group" aria-labelledby="ac-question">
-              <button class="ac-btn" data-ac="stock" aria-pressed="false"
+            <div class="ac-toggles" id="acToggles" role="radiogroup" aria-labelledby="ac-question">
+              <button class="ac-btn" data-ac="stock" role="radio" aria-checked="false" tabindex="0"
                       aria-label="Stock: Company shares">
                 <span class="ac-btn-icon" aria-hidden="true">&#128200;</span>
                 <span class="ac-btn-label">Stock</span>
                 <span class="ac-btn-desc">Company shares</span>
+                <span class="detected-badge" id="badge-stock" style="display:none" aria-label="auto-detected">&#10003; Detected</span>
               </button>
-              <button class="ac-btn" data-ac="cfd" aria-pressed="false"
+              <button class="ac-btn" data-ac="cfd" role="radio" aria-checked="false" tabindex="-1"
                       aria-label="CFD: Contracts for difference (leveraged trading)">
                 <span class="ac-btn-icon" aria-hidden="true">&#9889;</span>
                 <span class="ac-btn-label">CFD</span>
                 <span class="ac-btn-desc">Contracts for difference (leveraged trading)</span>
+                <span class="detected-badge" id="badge-cfd" style="display:none" aria-label="auto-detected">&#10003; Detected</span>
               </button>
-              <button class="ac-btn" data-ac="crypto" aria-pressed="false"
+              <button class="ac-btn" data-ac="crypto" role="radio" aria-checked="false" tabindex="-1"
                       aria-label="Crypto: Bitcoin, Ethereum, etc.">
                 <span class="ac-btn-icon" aria-hidden="true">&#8383;</span>
                 <span class="ac-btn-label">Crypto</span>
                 <span class="ac-btn-desc">Bitcoin, Ethereum, etc.</span>
+                <span class="detected-badge" id="badge-crypto" style="display:none" aria-label="auto-detected">&#10003; Detected</span>
               </button>
-              <button class="ac-btn" data-ac="savings" aria-pressed="false"
+              <button class="ac-btn" data-ac="savings" role="radio" aria-checked="false" tabindex="-1"
                       aria-label="Savings: Money market funds &amp; savings accounts">
                 <span class="ac-btn-icon" aria-hidden="true">&#127974;</span>
                 <span class="ac-btn-label">Savings</span>
                 <span class="ac-btn-desc">Money market funds &amp; savings accounts</span>
+                <span class="detected-badge" id="badge-savings" style="display:none" aria-label="auto-detected">&#10003; Detected</span>
               </button>
+            </div>
+            <div id="overrideWarning" class="override-warning" style="display:none" role="alert" aria-live="polite">
+              <strong>&#9888; Override:</strong> You selected <strong id="owSelectedClass"></strong> but we detected <strong id="owDetectedClass"></strong>. Column mappings will change:
+              <div id="overrideDiff" class="col-diff"></div>
             </div>
           </div>
 
@@ -204,6 +214,11 @@ let _statusData = null;
 let _currentStep = 1;
 let _validationData = null;
 
+// Detection state (Phase 2)
+let _detectedClass = null;
+let _detectionConfidence = 0;
+let _isOverridden = false;
+
 // Summaries shown in completed step headers
 const _stepSummaries = { 1: '', 2: '', 3: '' };
 
@@ -238,6 +253,18 @@ function esc(s) { const d = document.createElement('div'); d.textContent = Strin
 
 function announce(msg) {
   const el = document.getElementById('stepAnnounce');
+  el.textContent = '';
+  requestAnimationFrame(() => { el.textContent = msg; });
+}
+
+function _announceDetect(msg) {
+  const el = document.getElementById('acDetectAnnounce');
+  el.textContent = '';
+  requestAnimationFrame(() => { el.textContent = msg; });
+}
+
+function _announceOverride(msg) {
+  const el = document.getElementById('acOverrideAnnounce');
   el.textContent = '';
   requestAnimationFrame(() => { el.textContent = msg; });
 }
@@ -305,6 +332,10 @@ function navigateToStep(target) {
     previewBtn.disabled = !_selectedFile;
     previewBtn.textContent = 'Next: Map Columns';
     document.getElementById('step1Err').textContent = '';
+    // Re-upload resets detection state
+    _detectedClass = null;
+    _detectionConfidence = 0;
+    _isOverridden = false;
   }
   if (target <= 2) {
     _validationData = null;
@@ -365,7 +396,11 @@ previewBtn.addEventListener('click', async () => {
     _rowCount = data.row_count;
     _filename = data.filename;
     _stepSummaries[1] = _filename + ' (' + _rowCount.toLocaleString() + ' rows)';
-    showStep2(data.detected_asset_class);
+    // Reset detection state for fresh upload
+    _detectedClass = data.detected_asset_class || null;
+    _detectionConfidence = data.detection_confidence || 0;
+    _isOverridden = false;
+    showStep2(_detectedClass);
   } catch(e) {
     step1Err.textContent = 'Network error: ' + e.message;
     previewBtn.disabled = false;
@@ -377,24 +412,87 @@ previewBtn.addEventListener('click', async () => {
 
 let _acListenersAdded = false;
 
+// Column fields per asset class (for mapping diff)
+const AC_FIELDS_ALL = {
+  stock:   ["date","type","ticker","quantity","price_per_share","total_amount","currency","fx_rate"],
+  cfd:     ["date","type","ticker","quantity","price_per_share","total_amount","currency","fx_rate"],
+  crypto:  ["date","type","ticker","quantity","price_per_share","total_amount"],
+  savings: ["date","type","ticker","quantity","price_per_share","total_amount","fx_rate"],
+};
+
+function buildColumnMappingDiff(fromClass, toClass) {
+  if (!fromClass || !toClass || fromClass === toClass) return '';
+  const from = AC_FIELDS_ALL[fromClass] || [];
+  const to   = AC_FIELDS_ALL[toClass]   || [];
+  const fromSet = new Set(from);
+  const toSet   = new Set(to);
+  const removed = from.filter(f => !toSet.has(f));
+  const added   = to.filter(f => !fromSet.has(f));
+  if (!removed.length && !added.length) return '';
+  let html = '<div class="col-diff">';
+  removed.forEach(f => {
+    html += `<div class="col-diff-row"><span class="col-diff-removed">${esc(FIELD_LABELS[f]||f)}</span><span class="col-diff-arrow">&#10005; removed</span></div>`;
+  });
+  added.forEach(f => {
+    html += `<div class="col-diff-row"><span class="col-diff-to">+ ${esc(FIELD_LABELS[f]||f)}</span><span class="col-diff-arrow">added</span></div>`;
+  });
+  html += '</div>';
+  return html;
+}
+
+function updateDetectionBadgeAndWarning() {
+  // Show/hide detected badge
+  ['stock','cfd','crypto','savings'].forEach(ac => {
+    const badge = document.getElementById('badge-' + ac);
+    if (badge) badge.style.display = (_detectedClass === ac) ? '' : 'none';
+  });
+
+  // Show/hide override warning
+  const warn = document.getElementById('overrideWarning');
+  if (!warn) return;
+  if (_detectedClass && _isOverridden && _assetClass !== _detectedClass) {
+    document.getElementById('owSelectedClass').textContent = _assetClass;
+    document.getElementById('owDetectedClass').textContent = _detectedClass;
+    document.getElementById('overrideDiff').innerHTML = buildColumnMappingDiff(_detectedClass, _assetClass);
+    warn.style.display = '';
+    announce('Override: you selected ' + _assetClass + ' but we detected ' + _detectedClass);
+  } else {
+    warn.style.display = 'none';
+  }
+}
+
 function showStep2(detectedClass) {
   setStep(2);
 
   _assetClass = detectedClass || 'stock';
+  _isOverridden = false;
   document.querySelectorAll('.ac-btn').forEach(btn => {
     btn.setAttribute('aria-pressed', btn.dataset.ac === _assetClass ? 'true' : 'false');
     btn.classList.toggle('active', btn.dataset.ac === _assetClass);
   });
 
+  updateDetectionBadgeAndWarning();
+
+  if (detectedClass) {
+    announce('Detected asset class: ' + detectedClass + '. Click a different option to override.');
+  }
+
   if (!_acListenersAdded) {
     _acListenersAdded = true;
     document.querySelectorAll('.ac-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        const prev = _assetClass;
         _assetClass = btn.dataset.ac;
+        if (_detectedClass && _assetClass !== _detectedClass) {
+          _isOverridden = true;
+        } else {
+          _isOverridden = false;
+        }
         document.querySelectorAll('.ac-btn').forEach(b => {
           b.classList.toggle('active', b.dataset.ac === _assetClass);
           b.setAttribute('aria-pressed', b.dataset.ac === _assetClass ? 'true' : 'false');
         });
+        updateDetectionBadgeAndWarning();
         buildMapTable();
         validateStep2();
       });
