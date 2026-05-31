@@ -885,3 +885,91 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
   .wz-body-inner{padding:1rem 0.9rem 1.25rem}
   .wz-accordion{border-radius:var(--radius-sm)}
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+   Column Mapping Inspector
+   ────────────────────────────────────────────────────────────────────── */
+
+/* Sticky preview table header */
+.preview-table thead th{position:sticky;top:0;z-index:10;background:var(--surface)}
+
+/* Inspectable column header */
+.ci-inspectable-th{cursor:pointer;position:relative;user-select:none;transition:background 0.1s,color 0.1s}
+.ci-inspectable-th:hover{background:var(--accent-dim);color:var(--accent)}
+.ci-inspectable-th:focus-visible{outline:2px solid var(--accent);outline-offset:-1px}
+.ci-reviewed-mark{color:var(--green);font-size:.7rem;margin-left:.3rem;font-weight:700}
+
+/* Inspector panel — side drawer (desktop ≥768px) */
+.ci-panel{
+  position:fixed;top:0;right:0;width:320px;height:100vh;
+  background:var(--surface);border-left:1px solid var(--border);
+  z-index:200;overflow-y:auto;
+  transform:translateX(100%);
+  transition:transform 0.25s ease,visibility 0.25s;
+  display:flex;flex-direction:column;
+  visibility:hidden;
+}
+.ci-panel.ci-open{transform:translateX(0);visibility:visible}
+
+/* Mobile: bottom sheet (<768px) */
+@media (max-width:768px) {
+  .ci-panel{
+    top:auto;bottom:0;right:0;left:0;width:100%;height:70vh;max-height:80vh;
+    border-left:none;border-top:1px solid var(--border);
+    border-radius:var(--radius) var(--radius) 0 0;
+    transform:translateY(100%);
+  }
+  .ci-panel.ci-open{transform:translateY(0)}
+}
+
+/* Inspector inner layout */
+.ci-inner{display:flex;flex-direction:column;height:100%;padding:1rem 1.1rem}
+
+/* Inspector header */
+.ci-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;gap:.5rem}
+.ci-col-name{font-size:.95rem;font-weight:700;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ci-close-btn{background:none;border:none;cursor:pointer;color:var(--muted);font-size:1.1rem;
+              padding:.25rem .4rem;border-radius:4px;flex-shrink:0;line-height:1;transition:color 0.1s,background 0.1s}
+.ci-close-btn:hover{color:var(--text);background:var(--raised)}
+.ci-close-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Inspector content area */
+.ci-content{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:.6rem}
+
+/* Meta row — type badge + mapped field */
+.ci-meta{display:flex;flex-direction:column;gap:.35rem}
+.ci-type-badge{
+  font-size:.72rem;font-weight:600;
+  background:var(--raised);border:1px solid var(--border);
+  border-radius:6px;padding:.2rem .55rem;
+  display:inline-flex;align-items:center;gap:.25rem;
+  color:var(--text);align-self:flex-start;
+}
+.ci-mapped-field{font-size:.8rem;color:var(--muted)}
+
+/* Samples section */
+.ci-section-label{
+  font-size:.65rem;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;
+}
+.ci-samples-section{display:flex;flex-direction:column}
+.ci-sample-list{list-style:none;display:flex;flex-direction:column;gap:.2rem}
+.ci-sample-item{
+  font-size:.78rem;font-family:monospace;
+  background:var(--raised);border-radius:4px;
+  padding:.2rem .45rem;color:var(--text);
+  border:1px solid var(--border);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.ci-no-samples{font-size:.8rem;color:var(--muted);font-style:italic}
+
+/* Transform preview */
+.ci-transform-preview{font-size:.8rem;color:var(--muted);min-height:.5rem}
+
+/* Action buttons */
+.ci-actions{
+  display:flex;flex-direction:column;gap:.45rem;
+  margin-top:auto;padding-top:.85rem;
+  border-top:1px solid var(--border);
+  flex-shrink:0;
+}

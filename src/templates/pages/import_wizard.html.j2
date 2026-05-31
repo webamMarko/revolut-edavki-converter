@@ -180,6 +180,40 @@
 
   </div><!-- end .wz-accordion -->
 </div>
+
+<!-- ── Column Inspector Panel ──────────────────────────────────────── -->
+<div id="columnInspector" class="ci-panel" role="dialog" aria-modal="true"
+     aria-labelledby="ci-col-name" aria-hidden="true">
+  <div class="ci-inner">
+    <!-- Header -->
+    <div class="ci-hdr">
+      <span id="ci-col-name" class="ci-col-name"></span>
+      <button id="ci-close" class="ci-close-btn" aria-label="Close column inspector">&#10005;</button>
+    </div>
+
+    <!-- Content -->
+    <div id="ci-content" class="ci-content">
+      <div class="ci-meta">
+        <span id="ci-type-badge" class="ci-type-badge"></span>
+        <div id="ci-mapped-field" class="ci-mapped-field"></div>
+      </div>
+
+      <div class="ci-samples-section">
+        <div class="ci-section-label">Sample values</div>
+        <div id="ci-samples" class="ci-samples"></div>
+      </div>
+
+      <div id="ci-transform-preview" class="ci-transform-preview"></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="ci-actions">
+      <button id="ci-looks-good" class="btn btn-primary btn-sm">Looks good</button>
+      <button id="ci-fix-this" class="btn btn-secondary btn-sm">Fix this</button>
+      <button id="ci-change-mapping" class="btn btn-secondary btn-sm">Change mapping</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -539,11 +573,31 @@ function showStep2(detectedClass) {
 
 function buildPreviewTable() {
   const t = document.getElementById('previewTable');
-  let html = '<thead><tr>' + _headers.map(h => '<th>'+esc(h)+'</th>').join('') + '</tr></thead><tbody>';
+  let html = '<thead><tr>' + _headers.map(h => {
+    const isReviewed = _ciState.reviewedColumns.has(h);
+    const reviewMark = isReviewed
+      ? '<span class="ci-reviewed-mark" aria-label="Reviewed">✓</span>'
+      : '';
+    return '<th class="ci-inspectable-th" tabIndex="0"' +
+           ' aria-haspopup="dialog"' +
+           ' aria-label="Inspect column: ' + esc(h) + '"' +
+           ' data-col="' + esc(h) + '">' +
+           esc(h) + reviewMark + '</th>';
+  }).join('') + '</tr></thead><tbody>';
   _rows.forEach(row => {
     html += '<tr>' + _headers.map((_, i) => '<td>'+esc(row[i] !== undefined ? row[i] : '')+'</td>').join('') + '</tr>';
   });
   t.innerHTML = html + '</tbody>';
+  // Wire click and keyboard handlers onto each inspectable header
+  t.querySelectorAll('.ci-inspectable-th').forEach(th => {
+    th.addEventListener('click', () => openInspector(th.dataset.col, th));
+    th.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openInspector(th.dataset.col, th);
+      }
+    });
+  });
 }
 
 function bestMatch(field, headers) {
@@ -838,6 +892,188 @@ document.getElementById('importBtn').addEventListener('click', async () => {
   } catch(e) {
     document.getElementById('step4Err').textContent = 'Network error: ' + e.message;
     btn.disabled = false; btn.textContent = 'Import';
+  }
+});
+
+// ── Column Inspector ───────────────────────────────────────────────────────
+
+// State object (ColumnInspectorProvider equivalent)
+const _ciState = {
+  activeColumn: null,
+  reviewedColumns: new Set(),
+};
+
+let _ciLastFocused = null;
+
+// Reducer-style dispatch (useReducer equivalent)
+function _ciDispatch(action) {
+  switch (action.type) {
+    case 'OPEN':
+      _ciState.activeColumn = action.columnId;
+      break;
+    case 'CLOSE':
+      _ciState.activeColumn = null;
+      break;
+    case 'MARK_REVIEWED':
+      _ciState.reviewedColumns.add(action.columnId);
+      _ciState.activeColumn = null;
+      break;
+  }
+  _ciRender();
+}
+
+// Public actions
+function openInspector(columnId, triggerEl) {
+  _ciLastFocused = triggerEl || null;
+  _ciDispatch({ type: 'OPEN', columnId });
+}
+
+function closeInspector() {
+  _ciDispatch({ type: 'CLOSE' });
+  if (_ciLastFocused) {
+    _ciLastFocused.focus();
+    _ciLastFocused = null;
+  }
+}
+
+function markReviewed(columnId) {
+  _ciDispatch({ type: 'MARK_REVIEWED', columnId });
+  if (_ciLastFocused) {
+    _ciLastFocused.focus();
+    _ciLastFocused = null;
+  }
+  // Refresh headers to show reviewed checkmark
+  if (_headers.length) buildPreviewTable();
+}
+
+// Type emoji helper (📅 date, 💰 currency/price, 🏷️ ticker)
+function _ciGetTypeEmoji(fieldName) {
+  if (fieldName === 'date') return '📅';
+  if (fieldName === 'ticker') return '🏷️';
+  if (['price_per_share', 'total_amount', 'fx_rate', 'currency'].includes(fieldName)) return '💰';
+  return '';
+}
+
+// Render the inspector panel from current state
+function _ciRender() {
+  const panel = document.getElementById('columnInspector');
+  if (!panel) return;
+
+  if (!_ciState.activeColumn) {
+    panel.classList.remove('ci-open');
+    panel.setAttribute('aria-hidden', 'true');
+    return;
+  }
+
+  const colName = _ciState.activeColumn;
+  const colIdx = _headers.indexOf(colName);
+
+  // Reverse-lookup: which DB field maps to this CSV column?
+  let mappedField = null;
+  document.querySelectorAll('#mapTable select').forEach(sel => {
+    if (sel.value === colName) mappedField = sel.dataset.field;
+  });
+
+  const emoji = mappedField ? _ciGetTypeEmoji(mappedField) : '';
+  const fieldLabel = mappedField ? (FIELD_LABELS[mappedField] || mappedField) : 'Unmapped';
+
+  document.getElementById('ci-col-name').textContent = colName;
+
+  const typeBadge = document.getElementById('ci-type-badge');
+  typeBadge.textContent = emoji
+    ? emoji + ' ' + fieldLabel
+    : (mappedField ? fieldLabel : 'Unmapped');
+
+  document.getElementById('ci-mapped-field').textContent = mappedField
+    ? 'Mapped to: ' + fieldLabel
+    : 'This column is not mapped to any field';
+
+  // Sample values from preview rows
+  const samplesEl = document.getElementById('ci-samples');
+  const samples = (_rows || [])
+    .map(row => (colIdx >= 0 && row[colIdx] !== undefined ? String(row[colIdx]) : ''))
+    .filter(v => v !== '');
+
+  samplesEl.innerHTML = samples.length
+    ? '<ul class="ci-sample-list">' +
+        samples.slice(0, 10).map(v =>
+          '<li class="ci-sample-item">' + esc(v.slice(0, 50)) + '</li>'
+        ).join('') +
+      '</ul>'
+    : '<div class="ci-no-samples">No sample data available</div>';
+
+  document.getElementById('ci-transform-preview').innerHTML = '';
+
+  panel.setAttribute('aria-hidden', 'false');
+  panel.classList.add('ci-open');
+
+  // Move focus into panel (focus first button)
+  requestAnimationFrame(() => {
+    const firstFocusable = panel.querySelector('button:not([disabled])');
+    if (firstFocusable) firstFocusable.focus();
+  });
+}
+
+// Wire action buttons
+document.getElementById('ci-looks-good').addEventListener('click', () => {
+  if (_ciState.activeColumn) markReviewed(_ciState.activeColumn);
+});
+
+document.getElementById('ci-fix-this').addEventListener('click', () => {
+  if (_ciState.activeColumn) {
+    closeInspector();
+    const mapTable = document.getElementById('mapTable');
+    if (mapTable) mapTable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+});
+
+document.getElementById('ci-change-mapping').addEventListener('click', () => {
+  closeInspector();
+  const mapTable = document.getElementById('mapTable');
+  if (mapTable) mapTable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+document.getElementById('ci-close').addEventListener('click', closeInspector);
+
+// Keyboard: Escape closes + focus trap (Tab cycles within panel)
+document.addEventListener('keydown', e => {
+  const panel = document.getElementById('columnInspector');
+  if (!panel) return;
+  const isOpen = panel.classList.contains('ci-open');
+
+  if (e.key === 'Escape' && isOpen) {
+    closeInspector();
+    return;
+  }
+
+  if (!isOpen || e.key !== 'Tab') return;
+
+  const focusable = Array.from(
+    panel.querySelectorAll('button:not([disabled]), [tabindex]:not([tabindex="-1"])')
+  );
+  if (focusable.length === 0) return;
+  const firstFocusable = focusable[0];
+  const lastFocusable = focusable[focusable.length - 1];
+
+  if (e.shiftKey) {
+    if (document.activeElement === firstFocusable) {
+      e.preventDefault();
+      lastFocusable.focus();
+    }
+  } else {
+    if (document.activeElement === lastFocusable) {
+      e.preventDefault();
+      firstFocusable.focus();
+    }
+  }
+});
+
+// Click-outside: clicking the table area behind the drawer closes it
+document.addEventListener('click', e => {
+  const panel = document.getElementById('columnInspector');
+  if (!panel || !panel.classList.contains('ci-open')) return;
+  if (!panel.contains(e.target) && !e.target.closest('.ci-inspectable-th')) {
+    closeInspector();
   }
 });
 </script>
