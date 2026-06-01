@@ -93,7 +93,7 @@ def _get_fx_rate(fx_cache: dict, date_str: str, conn: sqlite3.Connection,
         "SELECT rate FROM fx_rates WHERE from_currency = ? AND to_currency = 'EUR' AND date <= ? ORDER BY date DESC LIMIT 1",
         (currency, date_str)
     ).fetchone()
-    rate = row[0] if row else 1.10  # sensible fallback
+    rate = row[0] if row else 0.91  # sensible fallback (1 USD ≈ 0.91 EUR)
     fx_cache[cache_key] = rate
     return rate
 
@@ -330,10 +330,11 @@ def _compute_analytics_inner(conn: sqlite3.Connection, year: int | None,
             currency = tx.get("currency", "USD")
 
             # If fx_rate is 1.0 but currency is not EUR, look up actual FX rate
+            # _get_fx_rate returns USD→EUR rate (~0.86); invert to EUR→USD for /fx usage
             if fx == 1.0 and currency != "EUR" and amount > 0:
                 db_fx = _get_fx_rate(fx_cache, date_str, conn, prices_conn, currency=currency)
                 if db_fx > 0:
-                    fx = db_fx
+                    fx = 1.0 / db_fx
 
             # In 'all' scope, prefix CFD/crypto/savings tickers to avoid mixing with stocks
             is_cfd_tx = tx.get("asset_class") == "cfd"
@@ -758,7 +759,7 @@ def _compute_analytics_inner(conn: sqlite3.Connection, year: int | None,
                 if currency == "EUR":
                     portfolio_value += qty * actual_close
                 else:
-                    portfolio_value += qty * actual_close / fx_rate
+                    portfolio_value += qty * actual_close * fx_rate
             elif ticker in last_known_price_eur:
                 # No yfinance data (e.g. bonds/ISINs): use last trade price
                 portfolio_value += qty * last_known_price_eur[ticker]
@@ -993,7 +994,7 @@ def _get_current_value_eur(ticker: str, date_str: str, conn: sqlite3.Connection,
     fx_rate = _get_fx_rate(fx_cache, date_str, conn, prices_conn)
     if currency == "EUR":
         return close
-    return close / fx_rate
+    return close * fx_rate
 
 
 def _compute_risk_metrics(daily_df: pd.DataFrame) -> dict:

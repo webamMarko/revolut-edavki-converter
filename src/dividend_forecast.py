@@ -65,7 +65,7 @@ def _get_held_positions(conn: sqlite3.Connection, portfolio_id: int | None = Non
 def _get_latest_fx_rate(conn: sqlite3.Connection) -> float:
     """Get most recent EUR/USD rate."""
     row = conn.execute("SELECT rate FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' ORDER BY date DESC LIMIT 1").fetchone()
-    return row[0] if row else 1.08
+    return row[0] if row else 0.91
 
 
 def _project_next_dates(historical_dates: list[str], frequency: str | None,
@@ -198,7 +198,7 @@ def build_dividend_forecast(conn: sqlite3.Connection,
         # Confirmed upcoming (already in schedule, after today)
         for row in rows:
             if row["ex_date"] > today_str:
-                amt_eur = row["amount"] * shares / fx_rate if currency != "EUR" else row["amount"] * shares
+                amt_eur = row["amount"] * shares * fx_rate if currency != "EUR" else row["amount"] * shares
                 event = DividendEvent(
                     ticker=ticker,
                     ex_date=row["ex_date"],
@@ -218,7 +218,7 @@ def build_dividend_forecast(conn: sqlite3.Connection,
         for proj_date in projected_dates:
             if proj_date > horizon_str:
                 break
-            amt_eur = latest_amount * shares / fx_rate if currency != "EUR" else latest_amount * shares
+            amt_eur = latest_amount * shares * fx_rate if currency != "EUR" else latest_amount * shares
             event = DividendEvent(
                 ticker=ticker,
                 ex_date=proj_date,
@@ -243,7 +243,7 @@ def build_dividend_forecast(conn: sqlite3.Connection,
         else:
             annual_est = latest_amount * shares
 
-        annual_eur = annual_est / fx_rate if currency != "EUR" else annual_est
+        annual_eur = annual_est * fx_rate if currency != "EUR" else annual_est
         annual_by_ticker[ticker] = round(annual_eur, 2)
 
         # Detect changes

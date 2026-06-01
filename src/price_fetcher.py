@@ -286,6 +286,20 @@ def sync_benchmarks(conn: sqlite3.Connection, start_date: datetime | None = None
     print("Benchmark indexes updated")
 
 
+def _fix_inverted_fx_rates(conn: sqlite3.Connection):
+    """One-time migration: invert FX rates that were stored as EUR/foreign instead of foreign/EUR.
+
+    Old code fetched EURUSD=X (~1.17) and stored it as from=USD,to=EUR — wrong direction.
+    Correct: from=USD,to=EUR rate should be ~0.85 (how many EUR per 1 USD).
+    """
+    count = conn.execute(
+        "UPDATE fx_rates SET rate = 1.0 / rate "
+        "WHERE from_currency = 'USD' AND to_currency = 'EUR' AND rate > 1.0"
+    ).rowcount
+    if count:
+        conn.commit()
+
+
 def sync_fx_rates(conn: sqlite3.Connection, start_date: datetime | None = None,
                   end_date: datetime | None = None, verbose: bool = False,
                   prices_conn: sqlite3.Connection | None = None):
@@ -339,6 +353,9 @@ def sync_fx_rates(conn: sqlite3.Connection, start_date: datetime | None = None,
             if verbose:
                 print(f"    -> no data for {yf_pair}")
 
+    _fix_inverted_fx_rates(target)
+    if prices_conn is not None and prices_conn is not conn:
+        _fix_inverted_fx_rates(conn)
     if updated_any:
         print("FX rates updated")
     else:

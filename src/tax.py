@@ -210,7 +210,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     " AND date <= ? ORDER BY date DESC LIMIT 1",
                     (_currency, date_str),
                 ).fetchone()
-                _fx_cache[_ck] = _row[0] if _row else fx
+                _fx_cache[_ck] = (1.0 / _row[0]) if _row and _row[0] > 0 else fx
             fx = _fx_cache[_ck] or fx
 
         # In 'all' scope, prefix CFD/crypto/savings tickers to avoid mixing with stocks
@@ -612,9 +612,9 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
             fx_row = _pconn.execute(
                 "SELECT rate FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' ORDER BY date DESC LIMIT 1"
             ).fetchone()
-            fx_rate = fx_row[0] if fx_row else 1.10
+            fx_rate = fx_row[0] if fx_row else 0.91
 
-            price_eur = close / fx_rate if currency != "EUR" else close
+            price_eur = close * fx_rate if currency != "EUR" else close
             market_value = qty * price_eur
 
             cost = sum(lq * lc for lq, lc, _ in lots)
@@ -667,8 +667,8 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
         fx_row = _pconn.execute(
             "SELECT rate FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' ORDER BY date DESC LIMIT 1"
         ).fetchone()
-        fx_rate = fx_row[0] if fx_row else 1.10
-        price_eur = close / fx_rate if currency != "EUR" else close
+        fx_rate = fx_row[0] if fx_row else 0.91
+        price_eur = close * fx_rate if currency != "EUR" else close
         market_value = qty * price_eur
         cost = sum(lq * lc for lq, lc, _ in lots)
         unrealized = market_value - cost

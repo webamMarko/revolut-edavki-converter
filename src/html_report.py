@@ -259,7 +259,7 @@ def _query_position_price_history(conn: sqlite3.Connection, tickers: list[str],
             d = (_date.fromisoformat(date) - _timedelta(days=i)).isoformat()
             if d in fx_map:
                 return fx_map[d]
-        return 1.1  # fallback
+        return 0.91  # fallback (1 USD ≈ 0.91 EUR)
 
     for ticker in tickers:
         # Strip asset-class prefix for DB lookup
@@ -284,7 +284,7 @@ def _query_position_price_history(conn: sqlite3.Connection, tickers: list[str],
                 price_eur = close
             else:
                 rate = eur_usd_for(date)
-                price_eur = close / rate if rate else close
+                price_eur = close * rate if rate else close
             dates.append(date)
             values.append(round(price_eur, 4))
         if dates:
@@ -550,7 +550,7 @@ def _compute_correlation_matrix(conn: sqlite3.Connection | None,
             d = (_date.fromisoformat(dt) - _td(days=i)).isoformat()
             if d in fx_map:
                 return fx_map[d]
-        return 1.1
+        return 0.91  # fallback (1 USD ≈ 0.91 EUR)
 
     price_series = {}
     for ticker in tickers:
@@ -567,7 +567,7 @@ def _compute_correlation_matrix(conn: sqlite3.Connection | None,
             continue
         prices = {}
         for r in rows:
-            price = r[1] / eur_usd_for(r[0]) if r[2] != "EUR" else r[1]
+            price = r[1] * eur_usd_for(r[0]) if r[2] != "EUR" else r[1]
             prices[r[0]] = price
         price_series[ticker] = prices
 
@@ -785,7 +785,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
             "SELECT rate FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' ORDER BY date DESC LIMIT 1"
         ).fetchone()
         if row:
-            fx_display_rate = row[0]  # 1 EUR = X USD
+            fx_display_rate = 1.0 / row[0] if row[0] > 0 else 1.0  # invert USD→EUR to get EUR→USD
 
     daily = analytics.daily_series
     data = {

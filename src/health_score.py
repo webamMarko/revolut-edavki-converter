@@ -195,7 +195,7 @@ def _holding_period_score(
     fx_row = (_pconn or conn).execute(
         "SELECT rate FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' ORDER BY date DESC LIMIT 1"
     ).fetchone() if conn else None
-    eur_usd = fx_row[0] if fx_row else 1.10
+    eur_usd = fx_row[0] if fx_row else 0.91
 
     ticker_currency: dict[str, str] = {}
     for p in positions:
@@ -216,7 +216,7 @@ def _holding_period_score(
     def to_eur(amount: float, currency: str) -> float:
         if currency == "EUR":
             return amount
-        return amount / eur_usd
+        return amount * eur_usd
 
     imminent_count = 0
 

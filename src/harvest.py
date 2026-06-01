@@ -225,7 +225,7 @@ def compute_harvest_suggestions(
     fx_row = _pconn.execute(
         "SELECT rate FROM fx_rates WHERE from_currency = 'USD' AND to_currency = 'EUR' ORDER BY date DESC LIMIT 1"
     ).fetchone()
-    fx_rate = fx_row[0] if fx_row else 1.10
+    fx_rate = fx_row[0] if fx_row else 0.91
 
     suggestions: list[HarvestSuggestion] = []
 
@@ -254,7 +254,7 @@ def compute_harvest_suggestions(
             price_eur = close / (last_tx[1] or 1.0)
         else:
             close, currency = row[0], row[1]
-            price_eur = close / fx_rate if currency != "EUR" else close
+            price_eur = close * fx_rate if currency != "EUR" else close
 
         market_value = qty * price_eur
         cost = sum(lq * lc for lq, lc, _ in lots)
