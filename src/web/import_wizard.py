@@ -238,3 +238,113 @@ def handle_import_run(handler):
         "new": result.new,
         "skipped": result.skipped,
     })
+
+
+def handle_import_autofix(handler):
+    """POST /import/autofix — apply auto-fixes to staged CSV and re-validate."""
+    session = get_session(handler)
+    if not session or session["role"] not in ("premium", "admin"):
+        json_response(handler, {"error": "Login required."}, status=403)
+        return
+
+    body = handler._read_body()
+    try:
+        data = json.loads(body)
+    except Exception:
+        json_response(handler, {"error": "Invalid JSON."}, status=400)
+        return
+
+    asset_class = data.get("asset_class", "")
+    column_map = data.get("mapping", {})
+    fix_types = data.get("fix_types", [])
+
+    if asset_class not in ("stock", "cfd", "crypto", "savings"):
+        json_response(handler, {"error": "Invalid asset class."}, status=400)
+        return
+
+    if not fix_types:
+        json_response(handler, {"error": "No fix_types specified."}, status=400)
+        return
+
+    token = get_session_token(handler)
+    staging = _IMPORT_STAGING.get(token)
+    if not staging or staging["expires"] < time.time():
+        if staging:
+            cleanup_staging(token)
+        json_response(handler, {"error": "Upload session expired. Please re-upload the file."}, status=400)
+        return
+
+    import re as _re
+    from datetime import datetime as _dt
+    import pandas as _pd
+    from ..import_validator import validate_csv
+
+    file_path = staging["path"]
+    try:
+        df = _pd.read_csv(file_path)
+        if len(df.columns) == 1 or (len(df.columns) < 3 and ";" in df.columns[0]):
+            df = _pd.read_csv(file_path, sep=";")
+    except Exception as e:
+        json_response(handler, {"error": f"Could not read staged file: {e}"}, status=500)
+        return
+
+    mapped_cols = set(column_map.values())
+    date_col = column_map.get("date")
+    num_cols = {column_map[f] for f in ("quantity", "price_per_share", "total_amount", "fx_rate") if f in column_map}
+
+    def _normalize_date(val):
+        if _pd.isna(val) or not str(val).strip():
+            return val
+        s = str(val).strip()
+        if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+            return s
+        for fmt in (
+            "%b %d, %Y, %I:%M:%S %p", "%b %d, %Y, %H:%M:%S",
+            "%Y-%m-%d %H:%M:%S", "%d/%m/%Y", "%m/%d/%Y",
+            "%d-%m-%Y", "%d.%m.%Y", "%Y/%m/%d",
+        ):
+            try:
+                return _dt.strptime(s, fmt).strftime("%Y-%m-%d")
+            except ValueError:
+                continue
+        return val
+
+    def _normalize_number(val):
+        if _pd.isna(val) or not str(val).strip():
+            return val
+        if isinstance(val, (int, float)):
+            return val
+        s = str(val).strip()
+        s = _re.sub(r"^[A-Z]{3}\s+", "", s)
+        s = s.lstrip("€$£¥").strip()
+        s = s.replace(",", "")
+        s = _re.sub(r"\s+[A-Z]{2,4}$", "", s).strip()
+        return s
+
+    for col in df.columns:
+        if col not in mapped_cols:
+            continue
+        if "whitespace_trim" in fix_types:
+            df[col] = df[col].apply(lambda v: v.strip() if isinstance(v, str) else v)
+        if "date_format" in fix_types and col == date_col:
+            df[col] = df[col].apply(_normalize_date)
+        if "number_format" in fix_types and col in num_cols:
+            df[col] = df[col].apply(_normalize_number)
+
+    try:
+        df.to_csv(file_path, index=False)
+    except Exception as e:
+        json_response(handler, {"error": f"Could not write fixed file: {e}"}, status=500)
+        return
+
+    existing_tickers = []
+    try:
+        conn = portfolio_conn(session, get_session_token(handler))
+        rows = conn.execute("SELECT DISTINCT ticker FROM transactions WHERE ticker IS NOT NULL").fetchall()
+        existing_tickers = [r[0] for r in rows]
+        conn.close()
+    except Exception:
+        pass
+
+    report = validate_csv(df, column_map, asset_class, existing_tickers)
+    json_response(handler, report.to_dict())
