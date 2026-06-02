@@ -36,6 +36,20 @@ function computePeriodMetrics(si, ei) {
   };
 }
 
+// --- Metrics config: classifies all 10 overview metrics by tier ---
+var METRICS_CONFIG = [
+  { key: 'summary.portfolio_value', tier: 'primary' },
+  { key: 'summary.total_return',    tier: 'primary' },
+  { key: 'summary.daily_change',    tier: 'primary' },
+  { key: 'summary.dividend_yield',  tier: 'primary' },
+  { key: 'summary.cagr',            tier: 'secondary' },
+  { key: 'summary.sharpe',          tier: 'secondary' },
+  { key: 'summary.max_drawdown',    tier: 'secondary' },
+  { key: 'summary.unrealized_pnl',  tier: 'secondary' },
+  { key: 'summary.absolute_gain',   tier: 'secondary' },
+  { key: 'summary.twr',             tier: 'secondary' },
+];
+
 // --- Summary cards ---
 function _renderCard(key, l, v, c, sub, isCustomize, isHidden, rawValue) {
   var hideStyle = isHidden ? ' style="opacity:0.35"' : '';
@@ -58,6 +72,7 @@ function _renderCard(key, l, v, c, sub, isCustomize, isHidden, rawValue) {
 
 function updateSummary() {
   const el = scopedFind(null, 'summary');
+  const elSec = scopedFind(null, 'summarySecondary');
   var isCustomize = window._layoutIsCustomizeMode ? _layoutIsCustomizeMode() : false;
   var layoutCfg = window._layoutGetCardOrder ? _layoutGetCardOrder() : { order: [], hidden: [] };
   var hiddenCards = layoutCfg.hidden || [];
@@ -75,53 +90,68 @@ function updateSummary() {
     el.innerHTML = cards.map(([key,l,v,c,sub,raw])=>
       _renderCard(key, l, v, c, sub, isCustomize, hiddenCards.indexOf(key) >= 0, raw)
     ).join('');
-  } else {
-    const s = getActiveSummary();
-    const cards = [
-      ['summary.portfolio_value', t('summary.portfolio_value'), fmtCcy(s.portfolio_value_eur), '', '', s.portfolio_value_eur],
-      ['summary.total_invested', t('summary.total_invested'), fmtCcy(s.total_invested_eur), '', '', s.total_invested_eur],
-      ['summary.absolute_gain', t('summary.absolute_gain'), signCcy(s.absolute_gain_eur), cls(s.absolute_gain_eur), '', s.absolute_gain_eur],
-      ['summary.total_return', t('summary.total_return'), sign(s.total_return_pct)+'%', cls(s.total_return_pct), '', s.total_return_pct],
-      ['summary.cagr', t('summary.cagr'), s.cagr_pct!=null?sign(s.cagr_pct)+'%':'—', cls(s.cagr_pct), '', s.cagr_pct],
-      ['summary.twr', t('summary.twr'), s.twr_pct!=null?sign(s.twr_pct)+'%':'—', cls(s.twr_pct), '', s.twr_pct],
-      ['summary.max_drawdown', t('summary.max_drawdown'), pct(s.max_drawdown_pct), 'neg', s.max_drawdown_peak_date+' → '+s.max_drawdown_trough_date, s.max_drawdown_pct],
-    ];
-    const yearly = computeYearlyAverages();
-    if (yearly) {
-      const totalYears = allDates.length > 1
-        ? (new Date(allDates[allDates.length-1]) - new Date(allDates[0])) / (365.25 * 86400000)
-        : 1;
-      const sub = yearly.numYears + ' ' + t('summary.yr_avg');
-      cards.push(['summary.avg_yearly_growth', t('summary.avg_yearly_growth'), signCcy(yearly.avgValueGrowth), cls(yearly.avgValueGrowth), sub, yearly.avgValueGrowth]);
-      if (s.total_return_pct != null && totalYears > 0)
-        cards.push(['summary.avg_yearly_return', t('summary.avg_yearly_return'), sign(s.total_return_pct / totalYears)+'%', cls(s.total_return_pct), sub, s.total_return_pct / totalYears]);
-      cards.push(['summary.avg_yearly_invested', t('summary.avg_yearly_invested'), signCcy(yearly.avgCashAdded), cls(yearly.avgCashAdded), sub, yearly.avgCashAdded]);
-    }
+    if (elSec) elSec.innerHTML = '';
+    return;
+  }
 
-    // Apply card ordering from layout
-    var cardMap = {};
-    cards.forEach(function(c) { cardMap[c[0]] = c; });
-    var orderedCards = [];
-    var cardOrder = layoutCfg.order;
-    if (cardOrder && cardOrder.length > 0) {
-      cardOrder.forEach(function(key) {
-        if (cardMap[key]) orderedCards.push(cardMap[key]);
-      });
-      cards.forEach(function(c) {
-        if (cardOrder.indexOf(c[0]) < 0) orderedCards.push(c);
-      });
-    } else {
-      orderedCards = cards;
-    }
+  const s = getActiveSummary();
+  const rm = (s.risk_metrics) || {};
+  const gains = D.gains || {};
 
-    // Filter hidden (unless customize mode)
-    var visibleCards = isCustomize ? orderedCards : orderedCards.filter(function(c) {
-      return hiddenCards.indexOf(c[0]) < 0;
-    });
+  // Compute daily change from last two values in the daily series
+  var dailyChange = null;
+  if (ds.value_eur && ds.value_eur.length >= 2) {
+    dailyChange = ds.value_eur[ds.value_eur.length - 1] - ds.value_eur[ds.value_eur.length - 2];
+  }
 
-    el.innerHTML = visibleCards.map(([key,l,v,c,sub,raw])=>
-      _renderCard(key, l, v, c, sub, isCustomize, hiddenCards.indexOf(key) >= 0, raw)
-    ).join('');
+  // Compute dividend yield (cumulative dividends / current portfolio value * 100)
+  var dividendYield = null;
+  if (gains.dividends_eur != null && s.portfolio_value_eur > 0) {
+    dividendYield = gains.dividends_eur / s.portfolio_value_eur * 100;
+  }
+
+  // Build card data keyed by metric key — drives the config-based split
+  var allCardData = {
+    'summary.portfolio_value': ['summary.portfolio_value', t('summary.portfolio_value'), fmtCcy(s.portfolio_value_eur), '', '', s.portfolio_value_eur],
+    'summary.total_return':    ['summary.total_return',    t('summary.total_return'),    sign(s.total_return_pct)+'%', cls(s.total_return_pct), '', s.total_return_pct],
+    'summary.daily_change':    ['summary.daily_change',    t('summary.daily_change'),    dailyChange != null ? signCcy(dailyChange) : '—', dailyChange != null ? cls(dailyChange) : '', '', dailyChange],
+    'summary.dividend_yield':  ['summary.dividend_yield',  t('summary.dividend_yield'),  dividendYield != null ? sign(dividendYield)+'%' : '—', '', '', dividendYield],
+    'summary.cagr':            ['summary.cagr',            t('summary.cagr'),            s.cagr_pct!=null?sign(s.cagr_pct)+'%':'—', cls(s.cagr_pct), '', s.cagr_pct],
+    'summary.sharpe':          ['summary.sharpe',          t('risk.sharpe'),             rm.sharpe_ratio!=null?fmt(rm.sharpe_ratio):'—', rm.sharpe_ratio!=null?cls(rm.sharpe_ratio):'', '', rm.sharpe_ratio],
+    'summary.max_drawdown':    ['summary.max_drawdown',    t('summary.max_drawdown'),    pct(s.max_drawdown_pct), 'neg', s.max_drawdown_peak_date+' → '+s.max_drawdown_trough_date, s.max_drawdown_pct],
+    'summary.unrealized_pnl':  ['summary.unrealized_pnl',  t('summary.unrealized_pnl'),  gains.unrealized_eur != null ? signCcy(gains.unrealized_eur) : '—', gains.unrealized_eur != null ? cls(gains.unrealized_eur) : '', '', gains.unrealized_eur],
+    'summary.absolute_gain':   ['summary.absolute_gain',   t('summary.absolute_gain'),   signCcy(s.absolute_gain_eur), cls(s.absolute_gain_eur), '', s.absolute_gain_eur],
+    'summary.twr':             ['summary.twr',             t('summary.twr'),             s.twr_pct!=null?sign(s.twr_pct)+'%':'—', cls(s.twr_pct), '', s.twr_pct],
+  };
+
+  // Split into primary/secondary using METRICS_CONFIG — no hardcoded filtering
+  var primaryCards = METRICS_CONFIG.filter(function(m) { return m.tier === 'primary'; })
+    .map(function(m) { return allCardData[m.key]; }).filter(Boolean);
+  var secondaryCards = METRICS_CONFIG.filter(function(m) { return m.tier === 'secondary'; })
+    .map(function(m) { return allCardData[m.key]; }).filter(Boolean);
+
+  // Apply layout ordering/hiding to primary cards
+  var cardOrder = layoutCfg.order;
+  if (cardOrder && cardOrder.length > 0) {
+    var primaryMap = {};
+    primaryCards.forEach(function(c) { primaryMap[c[0]] = c; });
+    var orderedPrimary = [];
+    cardOrder.forEach(function(key) { if (primaryMap[key]) orderedPrimary.push(primaryMap[key]); });
+    primaryCards.forEach(function(c) { if (cardOrder.indexOf(c[0]) < 0) orderedPrimary.push(c); });
+    primaryCards = orderedPrimary;
+  }
+  var visiblePrimary = isCustomize ? primaryCards : primaryCards.filter(function(c) {
+    return hiddenCards.indexOf(c[0]) < 0;
+  });
+
+  el.innerHTML = visiblePrimary.map(function(c) {
+    return _renderCard(c[0], c[1], c[2], c[3], c[4], isCustomize, hiddenCards.indexOf(c[0]) >= 0, c[5]);
+  }).join('');
+
+  if (elSec) {
+    elSec.innerHTML = secondaryCards.map(function(c) {
+      return _renderCard(c[0], c[1], c[2], c[3], c[4], false, false, c[5]);
+    }).join('');
   }
 }
 
@@ -310,6 +340,39 @@ function updateMilestones() {
     });
   }
 }
+
+// --- Metrics toggle (progressive disclosure) ---
+(function() {
+  var btn = document.getElementById('overviewMetricsToggle');
+  var panel = document.getElementById('overviewMetricsPanel');
+  var label = document.getElementById('overviewMetricsLabel');
+  if (!btn || !panel || !label) return;
+
+  function setExpanded(val) {
+    btn.setAttribute('aria-expanded', val ? 'true' : 'false');
+    if (val) {
+      panel.classList.add('is-expanded');
+    } else {
+      panel.classList.remove('is-expanded');
+    }
+    label.textContent = val ? 'Show fewer metrics' : 'Show more metrics';
+    try {
+      localStorage.setItem('overview-metrics-expanded', val ? '1' : '0');
+    } catch (e) {}
+  }
+
+  var initial = false;
+  try {
+    var stored = localStorage.getItem('overview-metrics-expanded');
+    if (stored === '1') initial = true;
+  } catch (e) {}
+  setExpanded(initial);
+
+  btn.addEventListener('click', function() {
+    var expanded = btn.getAttribute('aria-expanded') === 'true';
+    setExpanded(!expanded);
+  });
+})();
 
 // --- Tax season banner (Jan-Mar) ---
 (function() {
