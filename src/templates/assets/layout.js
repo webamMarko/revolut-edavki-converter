@@ -9,25 +9,26 @@
   ];
 
   var DEFAULT_CARD_ORDER = [
-    'summary.portfolio_value', 'summary.total_invested', 'summary.absolute_gain',
-    'summary.total_return', 'summary.cagr', 'summary.twr', 'summary.max_drawdown',
+    'summary.portfolio_value', 'summary.total_return', 'summary.daily_change', 'summary.dividend_yield',
+    'summary.total_invested', 'summary.absolute_gain',
+    'summary.cagr', 'summary.twr', 'summary.max_drawdown',
     'summary.avg_yearly_growth', 'summary.avg_yearly_return', 'summary.avg_yearly_invested'
   ];
 
   var PRESETS = {
     'tax-focused': {
       navOrder: ['overview', 'tax', 'positions', 'history', 'charts', 'risk', 'dividends', 'projections', 'notes', 'realestate'],
-      cardOrder: ['summary.portfolio_value', 'summary.absolute_gain', 'summary.total_return', 'summary.max_drawdown', 'summary.cagr', 'summary.twr', 'summary.total_invested', 'summary.avg_yearly_growth', 'summary.avg_yearly_return', 'summary.avg_yearly_invested'],
+      cardOrder: ['summary.portfolio_value', 'summary.total_return', 'summary.daily_change', 'summary.dividend_yield', 'summary.absolute_gain', 'summary.max_drawdown', 'summary.cagr', 'summary.twr', 'summary.total_invested', 'summary.avg_yearly_growth', 'summary.avg_yearly_return', 'summary.avg_yearly_invested'],
       hiddenCards: []
     },
     'growth-focused': {
       navOrder: ['overview', 'charts', 'projections', 'positions', 'risk', 'dividends', 'notes', 'realestate', 'tax', 'history'],
-      cardOrder: ['summary.total_return', 'summary.cagr', 'summary.twr', 'summary.portfolio_value', 'summary.absolute_gain', 'summary.avg_yearly_growth', 'summary.avg_yearly_return', 'summary.total_invested', 'summary.max_drawdown', 'summary.avg_yearly_invested'],
+      cardOrder: ['summary.total_return', 'summary.cagr', 'summary.daily_change', 'summary.dividend_yield', 'summary.twr', 'summary.portfolio_value', 'summary.absolute_gain', 'summary.avg_yearly_growth', 'summary.avg_yearly_return', 'summary.total_invested', 'summary.max_drawdown', 'summary.avg_yearly_invested'],
       hiddenCards: []
     },
     'income-focused': {
       navOrder: ['overview', 'dividends', 'positions', 'charts', 'projections', 'tax', 'risk', 'notes', 'realestate', 'history'],
-      cardOrder: ['summary.portfolio_value', 'summary.total_invested', 'summary.avg_yearly_invested', 'summary.total_return', 'summary.absolute_gain', 'summary.cagr', 'summary.twr', 'summary.avg_yearly_growth', 'summary.avg_yearly_return', 'summary.max_drawdown'],
+      cardOrder: ['summary.portfolio_value', 'summary.dividend_yield', 'summary.daily_change', 'summary.total_return', 'summary.total_invested', 'summary.avg_yearly_invested', 'summary.absolute_gain', 'summary.cagr', 'summary.twr', 'summary.avg_yearly_growth', 'summary.avg_yearly_return', 'summary.max_drawdown'],
       hiddenCards: []
     }
   };

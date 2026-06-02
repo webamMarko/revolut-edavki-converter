@@ -16,6 +16,18 @@
 <div class="page-stack">
   <section data-role="summary" class="card-grid"></section>
 
+  <div class="metrics-toggle-wrap">
+    <button class="metrics-toggle" id="overviewMetricsToggle" aria-expanded="false" aria-controls="overviewMetricsPanel">
+      <span class="metrics-toggle-label" id="overviewMetricsLabel">Show more metrics</span>
+      <svg class="metrics-toggle-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+  <div id="overviewMetricsPanel" class="overview-metrics-panel">
+    <div class="overview-metrics-inner">
+      <section data-role="summarySecondary" class="card-grid"></section>
+    </div>
+  </div>
+
   <section data-role="milestonesSection" class="milestones-strip-wrap" style="display:none">
     <div data-role="milestonesStrip" class="milestones-strip"></div>
     <div data-role="milestonesList" class="milestones-list" style="display:none"></div>

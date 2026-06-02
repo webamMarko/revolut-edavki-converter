@@ -16,6 +16,8 @@
   <div id="stepAnnounce" aria-live="polite" aria-atomic="true" class="sr-only"></div>
   <div id="acDetectAnnounce" aria-live="polite" aria-atomic="true" class="sr-only"></div>
   <div id="acOverrideAnnounce" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+  <!-- Column inspector announcements for screen readers -->
+  <div id="ci-announce" aria-live="polite" aria-atomic="true" class="sr-only"></div>
 
   <!-- Import History Card -->
   <div class="card" id="historyCard" style="display:none;margin-bottom:1rem;padding:.75rem 1rem;background:var(--bg-alt,#f8f9fa);border:1px solid var(--border,#e0e0e0)">
@@ -196,6 +198,12 @@
       <div class="ci-meta">
         <span id="ci-type-badge" class="ci-type-badge"></span>
         <div id="ci-mapped-field" class="ci-mapped-field"></div>
+      </div>
+
+      <!-- Unmapped column section — shown only when column has no mapping -->
+      <div id="ci-unmapped-section" class="ci-unmapped-section" style="display:none">
+        <span class="ci-unmapped-badge">Unmapped</span>
+        <button id="ci-map-this" class="btn btn-primary btn-sm">Map this column</button>
       </div>
 
       <div class="ci-samples-section">
@@ -938,12 +946,21 @@ function closeInspector() {
 
 function markReviewed(columnId) {
   _ciDispatch({ type: 'MARK_REVIEWED', columnId });
+  _ciAnnounce('Reviewed: ' + columnId + ' marked as reviewed');
   if (_ciLastFocused) {
     _ciLastFocused.focus();
     _ciLastFocused = null;
   }
   // Refresh headers to show reviewed checkmark
   if (_headers.length) buildPreviewTable();
+}
+
+// Screen reader announcement helper
+function _ciAnnounce(msg) {
+  const el = document.getElementById('ci-announce');
+  if (!el) return;
+  el.textContent = '';
+  requestAnimationFrame(() => { el.textContent = msg; });
 }
 
 // Type emoji helper (📅 date, 💰 currency/price, 🏷️ ticker)
@@ -953,6 +970,31 @@ function _ciGetTypeEmoji(fieldName) {
   if (['price_per_share', 'total_amount', 'fx_rate', 'currency'].includes(fieldName)) return '💰';
   return '';
 }
+
+// Transform functions for each field type (live before/after preview)
+const _ciTransformFns = {
+  date: v => {
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? v : d.toISOString().slice(0, 10);
+  },
+  price_per_share: v => {
+    const n = parseFloat(v.replace(/[^0-9.\-]/g, ''));
+    return isNaN(n) ? v : n.toFixed(2);
+  },
+  total_amount: v => {
+    const n = parseFloat(v.replace(/[^0-9.\-]/g, ''));
+    return isNaN(n) ? v : n.toFixed(2);
+  },
+  fx_rate: v => {
+    const n = parseFloat(v.replace(/[^0-9.\-]/g, ''));
+    return isNaN(n) ? v : n.toFixed(6);
+  },
+  currency: v => v.trim().toUpperCase(),
+  quantity: v => {
+    const n = parseFloat(v.replace(/[^0-9.\-]/g, ''));
+    return isNaN(n) ? v : String(n);
+  },
+};
 
 // Render the inspector panel from current state
 function _ciRender() {
@@ -988,7 +1030,13 @@ function _ciRender() {
     ? 'Mapped to: ' + fieldLabel
     : 'This column is not mapped to any field';
 
-  // Sample values from preview rows
+  // Unmapped section: visible only when no mapping
+  const unmappedSection = document.getElementById('ci-unmapped-section');
+  if (unmappedSection) {
+    unmappedSection.style.display = mappedField ? 'none' : '';
+  }
+
+  // Sample values — truncate at 50 chars with "Show full" toggle
   const samplesEl = document.getElementById('ci-samples');
   const samples = (_rows || [])
     .map(row => (colIdx >= 0 && row[colIdx] !== undefined ? String(row[colIdx]) : ''))
@@ -996,16 +1044,47 @@ function _ciRender() {
 
   samplesEl.innerHTML = samples.length
     ? '<ul class="ci-sample-list">' +
-        samples.slice(0, 10).map(v =>
-          '<li class="ci-sample-item">' + esc(v.slice(0, 50)) + '</li>'
-        ).join('') +
+        samples.slice(0, 10).map(v => {
+          if (v.length > 50) {
+            return '<li class="ci-sample-item">' +
+              esc(v.slice(0, 50)) + '…' +
+              ' <button class="ci-show-full" data-full="' + esc(v) + '" aria-label="Show full value">Show full</button>' +
+              '</li>';
+          }
+          return '<li class="ci-sample-item">' + esc(v) + '</li>';
+        }).join('') +
       '</ul>'
     : '<div class="ci-no-samples">No sample data available</div>';
 
-  document.getElementById('ci-transform-preview').innerHTML = '';
+  // Transformation preview (Before → After) for mapped fields
+  const transformEl = document.getElementById('ci-transform-preview');
+  const transformFn = mappedField ? _ciTransformFns[mappedField] : null;
+  if (transformFn && samples.length) {
+    const previewRows = samples.slice(0, 3).map(v => {
+      const transformed = transformFn(v);
+      const before = v.length > 50 ? v.slice(0, 50) + '…' : v;
+      const after = transformed.length > 50 ? transformed.slice(0, 50) + '…' : transformed;
+      return '<div class="ci-transform-row">' +
+        '<span class="ci-before">' + esc(before) + '</span>' +
+        '<span class="ci-transform-arrow" aria-hidden="true">→</span>' +
+        '<span class="ci-after">' + esc(after) + '</span>' +
+        '</div>';
+    }).join('');
+    transformEl.innerHTML =
+      '<div class="ci-section-label">Transformation preview</div>' +
+      '<div class="ci-transform-rows">' +
+        '<div class="ci-transform-hdr"><span>Before</span><span></span><span>After</span></div>' +
+        previewRows +
+      '</div>';
+  } else {
+    transformEl.innerHTML = '';
+  }
 
   panel.setAttribute('aria-hidden', 'false');
   panel.classList.add('ci-open');
+
+  // Announce opening to screen readers
+  _ciAnnounce('Inspecting column: ' + colName + (mappedField ? ', mapped to ' + fieldLabel : ', Unmapped'));
 
   // Move focus into panel (focus first button)
   requestAnimationFrame(() => {
@@ -1034,6 +1113,31 @@ document.getElementById('ci-change-mapping').addEventListener('click', () => {
 });
 
 document.getElementById('ci-close').addEventListener('click', closeInspector);
+
+// "Map this column" for unmapped columns — scroll to mapping table
+document.getElementById('ci-map-this').addEventListener('click', () => {
+  closeInspector();
+  const mapTable = document.getElementById('mapTable');
+  if (mapTable) mapTable.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+// Event delegation for "Show full" / "Show less" sample value toggles
+document.getElementById('ci-samples').addEventListener('click', e => {
+  const btn = e.target.closest('.ci-show-full, .ci-show-less');
+  if (!btn) return;
+  const li = btn.closest('li.ci-sample-item');
+  if (!li) return;
+  if (btn.classList.contains('ci-show-full')) {
+    const full = btn.dataset.full || '';
+    li.innerHTML = esc(full) +
+      ' <button class="ci-show-less" aria-label="Show less">Show less</button>';
+  } else {
+    const full = li.textContent.replace('Show less', '').trim();
+    const truncated = full.slice(0, 50);
+    li.innerHTML = esc(truncated) + '…' +
+      ' <button class="ci-show-full" data-full="' + esc(full) + '" aria-label="Show full value">Show full</button>';
+  }
+});
 
 // Keyboard: Escape closes + focus trap (Tab cycles within panel)
 document.addEventListener('keydown', e => {
