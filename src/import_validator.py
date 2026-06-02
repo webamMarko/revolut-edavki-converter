@@ -45,6 +45,8 @@ class RowIssue:
     message: str
     value: str = ""
     suggestion: str = ""
+    auto_fixable: bool = False
+    fix_type: str = ""  # "whitespace_trim", "date_format", "number_format"
 
 
 @dataclass
@@ -73,6 +75,8 @@ class ValidationReport:
                     "message": i.message,
                     "value": i.value,
                     "suggestion": i.suggestion,
+                    "auto_fixable": i.auto_fixable,
+                    "fix_type": i.fix_type,
                 }
                 for i in self.issues
             ],
@@ -186,6 +190,7 @@ def validate_csv(
                     row_num=row_num, column="date", severity="error",
                     message="Unrecognized date format",
                     value=str(date_val)[:50],
+                    auto_fixable=True, fix_type="date_format",
                 ))
                 rows_with_errors.add(row_num)
             else:
@@ -299,10 +304,22 @@ def validate_csv(
             else:
                 parsed = _parse_amount_safe(num_val)
                 if parsed is None:
+                    raw_s = str(num_val).strip()
+                    # Check if stripping non-numeric chars (beyond what _parse_amount_safe handles)
+                    # would leave a parseable number — mark as auto-fixable if so
+                    stripped_num = re.sub(r"[^\d.\-]", "", raw_s)
+                    can_fix = False
+                    try:
+                        if stripped_num:
+                            float(stripped_num)
+                            can_fix = True
+                    except ValueError:
+                        pass
                     report.issues.append(RowIssue(
                         row_num=row_num, column=num_field, severity="error",
                         message=f"Cannot parse {num_field.replace('_', ' ')} as number",
                         value=str(num_val)[:30],
+                        auto_fixable=can_fix, fix_type="number_format" if can_fix else "",
                     ))
                     rows_with_errors.add(row_num)
                 elif parsed < 0 and num_field == "quantity":

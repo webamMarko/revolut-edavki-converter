@@ -249,6 +249,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             import_wizard.handle_import_preview(self)
         elif path == "/import/validate":
             import_wizard.handle_import_validate(self)
+        elif path == "/import/autofix":
+            import_wizard.handle_import_autofix(self)
         elif path == "/import/run":
             import_wizard.handle_import_run(self)
 

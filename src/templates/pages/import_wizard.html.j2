@@ -7,7 +7,31 @@
 {% block title %}Import Wizard — WealthEagle{% endblock %}
 
 {% block extra_css %}
-<style>.app-main{max-width:780px}</style>
+<style>
+.app-main{max-width:780px}
+/* Field validation states */
+.field-status{position:relative}
+.field-error select,.field-error input{border-color:var(--red,#ef4444)!important;outline-color:var(--red,#ef4444)}
+.field-valid select,.field-valid input{border-color:var(--green,#22c55e)!important;outline-color:var(--green,#22c55e)}
+.field-icon{display:inline-block;width:1rem;margin-left:.3rem;font-size:.85rem;vertical-align:middle}
+.field-icon--error{color:var(--red,#ef4444)}
+.field-icon--valid{color:var(--green,#22c55e)}
+/* Badges */
+.error-badge{display:inline-flex;align-items:center;gap:.2rem;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;border-radius:4px;padding:.15rem .45rem;font-size:.75rem;font-weight:600}
+.success-badge{display:inline-flex;align-items:center;gap:.2rem;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;border-radius:4px;padding:.15rem .45rem;font-size:.75rem;font-weight:600}
+/* Drop zone validation state */
+.drop-zone--valid{border-color:var(--green,#22c55e)!important}
+.drop-zone--error{border-color:var(--red,#ef4444)!important}
+/* Validation issues list with suggestion text */
+.v-sug{color:var(--green,#059669);font-size:.78rem;font-style:italic}
+/* Auto-fix button */
+.btn-autofix{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:4px;padding:.35rem .75rem;font-size:.82rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:.35rem}
+.btn-autofix:hover{background:#dbeafe}
+.btn-autofix:disabled{opacity:.55;cursor:default}
+/* Step 4 import disabled state */
+#importBtn:disabled{opacity:.55;cursor:not-allowed}
+.step4-error-note{margin-bottom:.6rem;padding:.4rem .7rem;background:#fef2f2;border:1px solid #fecaca;border-radius:4px;font-size:.82rem;color:#991b1b}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -45,11 +69,11 @@
           <div class="drop-zone" id="dropZone">
             <div class="icon" aria-hidden="true">&#128196;</div>
             <div class="lbl">Drop CSV here or <strong>browse</strong></div>
-            <div class="hint">CSV only &mdash; comma or semicolon separated</div>
-            <input type="file" id="fileInput" accept=".csv" aria-label="Upload CSV file">
+            <div class="hint">CSV only &mdash; comma or semicolon separated &mdash; max 50 MB</div>
+            <input type="file" id="fileInput" accept=".csv" aria-label="Upload CSV file" aria-describedby="step1Err">
           </div>
           <div class="chosen-file" id="chosenFile" aria-live="polite"></div>
-          <div class="error-msg" id="step1Err" aria-live="polite" aria-atomic="true"></div>
+          <div class="error-msg" id="step1Err" role="alert" aria-live="polite" aria-atomic="true"></div>
           <div class="btn-group">
             <button class="btn btn-primary" id="previewBtn" disabled>Next: Map Columns</button>
           </div>
@@ -115,7 +139,8 @@
           <div style="font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem" id="mapping-label">Column mapping</div>
           <table class="map-table" id="mapTable" aria-labelledby="mapping-label"></table>
 
-          <div class="error-msg" id="step2Err" aria-live="polite" aria-atomic="true"></div>
+          <div id="step2ErrorBadge" class="error-badge" style="display:none;margin-bottom:.5rem" aria-live="polite" aria-atomic="true"></div>
+          <div class="error-msg" id="step2Err" role="alert" aria-live="polite" aria-atomic="true"></div>
           <div class="btn-group">
             <button class="btn btn-primary" id="nextBtn2" disabled>Next: Validate</button>
           </div>
@@ -171,7 +196,8 @@
         <div class="wz-body-inner">
           <div id="overlapWarning" style="display:none;padding:.6rem .8rem;margin-bottom:.75rem;border-radius:6px;background:#fff8e1;border:1px solid #ffe082;font-size:.82rem;color:#6d4c00" role="alert"></div>
           <div class="summary-list" id="summaryList"></div>
-          <div class="error-msg" id="step4Err" aria-live="polite" aria-atomic="true"></div>
+          <div id="step4ErrorNote" class="step4-error-note" style="display:none" role="alert" aria-live="polite"></div>
+          <div class="error-msg" id="step4Err" role="alert" aria-live="polite" aria-atomic="true"></div>
           <div id="successBox" style="display:none" aria-live="polite" role="status"></div>
           <div class="btn-group" id="step4Btns">
             <button class="btn btn-primary" id="importBtn">Import</button>
@@ -290,6 +316,32 @@ const _stepSummaries = { 1: '', 2: '', 3: '' };
 })();
 
 function esc(s) { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+
+// ── Field validation helpers ──────────────────────────────────────────
+
+function showFieldError(el, describedById) {
+  const wrap = el.closest('.field-status');
+  if (wrap) { wrap.classList.add('field-error'); wrap.classList.remove('field-valid'); }
+  if (describedById) el.setAttribute('aria-describedby', describedById);
+  const icon = wrap && wrap.querySelector('.field-icon');
+  if (icon) { icon.textContent = '✗'; icon.className = 'field-icon field-icon--error'; icon.setAttribute('aria-hidden', 'true'); }
+}
+
+function showFieldSuccess(el) {
+  const wrap = el.closest('.field-status');
+  if (wrap) { wrap.classList.add('field-valid'); wrap.classList.remove('field-error'); }
+  el.removeAttribute('aria-describedby');
+  const icon = wrap && wrap.querySelector('.field-icon');
+  if (icon) { icon.textContent = '✓'; icon.className = 'field-icon field-icon--valid'; icon.setAttribute('aria-hidden', 'true'); }
+}
+
+function clearFieldState(el) {
+  const wrap = el.closest('.field-status');
+  if (wrap) { wrap.classList.remove('field-error', 'field-valid'); }
+  el.removeAttribute('aria-describedby');
+  const icon = wrap && wrap.querySelector('.field-icon');
+  if (icon) { icon.textContent = ''; icon.className = 'field-icon'; }
+}
 
 // ── Accordion state management ────────────────────────────────────────
 
@@ -410,14 +462,34 @@ dropZone.addEventListener('drop', e => {
 fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); fileInput.value=''; });
 
 function setFile(f) {
+  step1Err.textContent = '';
+  dropZone.classList.remove('drop-zone--valid', 'drop-zone--error');
+
   if (!f.name.toLowerCase().endsWith('.csv')) {
-    step1Err.textContent = 'Only CSV files are supported.'; return;
+    step1Err.textContent = 'Only CSV files are supported.';
+    dropZone.classList.add('drop-zone--error');
+    chosenFile.innerHTML = esc(f.name);
+    _selectedFile = null; previewBtn.disabled = true; return;
   }
+  if (f.size === 0) {
+    step1Err.textContent = 'File is empty — please choose a non-empty CSV.';
+    dropZone.classList.add('drop-zone--error');
+    chosenFile.innerHTML = esc(f.name);
+    _selectedFile = null; previewBtn.disabled = true; return;
+  }
+  if (f.size > 50 * 1024 * 1024) {
+    const mb = (f.size / 1048576).toFixed(1);
+    step1Err.textContent = `File is too large (${mb} MB). Maximum size is 50 MB.`;
+    dropZone.classList.add('drop-zone--error');
+    chosenFile.innerHTML = esc(f.name) + ' (' + mb + ' MB)';
+    _selectedFile = null; previewBtn.disabled = true; return;
+  }
+
   _selectedFile = f;
   const size = f.size > 1048576 ? (f.size/1048576).toFixed(1)+' MB' : Math.ceil(f.size/1024)+' KB';
-  chosenFile.textContent = f.name + ' (' + size + ')';
+  chosenFile.innerHTML = '<span class="success-badge">&#10003; Ready</span> ' + esc(f.name) + ' (' + size + ')';
+  dropZone.classList.add('drop-zone--valid');
   previewBtn.disabled = false;
-  step1Err.textContent = '';
 }
 
 // ── Step 1 → 2 ────────────────────────────────────────────────────────
@@ -630,10 +702,17 @@ function buildMapTable() {
     const opts = ['<option value="">— skip —</option>'].concat(_headers.map(h =>
       `<option value="${esc(h)}" ${h === match ? 'selected' : ''}>${esc(h)}</option>`
     ));
+    const errId = 'field-err-' + field;
     html += `<tr>
-      <td>${FIELD_LABELS[field] || field}</td>
+      <td>${esc(FIELD_LABELS[field] || field)}</td>
       <td>${isReq ? '<span class="req-badge">Required</span>' : '<span class="opt-badge">Optional</span>'}</td>
-      <td><select data-field="${field}" data-req="${isReq ? '1' : '0'}" aria-label="${FIELD_LABELS[field] || field} column mapping">${opts.join('')}</select></td>
+      <td><div class="field-status">
+        <select data-field="${field}" data-req="${isReq ? '1' : '0'}"
+          aria-label="${esc(FIELD_LABELS[field] || field)} column mapping"
+          aria-describedby="${errId}">${opts.join('')}</select>
+        <span class="field-icon" aria-hidden="true"></span>
+        <div id="${errId}" role="alert" style="font-size:.75rem;color:var(--red,#991b1b);margin-top:.1rem;display:none"></div>
+      </div></td>
     </tr>`;
   });
   t.innerHTML = html;
@@ -641,14 +720,37 @@ function buildMapTable() {
 }
 
 function validateStep2() {
-  const ac = _assetClass || 'stock';
-  const required = DB_FIELDS[ac].required;
   const table = document.getElementById('mapTable');
   let ok = true;
-  required.forEach(field => {
-    const sel = table.querySelector(`select[data-field="${field}"]`);
-    if (!sel || !sel.value) ok = false;
+  let errorCount = 0;
+
+  table.querySelectorAll('select').forEach(sel => {
+    const field = sel.dataset.field;
+    const isReq = sel.dataset.req === '1';
+    const errEl = document.getElementById('field-err-' + field);
+    if (isReq && !sel.value) {
+      showFieldError(sel, 'field-err-' + field);
+      if (errEl) { errEl.style.display = ''; errEl.textContent = (FIELD_LABELS[field] || field) + ' is required'; }
+      ok = false;
+      errorCount++;
+    } else if (sel.value) {
+      showFieldSuccess(sel);
+      if (errEl) errEl.style.display = 'none';
+    } else {
+      clearFieldState(sel);
+      if (errEl) errEl.style.display = 'none';
+    }
   });
+
+  const badge = document.getElementById('step2ErrorBadge');
+  if (badge) {
+    if (errorCount > 0) {
+      badge.style.display = '';
+      badge.textContent = errorCount + ' required field' + (errorCount === 1 ? '' : 's') + ' not mapped';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
   document.getElementById('nextBtn2').disabled = !ok;
   document.getElementById('step2Err').textContent = '';
 }
@@ -751,19 +853,41 @@ function renderValidationResults(data) {
 
   const issuesEl = document.getElementById('validationIssues');
   if (data.issues && data.issues.length > 0) {
+    const errorCount = data.issues.filter(i => i.severity === 'error').length;
+    const warnCount  = data.issues.filter(i => i.severity === 'warning').length;
+    const autoFixableIssues = data.issues.filter(i => i.auto_fixable);
+    const fixTypes = [...new Set(autoFixableIssues.map(i => i.fix_type).filter(Boolean))];
+
+    let badgesHtml = '';
+    if (errorCount > 0) badgesHtml += `<span class="error-badge" aria-label="${errorCount} errors found">&#9888; ${errorCount} error${errorCount === 1 ? '' : 's'} found</span> `;
+    if (warnCount  > 0) badgesHtml += `<span style="display:inline-flex;align-items:center;gap:.2rem;background:#fff8e1;color:#6d4c00;border:1px solid #ffe082;border-radius:4px;padding:.15rem .45rem;font-size:.75rem;font-weight:600">${warnCount} warning${warnCount === 1 ? '' : 's'}</span> `;
+
+    let autofixBtnHtml = '';
+    if (autoFixableIssues.length > 0) {
+      autofixBtnHtml = `<button class="btn-autofix" id="autoFixBtn"
+          aria-label="Auto-fix ${autoFixableIssues.length} issue${autoFixableIssues.length === 1 ? '' : 's'}"
+          data-fix-types='${JSON.stringify(fixTypes)}'>
+          &#9889; Auto-fix ${autoFixableIssues.length} issue${autoFixableIssues.length === 1 ? '' : 's'}
+        </button>`;
+    }
+
     const shown = data.issues.slice(0, 50);
-    let html = '<div style="font-size:.8rem;font-weight:600;color:var(--muted);margin:.75rem 0 .4rem">Issues (' + data.issues.length + ' total)</div>';
-    html += '<div class="validation-issues-list">';
+    let html = `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:.4rem;margin:.75rem 0 .4rem">
+      <span style="font-size:.8rem;font-weight:600;color:var(--muted)">Issues (${data.issues.length} total)</span>
+      ${badgesHtml}${autofixBtnHtml}
+    </div>`;
+    html += '<div class="validation-issues-list" role="list" aria-label="Validation issues">';
     shown.forEach(issue => {
       const sevClass = issue.severity === 'error' ? 'sev-error' : issue.severity === 'warning' ? 'sev-warning' : 'sev-info';
       const sevLabel = issue.severity === 'error' ? 'ERR' : issue.severity === 'warning' ? 'WARN' : 'INFO';
-      html += `<div class="v-issue ${sevClass}">
+      const fixBadge = issue.auto_fixable ? '<span style="font-size:.7rem;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:3px;padding:.05rem .3rem;margin-left:.25rem">fixable</span>' : '';
+      html += `<div class="v-issue ${sevClass}" role="listitem">
         <span class="v-sev">${sevLabel}</span>
         <span class="v-row">Row ${issue.row}</span>
         <span class="v-col">${esc(issue.column)}</span>
-        <span class="v-msg">${esc(issue.message)}</span>
+        <span class="v-msg">${esc(issue.message)}${fixBadge}</span>
         ${issue.value ? '<span class="v-val">' + esc(issue.value) + '</span>' : ''}
-        ${issue.suggestion ? '<span class="v-sug">' + esc(issue.suggestion) + '</span>' : ''}
+        ${issue.suggestion ? '<span class="v-sug">&#128161; ' + esc(issue.suggestion) + '</span>' : ''}
       </div>`;
     });
     if (data.issues.length > 50) {
@@ -771,8 +895,17 @@ function renderValidationResults(data) {
     }
     html += '</div>';
     issuesEl.innerHTML = html;
+
+    // Wire auto-fix button after DOM insertion
+    const afBtn = document.getElementById('autoFixBtn');
+    if (afBtn) {
+      afBtn.addEventListener('click', () => {
+        const types = JSON.parse(afBtn.dataset.fixTypes || '[]');
+        applyAutoFix(types);
+      });
+    }
   } else {
-    issuesEl.innerHTML = '';
+    issuesEl.innerHTML = '<div class="success-badge" style="margin:.75rem 0;font-size:.85rem;padding:.4rem .75rem" role="status" aria-live="polite">&#10003; All fields valid</div>';
   }
 
   const mbEl = document.getElementById('validationMissingBuys');
@@ -854,6 +987,22 @@ function showStep4() {
   document.getElementById('step4Err').textContent = '';
   document.getElementById('successBox').style.display = 'none';
   document.getElementById('step4Btns').style.display = '';
+
+  // Disable import button when unresolved errors exist
+  const importBtn = document.getElementById('importBtn');
+  const errorNote = document.getElementById('step4ErrorNote');
+  if (_validationData && _validationData.error_rows > 0) {
+    importBtn.disabled = true;
+    importBtn.setAttribute('aria-disabled', 'true');
+    if (errorNote) {
+      errorNote.style.display = '';
+      errorNote.textContent = _validationData.error_rows + ' row error' + (_validationData.error_rows === 1 ? '' : 's') + ' found. Go back to step 3 and use "Auto-fix" or fix errors manually before importing.';
+    }
+  } else {
+    importBtn.disabled = false;
+    importBtn.removeAttribute('aria-disabled');
+    if (errorNote) errorNote.style.display = 'none';
+  }
 }
 
 // ── Import ────────────────────────────────────────────────────────────
@@ -902,6 +1051,36 @@ document.getElementById('importBtn').addEventListener('click', async () => {
     btn.disabled = false; btn.textContent = 'Import';
   }
 });
+
+// ── Auto-fix ──────────────────────────────────────────────────────────────
+
+async function applyAutoFix(fixTypes) {
+  const btn = document.getElementById('autoFixBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Applying fixes...'; }
+  document.getElementById('step3Err').textContent = '';
+
+  const mapping = collectMapping();
+  try {
+    const resp = await fetch('/import/autofix', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asset_class: _assetClass, mapping, fix_types: fixTypes }),
+    });
+    const data = await resp.json();
+    if (data.error) {
+      document.getElementById('step3Err').textContent = data.error;
+      if (btn) { btn.disabled = false; btn.innerHTML = '&#9889; Auto-fix issues'; }
+      return;
+    }
+    _validationData = data;
+    renderValidationResults(data);
+    const fixedCount = (data.issues || []).filter(i => i.auto_fixable).length;
+    announce(fixedCount === 0 ? 'All auto-fixable issues resolved.' : fixedCount + ' issue' + (fixedCount === 1 ? '' : 's') + ' remaining after auto-fix.');
+  } catch (e) {
+    document.getElementById('step3Err').textContent = 'Network error: ' + e.message;
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#9889; Auto-fix issues'; }
+  }
+}
 
 // ── Column Inspector ───────────────────────────────────────────────────────
 
