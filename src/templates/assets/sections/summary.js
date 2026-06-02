@@ -343,9 +343,9 @@ function updateMilestones() {
 
 // --- Metrics toggle (progressive disclosure) ---
 (function() {
-  var btn = document.getElementById('overviewMetricsToggle');
-  var panel = document.getElementById('overviewMetricsPanel');
-  var label = document.getElementById('overviewMetricsLabel');
+  var btn = scopedFind(null, 'overviewMetricsToggle');
+  var panel = scopedFind(null, 'overviewMetricsPanel');
+  var label = scopedFind(null, 'overviewMetricsLabel');
   if (!btn || !panel || !label) return;
 
   function setExpanded(val) {

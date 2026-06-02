@@ -17,12 +17,12 @@
   <section data-role="summary" class="card-grid"></section>
 
   <div class="metrics-toggle-wrap">
-    <button class="metrics-toggle" id="overviewMetricsToggle" aria-expanded="false" aria-controls="overviewMetricsPanel">
-      <span class="metrics-toggle-label" id="overviewMetricsLabel">Show more metrics</span>
+    <button class="metrics-toggle" id="overviewMetricsToggle" data-role="overviewMetricsToggle" aria-expanded="false" aria-controls="overviewMetricsPanel">
+      <span class="metrics-toggle-label" id="overviewMetricsLabel" data-role="overviewMetricsLabel">Show more metrics</span>
       <svg class="metrics-toggle-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
   </div>
-  <div id="overviewMetricsPanel" class="overview-metrics-panel">
+  <div id="overviewMetricsPanel" class="overview-metrics-panel" data-role="overviewMetricsPanel">
     <div class="overview-metrics-inner">
       <section data-role="summarySecondary" class="card-grid"></section>
     </div>
