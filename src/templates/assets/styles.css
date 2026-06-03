@@ -446,6 +446,35 @@ body {
 .pagination button:disabled { opacity: 0.3; cursor: default; }
 .pagination button:not(:disabled):hover { background: var(--raised); border-color: var(--accent); color: var(--accent); }
 
+/* ---- Transaction empty state ---- */
+.tx-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  gap: 0.5rem;
+}
+.tx-empty-illustration {
+  width: 120px;
+  height: 100px;
+  margin-bottom: 0.5rem;
+  opacity: 0.85;
+}
+.tx-empty-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+.tx-empty-sub {
+  font-size: 0.83rem;
+  color: var(--muted);
+  margin: 0;
+  max-width: 280px;
+}
+
 /* ---- Tags ---- */
 .tag { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
 .tag-stock      { background: rgba(96,165,250,0.12);  color: var(--stock-color); }
@@ -784,6 +813,10 @@ body {
   /* Toolbar: stack on small screens */
   .toolbar { flex-wrap: wrap; gap: 0.5rem; }
   #txFilter { width: 100%; }
+
+  /* Transaction page: pagination stacks vertically */
+  .pagination { flex-wrap: wrap; gap: 0.4rem; }
+  .pagination span { width: 100%; text-align: center; order: -1; }
 
   /* Heatmap: single column, horizontally scrollable */
   .two-col.heatmap-row { grid-template-columns: 1fr; }

@@ -30,8 +30,25 @@ function updateTxStats() {
   const section = scopedFind(null, 'txStatsSection');
   const txs = getDateFilteredTx();
   const trades = txs.filter(t => t.type === 'BUY' || t.type === 'SELL');
-  if (trades.length < 2) { section.style.display = 'none'; return; }
   section.style.display = '';
+  if (trades.length < 2) {
+    const el = scopedFind(null, 'txStats');
+    const divTypes = new Set(['DIVIDEND', 'BOND COUPON', 'INTEREST PAID', 'STAKING REWARD', 'LEARN REWARD']);
+    const dividends = txs.filter(t => divTypes.has(t.type));
+    const cards = [
+      [t('tx.total_trades'), 0, ''],
+      [t('tx.buys_sells'), '0 / 0', ''],
+      [t('tx.avg_trade_size'), fmtCcy(0), ''],
+      [t('tx.trades_month'), fmt(0, 1), ''],
+      [t('tx.unique_tickers'), 0, ''],
+      [t('tx.most_traded'), '—', ''],
+      [t('tx.dividends_received'), dividends.length, ''],
+    ];
+    el.innerHTML = cards.map(([l, v, c, sub]) =>
+      `<div class="metric-card"><div class="label">${l}</div><div class="value ${c || ''}">${v}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`
+    ).join('');
+    return;
+  }
 
   const buys = trades.filter(t => t.type === 'BUY');
   const sells = trades.filter(t => t.type === 'SELL');
@@ -79,7 +96,17 @@ function renderTxPage() {
   const start = txPage * PAGE_SIZE, end = start + PAGE_SIZE;
   const page = txFiltered.slice(start, end);
   const totalPages = Math.ceil(txFiltered.length / PAGE_SIZE);
-  txCountEl.textContent = txFiltered.length + ' ' + t('tx.count');
+  const emptyEl = scopedFind(null, 'txEmpty');
+  const tableWrap = scopedFind(null, 'txTableWrap');
+  const isEmpty = txFiltered.length === 0;
+
+  txCountEl.textContent = isEmpty ? '' : txFiltered.length + ' ' + t('tx.count');
+  emptyEl.style.display = isEmpty ? '' : 'none';
+  tableWrap.style.display = isEmpty ? 'none' : '';
+  txPag.style.display = isEmpty ? 'none' : '';
+
+  if (isEmpty) return;
+
   const tagClsMap = {cfd:'tag-cfd', stock:'tag-stock', crypto:'tag-crypto', savings:'tag-savings'};
   txTable.innerHTML = '<thead><tr><th>'+t('tx.col.date')+'</th><th>'+t('tx.col.ticker')+'</th><th>'+t('tx.col.type')+'</th><th>'+t('tx.col.qty')+'</th><th>'+t('tx.col.price')+'</th><th>'+t('tx.col.amount')+'</th><th>'+t('tx.col.ccy')+'</th><th>'+t('tx.col.fx')+'</th><th>'+t('tx.col.class')+'</th></tr></thead><tbody>'+
     page.map(t => {
