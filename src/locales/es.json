@@ -337,6 +337,8 @@
   "tx.next": "Sig.",
   "tx.page_of": "Página {page} de {total}",
   "tx.total_trades": "Total de operaciones",
+  "tx.total_transactions": "Total de transacciones",
+  "tx.net_pnl": "G&P neto",
   "tx.buys_sells": "Compras / Ventas",
   "tx.avg_trade_size": "Tamaño medio de operación",
   "tx.trades_month": "Operaciones/mes",

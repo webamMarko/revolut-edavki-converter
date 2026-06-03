@@ -445,6 +445,8 @@ body {
 }
 .pagination button:disabled { opacity: 0.3; cursor: default; }
 .pagination button:not(:disabled):hover { background: var(--raised); border-color: var(--accent); color: var(--accent); }
+.pagination button.active { background: var(--accent); color: #fff; border-color: var(--accent); opacity: 1; font-weight: 600; }
+.pagination-ellipsis { padding: 0.3rem 0.2rem; color: var(--muted); font-size: 0.83rem; user-select: none; }
 
 /* ---- Transaction empty state ---- */
 .tx-empty-state {
