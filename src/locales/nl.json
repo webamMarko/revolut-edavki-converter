@@ -337,6 +337,8 @@
   "tx.next": "Volgende",
   "tx.page_of": "Pagina {page} van {total}",
   "tx.total_trades": "Totaal transacties",
+  "tx.total_transactions": "Totaal transacties",
+  "tx.net_pnl": "Netto W&V",
   "tx.buys_sells": "Aankopen / Verkopen",
   "tx.avg_trade_size": "Gem. transactiegrootte",
   "tx.trades_month": "Transacties/maand",

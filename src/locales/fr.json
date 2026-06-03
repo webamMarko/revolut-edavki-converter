@@ -337,6 +337,8 @@
   "tx.next": "Suiv.",
   "tx.page_of": "Page {page} sur {total}",
   "tx.total_trades": "Total des trades",
+  "tx.total_transactions": "Total des transactions",
+  "tx.net_pnl": "G&P net",
   "tx.buys_sells": "Achats / Ventes",
   "tx.avg_trade_size": "Taille moy. du trade",
   "tx.trades_month": "Trades/mois",

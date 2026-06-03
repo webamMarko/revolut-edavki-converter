@@ -1,5 +1,5 @@
 <div class="page-stack">
-<section class="card" data-role="txStatsSection" style="display:none">
+<section class="card" data-role="txStatsSection">
   <h2>Trading Activity</h2>
   <div data-role="txStats" class="card-grid"></div>
 </section>
@@ -8,9 +8,36 @@
   <h2>Transaction History</h2>
   <div class="toolbar">
     <input type="text" data-role="txFilter" placeholder="Filter by ticker or type…">
+    <input type="date" data-role="txDateFrom" title="From date">
+    <input type="date" data-role="txDateTo" title="To date">
+    <select data-role="txSort">
+      <option value="date-desc">Date: Newest first</option>
+      <option value="date-asc">Date: Oldest first</option>
+      <option value="amount-desc">Amount: High → Low</option>
+      <option value="amount-asc">Amount: Low → High</option>
+      <option value="type">Type A → Z</option>
+    </select>
     <span data-role="txCount"></span>
   </div>
-  <div class="table-scroll">
+  <div data-role="txTypeChips" class="tx-type-chips"></div>
+
+  <div data-role="txEmpty" class="tx-empty-state" style="display:none">
+    <svg class="tx-empty-illustration" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="10" y="20" width="100" height="65" rx="6" fill="var(--raised)" stroke="var(--border)" stroke-width="1.5"/>
+      <rect x="10" y="20" width="100" height="14" rx="6" fill="var(--border)"/>
+      <rect x="10" y="26" width="100" height="8" fill="var(--border)"/>
+      <rect x="20" y="44" width="30" height="5" rx="2" fill="var(--border)"/>
+      <rect x="20" y="55" width="50" height="5" rx="2" fill="var(--border)" opacity="0.6"/>
+      <rect x="20" y="66" width="40" height="5" rx="2" fill="var(--border)" opacity="0.4"/>
+      <circle cx="90" cy="72" r="18" fill="var(--accent-glow)" stroke="var(--accent)" stroke-width="1.5"/>
+      <line x1="90" y1="65" x2="90" y2="79" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+      <line x1="83" y1="72" x2="97" y2="72" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <p class="tx-empty-title">No transactions yet</p>
+    <p class="tx-empty-sub">Upload a Revolut CSV to see your transaction history here.</p>
+  </div>
+
+  <div class="table-scroll" data-role="txTableWrap">
     <table data-role="txTable" class="data-table sortable"></table>
   </div>
   <div data-role="txPagination" class="pagination"></div>

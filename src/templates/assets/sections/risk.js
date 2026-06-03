@@ -8,12 +8,27 @@ const _GEO_COLORS = [
   '#22d3ee','#c084fc','#f472b6','#2dd4bf','#818cf8',
 ];
 
+function _initRiskToggle(btnRole, labelRole, panelRole, showText, hideText) {
+  const btn = scopedFind(null, btnRole);
+  const panel = scopedFind(null, panelRole);
+  if (!btn || !panel || btn._toggleBound) return;
+  btn._toggleBound = true;
+  btn.addEventListener('click', () => {
+    const expanded = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', String(!expanded));
+    panel.classList.toggle('is-expanded', !expanded);
+    scopedFind(null, labelRole).textContent = expanded ? showText : hideText;
+  });
+}
+
 function updateRiskPage() {
   updateRiskWarnings();
   updateRiskMetrics();
   updateGeoAllocation();
   updateRiskSector();
   updateRiskCorrelation();
+  _initRiskToggle('riskMetricsToggle', 'riskMetricsToggleLabel', 'riskMetricsPanel', 'Show more metrics', 'Hide extra metrics');
+  _initRiskToggle('riskGeoToggle', 'riskGeoToggleLabel', 'riskGeoPanel', 'Show geographic exposure', 'Hide geographic exposure');
 }
 
 function updateRiskWarnings() {
@@ -50,33 +65,43 @@ function updateRiskMetrics() {
   const hhiLabel = m.hhi < 1500 ? 'Well Diversified' : m.hhi < 2500 ? 'Moderate' : 'Concentrated';
   const hhiColor = m.hhi < 1500 ? 'pos' : m.hhi < 2500 ? '' : 'neg';
 
-  const el = scopedFind(null, 'riskMetricsCards');
-  el.innerHTML = [
-    ['Positions', m.total_positions, ''],
-    ['Effective N', m.effective_n, '', 'Diversification-adjusted count'],
-    ['HHI', m.hhi.toLocaleString(_locale), hhiColor, hhiLabel],
-    ['Top 5 Weight', fmt(m.top5_pct, 1) + '%', m.top5_pct > 70 ? 'neg' : ''],
-    ['Top 10 Weight', fmt(m.top10_pct, 1) + '%', ''],
-    ['Largest Position', m.largest_ticker, '', fmt(m.largest_pct, 1) + '% of portfolio'],
-  ].map(([l, v, c, sub]) =>
+  const renderCards = cards => cards.map(([l, v, c, sub]) =>
     `<div class="metric-card"><div class="label">${l}</div><div class="value ${c || ''}">${v}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`
   ).join('');
+
+  const el = scopedFind(null, 'riskMetricsCards');
+  el.innerHTML = renderCards([
+    ['Positions', m.total_positions, ''],
+    ['HHI', m.hhi.toLocaleString(_locale), hhiColor, hhiLabel],
+    ['Largest Position', m.largest_ticker, '', fmt(m.largest_pct, 1) + '% of portfolio'],
+  ]);
+
+  const elExtra = scopedFind(null, 'riskMetricsCardsExtra');
+  elExtra.innerHTML = renderCards([
+    ['Effective N', m.effective_n, '', 'Diversification-adjusted count'],
+    ['Top 5 Weight', fmt(m.top5_pct, 1) + '%', m.top5_pct > 70 ? 'neg' : ''],
+    ['Top 10 Weight', fmt(m.top10_pct, 1) + '%', ''],
+  ]);
 }
 
 function updateGeoAllocation() {
   const row = scopedFind(null, 'riskGeoRow');
+  const toggleWrap = scopedFind(null, 'riskGeoToggleWrap');
   const ga = D.geographic_allocation;
   if (!ga || !ga.countries || ga.countries.length === 0) {
     row.style.display = 'none';
+    toggleWrap.style.display = 'none';
     return;
   }
 
   const countries = ga.countries.filter(c => c.pct > 0);
   if (countries.length === 0 || (countries.length === 1 && countries[0].name === 'Other')) {
     row.style.display = 'none';
+    toggleWrap.style.display = 'none';
     return;
   }
   row.style.display = '';
+  toggleWrap.style.display = '';
 
   // Geo donut chart
   if (_geoChart) { _geoChart.destroy(); _geoChart = null; }

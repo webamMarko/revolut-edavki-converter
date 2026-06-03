@@ -337,6 +337,8 @@
   "tx.next": "Next",
   "tx.page_of": "Page {page} of {total}",
   "tx.total_trades": "Total Trades",
+  "tx.total_transactions": "Total Transactions",
+  "tx.net_pnl": "Net P&L",
   "tx.buys_sells": "Buys / Sells",
   "tx.avg_trade_size": "Avg Trade Size",
   "tx.trades_month": "Trades/Month",

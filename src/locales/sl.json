@@ -337,6 +337,8 @@
   "tx.next": "Naprej",
   "tx.page_of": "Stran {page} od {total}",
   "tx.total_trades": "Skupaj poslov",
+  "tx.total_transactions": "Skupaj transakcij",
+  "tx.net_pnl": "Neto D&G",
   "tx.buys_sells": "Nakupi / Prodaje",
   "tx.avg_trade_size": "Povp. velikost posla",
   "tx.trades_month": "Poslov/mesec",

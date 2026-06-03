@@ -1,10 +1,15 @@
 // --- Transaction history ---
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 20;
 let txPage = 0, txFiltered = [], txDateFiltered = [];
+let txTypeFilter = new Set();
 const txTable = scopedFind(null, 'txTable');
 const txPag = scopedFind(null, 'txPagination');
 const txCountEl = scopedFind(null, 'txCount');
 const txFilterEl = scopedFind(null, 'txFilter');
+const txDateFromEl = scopedFind(null, 'txDateFrom');
+const txDateToEl = scopedFind(null, 'txDateTo');
+const txSortEl = scopedFind(null, 'txSort');
+const txTypeChipsEl = scopedFind(null, 'txTypeChips');
 
 function getDateFilteredTx() {
   let txs = D.transactions;
@@ -16,12 +21,44 @@ function getDateFilteredTx() {
   return txs.filter(t => t.date >= sd && t.date <= ed);
 }
 
+function sortTxArray(arr) {
+  const key = txSortEl ? txSortEl.value : 'date-desc';
+  const copy = arr.slice();
+  if (key === 'date-asc')    return copy.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  if (key === 'amount-desc') return copy.sort((a, b) => (b.total_amount || 0) - (a.total_amount || 0));
+  if (key === 'amount-asc')  return copy.sort((a, b) => (a.total_amount || 0) - (b.total_amount || 0));
+  if (key === 'type')        return copy.sort((a, b) => (a.type || '').localeCompare(b.type || ''));
+  return copy.sort((a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : 0)); // date-desc default
+}
+
+function buildTypeChips() {
+  if (!txTypeChipsEl) return;
+  const types = [...new Set((D.transactions || []).map(t => t.type).filter(Boolean))].sort();
+  if (!types.length) { txTypeChipsEl.innerHTML = ''; return; }
+  txTypeChipsEl.innerHTML = types.map(type =>
+    `<button class="tx-type-chip${txTypeFilter.has(type) ? ' active' : ''}" data-type="${type}">${type}</button>`
+  ).join('');
+  txTypeChipsEl.querySelectorAll('.tx-type-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.type;
+      if (txTypeFilter.has(type)) txTypeFilter.delete(type); else txTypeFilter.add(type);
+      btn.classList.toggle('active', txTypeFilter.has(type));
+      applyTxFilter();
+    });
+  });
+}
+
 function applyTxFilter() {
   txDateFiltered = getDateFilteredTx();
   const q = txFilterEl.value.toUpperCase();
-  txFiltered = q
-    ? txDateFiltered.filter(t => (t.ticker && t.ticker.toUpperCase().includes(q)) || (t.type && t.type.toUpperCase().includes(q)))
-    : txDateFiltered;
+  const fromDate = txDateFromEl ? txDateFromEl.value : '';
+  const toDate   = txDateToEl   ? txDateToEl.value   : '';
+  let filtered = txDateFiltered;
+  if (q)            filtered = filtered.filter(t => (t.ticker && t.ticker.toUpperCase().includes(q)) || (t.type && t.type.toUpperCase().includes(q)));
+  if (fromDate)     filtered = filtered.filter(t => t.date >= fromDate);
+  if (toDate)       filtered = filtered.filter(t => t.date <= toDate);
+  if (txTypeFilter.size > 0) filtered = filtered.filter(t => txTypeFilter.has(t.type));
+  txFiltered = sortTxArray(filtered);
   txPage = 0;
   renderTxPage();
 }
@@ -29,51 +66,40 @@ function applyTxFilter() {
 function updateTxStats() {
   const section = scopedFind(null, 'txStatsSection');
   const txs = getDateFilteredTx();
-  const trades = txs.filter(t => t.type === 'BUY' || t.type === 'SELL');
-  if (trades.length < 2) { section.style.display = 'none'; return; }
   section.style.display = '';
 
-  const buys = trades.filter(t => t.type === 'BUY');
-  const sells = trades.filter(t => t.type === 'SELL');
-
-  // Average trade size
-  const amounts = trades.filter(t => t.total_amount != null).map(t => Math.abs(t.total_amount));
-  const avgSize = amounts.length > 0 ? amounts.reduce((a, b) => a + b, 0) / amounts.length : 0;
-
-  // Most traded ticker
-  const tickerCount = {};
-  trades.forEach(t => { if (t.ticker) tickerCount[t.ticker] = (tickerCount[t.ticker] || 0) + 1; });
-  const topTicker = Object.entries(tickerCount).sort((a, b) => b[1] - a[1])[0];
-
-  // Unique tickers traded
-  const uniqueTickers = Object.keys(tickerCount).length;
-
-  // Trading frequency: trades per month
-  const firstDate = trades[trades.length - 1].date;
-  const lastDate = trades[0].date;
-  const months = Math.max(1, (new Date(lastDate) - new Date(firstDate)) / (30.44 * 86400000));
-  const tradesPerMonth = trades.length / months;
-
-  // Dividend transactions
   const divTypes = new Set(['DIVIDEND', 'BOND COUPON', 'INTEREST PAID', 'STAKING REWARD', 'LEARN REWARD']);
   const dividends = txs.filter(t => divTypes.has(t.type));
 
+  const netPnl = (D.analytics && D.analytics.total_gain_eur != null) ? D.analytics.total_gain_eur : 0;
+  const pnlCls = netPnl >= 0 ? 'pos' : 'neg';
+
   const el = scopedFind(null, 'txStats');
   const cards = [
-    [t('tx.total_trades'), trades.length, ''],
-    [t('tx.buys_sells'), buys.length + ' / ' + sells.length, ''],
-    [t('tx.avg_trade_size'), fmtCcy(avgSize), ''],
-    [t('tx.trades_month'), fmt(tradesPerMonth, 1), ''],
-    [t('tx.unique_tickers'), uniqueTickers, ''],
-    [t('tx.most_traded'), topTicker ? topTicker[0] : '—', '', topTicker ? topTicker[1] + ' ' + t('tx.trades') : ''],
+    [t('tx.total_transactions'), txs.length, ''],
+    [t('tx.net_pnl'), fmtCcy(netPnl), pnlCls],
     [t('tx.dividends_received'), dividends.length, ''],
   ];
-  el.innerHTML = cards.map(([l, v, c, sub]) =>
-    `<div class="metric-card"><div class="label">${l}</div><div class="value ${c || ''}">${v}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`
+  el.innerHTML = cards.map(([l, v, c]) =>
+    `<div class="metric-card"><div class="label">${l}</div><div class="value ${c || ''}">${v}</div></div>`
   ).join('');
 }
 
-function updateTransactions() { updateTxStats(); applyTxFilter(); }
+function updateTransactions() { buildTypeChips(); updateTxStats(); applyTxFilter(); }
+
+function buildTxPagination(totalPages, currentPage) {
+  if (totalPages <= 1) return '';
+  const shown = new Set([0, totalPages - 1, currentPage - 1, currentPage, currentPage + 1].filter(p => p >= 0 && p < totalPages));
+  const sorted = Array.from(shown).sort((a, b) => a - b);
+  let html = '';
+  let prev = -1;
+  sorted.forEach(p => {
+    if (prev !== -1 && p > prev + 1) html += '<span class="pagination-ellipsis">…</span>';
+    html += `<button onclick="txGoTo(${p})"${p === currentPage ? ' class="active" disabled' : ''}>${p + 1}</button>`;
+    prev = p;
+  });
+  return html;
+}
 
 function renderTxPage() {
   const start = txPage * PAGE_SIZE, end = start + PAGE_SIZE;
@@ -86,10 +112,12 @@ function renderTxPage() {
       const tagCls = tagClsMap[t.asset_class] || 'tag-stock';
       return `<tr><td>${t.date}</td><td><strong>${t.ticker}</strong></td><td>${t.type}</td><td>${t.quantity!=null?fmt(t.quantity,4):'—'}</td><td>${t.price_per_share!=null?fmt(t.price_per_share,4):'—'}</td><td class="${cls(t.total_amount)}">${t.total_amount!=null?fmt(t.total_amount):'—'}</td><td>${t.currency}</td><td>${t.fx_rate!=null?fmt(t.fx_rate,4):'—'}</td><td><span class="tag ${tagCls}">${t.asset_class}</span></td></tr>`;
     }).join('') + '</tbody>';
-  txPag.innerHTML = totalPages > 1
-    ? `<button onclick="txGo(-1)" ${txPage===0?'disabled':''}>← ${t('tx.prev')}</button><span>${t('tx.page_of',{page:txPage+1,total:totalPages})}</span><button onclick="txGo(1)" ${txPage>=totalPages-1?'disabled':''}>${ t('tx.next')} →</button>`
-    : '';
+  txPag.innerHTML = buildTxPagination(totalPages, txPage);
   makeSortable(txTable);
 }
+window.txGoTo = function(page) { txPage = page; renderTxPage(); };
 window.txGo = function(dir) { txPage = Math.max(0, txPage + dir); renderTxPage(); };
 txFilterEl.addEventListener('input', function() { applyTxFilter(); });
+txDateFromEl && txDateFromEl.addEventListener('change', function() { applyTxFilter(); });
+txDateToEl   && txDateToEl.addEventListener('change', function() { applyTxFilter(); });
+txSortEl     && txSortEl.addEventListener('change', function() { applyTxFilter(); });
