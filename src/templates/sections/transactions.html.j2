@@ -8,8 +8,18 @@
   <h2>Transaction History</h2>
   <div class="toolbar">
     <input type="text" data-role="txFilter" placeholder="Filter by ticker or type…">
+    <input type="date" data-role="txDateFrom" title="From date">
+    <input type="date" data-role="txDateTo" title="To date">
+    <select data-role="txSort">
+      <option value="date-desc">Date: Newest first</option>
+      <option value="date-asc">Date: Oldest first</option>
+      <option value="amount-desc">Amount: High → Low</option>
+      <option value="amount-asc">Amount: Low → High</option>
+      <option value="type">Type A → Z</option>
+    </select>
     <span data-role="txCount"></span>
   </div>
+  <div data-role="txTypeChips" class="tx-type-chips"></div>
 
   <div data-role="txEmpty" class="tx-empty-state" style="display:none">
     <svg class="tx-empty-illustration" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">

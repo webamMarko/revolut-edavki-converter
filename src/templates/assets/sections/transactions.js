@@ -1,10 +1,15 @@
 // --- Transaction history ---
 const PAGE_SIZE = 20;
 let txPage = 0, txFiltered = [], txDateFiltered = [];
+let txTypeFilter = new Set();
 const txTable = scopedFind(null, 'txTable');
 const txPag = scopedFind(null, 'txPagination');
 const txCountEl = scopedFind(null, 'txCount');
 const txFilterEl = scopedFind(null, 'txFilter');
+const txDateFromEl = scopedFind(null, 'txDateFrom');
+const txDateToEl = scopedFind(null, 'txDateTo');
+const txSortEl = scopedFind(null, 'txSort');
+const txTypeChipsEl = scopedFind(null, 'txTypeChips');
 
 function getDateFilteredTx() {
   let txs = D.transactions;
@@ -16,12 +21,44 @@ function getDateFilteredTx() {
   return txs.filter(t => t.date >= sd && t.date <= ed);
 }
 
+function sortTxArray(arr) {
+  const key = txSortEl ? txSortEl.value : 'date-desc';
+  const copy = arr.slice();
+  if (key === 'date-asc')    return copy.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  if (key === 'amount-desc') return copy.sort((a, b) => (b.total_amount || 0) - (a.total_amount || 0));
+  if (key === 'amount-asc')  return copy.sort((a, b) => (a.total_amount || 0) - (b.total_amount || 0));
+  if (key === 'type')        return copy.sort((a, b) => (a.type || '').localeCompare(b.type || ''));
+  return copy.sort((a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : 0)); // date-desc default
+}
+
+function buildTypeChips() {
+  if (!txTypeChipsEl) return;
+  const types = [...new Set((D.transactions || []).map(t => t.type).filter(Boolean))].sort();
+  if (!types.length) { txTypeChipsEl.innerHTML = ''; return; }
+  txTypeChipsEl.innerHTML = types.map(type =>
+    `<button class="tx-type-chip${txTypeFilter.has(type) ? ' active' : ''}" data-type="${type}">${type}</button>`
+  ).join('');
+  txTypeChipsEl.querySelectorAll('.tx-type-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.type;
+      if (txTypeFilter.has(type)) txTypeFilter.delete(type); else txTypeFilter.add(type);
+      btn.classList.toggle('active', txTypeFilter.has(type));
+      applyTxFilter();
+    });
+  });
+}
+
 function applyTxFilter() {
   txDateFiltered = getDateFilteredTx();
   const q = txFilterEl.value.toUpperCase();
-  txFiltered = q
-    ? txDateFiltered.filter(t => (t.ticker && t.ticker.toUpperCase().includes(q)) || (t.type && t.type.toUpperCase().includes(q)))
-    : txDateFiltered;
+  const fromDate = txDateFromEl ? txDateFromEl.value : '';
+  const toDate   = txDateToEl   ? txDateToEl.value   : '';
+  let filtered = txDateFiltered;
+  if (q)            filtered = filtered.filter(t => (t.ticker && t.ticker.toUpperCase().includes(q)) || (t.type && t.type.toUpperCase().includes(q)));
+  if (fromDate)     filtered = filtered.filter(t => t.date >= fromDate);
+  if (toDate)       filtered = filtered.filter(t => t.date <= toDate);
+  if (txTypeFilter.size > 0) filtered = filtered.filter(t => txTypeFilter.has(t.type));
+  txFiltered = sortTxArray(filtered);
   txPage = 0;
   renderTxPage();
 }
@@ -48,7 +85,7 @@ function updateTxStats() {
   ).join('');
 }
 
-function updateTransactions() { updateTxStats(); applyTxFilter(); }
+function updateTransactions() { buildTypeChips(); updateTxStats(); applyTxFilter(); }
 
 function buildTxPagination(totalPages, currentPage) {
   if (totalPages <= 1) return '';
@@ -81,3 +118,6 @@ function renderTxPage() {
 window.txGoTo = function(page) { txPage = page; renderTxPage(); };
 window.txGo = function(dir) { txPage = Math.max(0, txPage + dir); renderTxPage(); };
 txFilterEl.addEventListener('input', function() { applyTxFilter(); });
+txDateFromEl && txDateFromEl.addEventListener('change', function() { applyTxFilter(); });
+txDateToEl   && txDateToEl.addEventListener('change', function() { applyTxFilter(); });
+txSortEl     && txSortEl.addEventListener('change', function() { applyTxFilter(); });
