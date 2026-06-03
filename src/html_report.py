@@ -10,6 +10,8 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
+from .analytics import position_cagr
+
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _env = Environment(
     loader=FileSystemLoader(str(_TEMPLATES_DIR)),
@@ -885,6 +887,10 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                     "unrealized_gain_pct": round(p.unrealized_gain_pct, 2),
                     "weight_pct": round(p.weight_pct, 2),
                     "realized_gain_eur": round(p.realized_gain_eur, 2),
+                    "annualized_return_pct": round(c, 2) if (c := position_cagr(
+                        p.cost_basis_eur, p.market_value_eur,
+                        min((l[2] for l in analytics.position_lots.get(p.ticker, [])), default=None),
+                    )) is not None else None,
                 }
                 for p in analytics.positions
             ],
@@ -899,6 +905,10 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                     "total_proceeds_eur": round(p.total_proceeds_eur, 2),
                     "realized_gain_eur": round(p.realized_gain_eur, 2),
                     "realized_gain_pct": round(p.realized_gain_pct, 2),
+                    "annualized_return_pct": round(c, 2) if (c := position_cagr(
+                        p.total_cost_eur, p.total_proceeds_eur,
+                        p.first_buy_date, p.last_sell_date,
+                    )) is not None else None,
                 }
                 for p in analytics.closed_positions
             ],
@@ -1040,6 +1050,10 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                             "unrealized_gain_pct": round(p.unrealized_gain_pct, 2),
                             "weight_pct": round(p.weight_pct, 2),
                             "realized_gain_eur": round(p.realized_gain_eur, 2),
+                            "annualized_return_pct": round(c, 2) if (c := position_cagr(
+                                p.cost_basis_eur, p.market_value_eur,
+                                min((l[2] for l in ac_analytics.position_lots.get(p.ticker, [])), default=None),
+                            )) is not None else None,
                         }
                         for p in ac_analytics.positions
                     ],
@@ -1054,6 +1068,10 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                             "total_proceeds_eur": round(p.total_proceeds_eur, 2),
                             "realized_gain_eur": round(p.realized_gain_eur, 2),
                             "realized_gain_pct": round(p.realized_gain_pct, 2),
+                            "annualized_return_pct": round(c, 2) if (c := position_cagr(
+                                p.total_cost_eur, p.total_proceeds_eur,
+                                p.first_buy_date, p.last_sell_date,
+                            )) is not None else None,
                         }
                         for p in ac_analytics.closed_positions
                     ],

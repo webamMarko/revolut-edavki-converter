@@ -521,6 +521,10 @@ function updatePositions() {
               <span class="pos-stat-value ${cls(totalGain)}">${signCcy(totalGain)}</span>
             </div>
             <div class="pos-stat">
+              <span class="pos-stat-label">${t('pos.annualized_return')}</span>
+              <span class="pos-stat-value ${p.annualized_return_pct != null ? cls(p.annualized_return_pct) : ''}">${p.annualized_return_pct != null ? sign(p.annualized_return_pct) + '%' : '—'}</span>
+            </div>
+            <div class="pos-stat">
               <span class="pos-stat-label">${t('pos.price_change_2yr')}</span>
               <span class="pos-stat-value ${priceChange != null ? cls(priceChange) : ''}">${priceChange != null ? sign(priceChange) + '%' : '—'}</span>
             </div>
@@ -596,6 +600,7 @@ function updateClosedPositions() {
     + '<th>' + t('closed.proceeds') + '</th>'
     + '<th>' + t('pos.realized_pl') + '</th>'
     + '<th>' + t('closed.return_pct') + '</th>'
+    + '<th>' + t('closed.annualized') + '</th>'
     + '</tr></thead><tbody>'
     + closed.map(p =>
       `<tr>`
@@ -604,6 +609,7 @@ function updateClosedPositions() {
       + `<td>${fmtCcy(p.total_proceeds_eur)}</td>`
       + `<td class="${cls(p.realized_gain_eur)}">${signCcy(p.realized_gain_eur)}</td>`
       + `<td class="${cls(p.realized_gain_pct)}">${sign(p.realized_gain_pct)}%</td>`
+      + `<td class="${p.annualized_return_pct != null ? cls(p.annualized_return_pct) : ''}">${p.annualized_return_pct != null ? sign(p.annualized_return_pct) + '%' : '—'}</td>`
       + `</tr>`
     ).join('')
     + '</tbody>';

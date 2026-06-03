@@ -12,6 +12,18 @@ import pandas as pd
 from .importer import normalize_date
 
 
+def position_cagr(cost: float, value: float, first_date: str | None, end_date: str | None = None, min_days: int = 30) -> float | None:
+    """CAGR for a single position. Returns None if holding < min_days or data missing."""
+    if not first_date or cost <= 0 or value <= 0:
+        return None
+    end = end_date or datetime.now().strftime("%Y-%m-%d")
+    days = (datetime.strptime(end, "%Y-%m-%d") - datetime.strptime(first_date, "%Y-%m-%d")).days
+    if days < min_days:
+        return None
+    years = days / 365.25
+    return ((value / cost) ** (1 / years) - 1) * 100
+
+
 @dataclass
 class PositionDetail:
     ticker: str
@@ -31,6 +43,8 @@ class ClosedPositionDetail:
     total_proceeds_eur: float
     realized_gain_eur: float
     realized_gain_pct: float
+    first_buy_date: str | None = None
+    last_sell_date: str | None = None
 
 
 @dataclass
@@ -282,6 +296,8 @@ def _compute_analytics_inner(conn: sqlite3.Connection, year: int | None,
     per_ticker_realized = defaultdict(float)  # ticker -> cumulative realized gain EUR
     per_ticker_cost_sold = defaultdict(float)  # ticker -> total cost basis of sold shares
     per_ticker_proceeds = defaultdict(float)  # ticker -> total sale proceeds
+    per_ticker_first_buy = {}   # ticker -> earliest buy date str
+    per_ticker_last_sell = {}   # ticker -> latest sell date str
     total_fees = 0.0  # commissions + overnight fees (CFD)
     cfd_cash = 0.0  # running cash balance for CFD account valuation
     stock_cash = 0.0  # uninvested cash from CASH TOP-UP (for sources with cash events)
@@ -349,6 +365,13 @@ def _compute_analytics_inner(conn: sqlite3.Connection, year: int | None,
 
             amount_eur = abs(amount) / fx if fx > 0 else abs(amount)
             pps_eur = pps / fx if fx > 0 else pps
+
+            if ticker and ("BUY" in tx_type or tx_type in ("Receive", "Staking reward", "Learn reward")):
+                if ticker not in per_ticker_first_buy or date_str < per_ticker_first_buy[ticker]:
+                    per_ticker_first_buy[ticker] = date_str
+            if ticker and ("SELL" in tx_type or tx_type == "Payment"):
+                if ticker not in per_ticker_last_sell or date_str > per_ticker_last_sell[ticker]:
+                    per_ticker_last_sell[ticker] = date_str
 
             if "BUY" in tx_type and ticker and (is_cfd or is_cfd_tx):
                 # CFD BUY: can close shorts and/or open longs
@@ -944,6 +967,8 @@ def _compute_analytics_inner(conn: sqlite3.Connection, year: int | None,
             total_proceeds_eur=proceeds,
             realized_gain_eur=realized,
             realized_gain_pct=gain_pct,
+            first_buy_date=per_ticker_first_buy.get(ticker),
+            last_sell_date=per_ticker_last_sell.get(ticker),
         ))
 
     # Risk metrics (Sharpe, Sortino, volatility, etc.)

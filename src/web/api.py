@@ -35,7 +35,7 @@ def api_get_analytics(handler, scope: str):
     from ..prices_db import get_prices_conn_or_none
     prices_conn = get_prices_conn_or_none()
     try:
-        from ..analytics import compute_analytics
+        from ..analytics import compute_analytics, position_cagr
         from ..analytics_cache import compute_data_hash, get_cached, put_cache
         data_hash = compute_data_hash(conn, prices_conn, portfolio_id=portfolio_id)
         cached = get_cached(conn, scope, data_hash, portfolio_id=portfolio_id)
@@ -83,6 +83,10 @@ def api_get_analytics(handler, scope: str):
                         "unrealized_gain_pct": round(p.unrealized_gain_pct, 2),
                         "weight_pct": round(p.weight_pct, 2),
                         "realized_gain_eur": round(p.realized_gain_eur, 2),
+                        "annualized_return_pct": round(c, 2) if (c := position_cagr(
+                            p.cost_basis_eur, p.market_value_eur,
+                            min((l[2] for l in ac_analytics.position_lots.get(p.ticker, [])), default=None),
+                        )) is not None else None,
                     }
                     for p in ac_analytics.positions
                 ],
@@ -97,6 +101,10 @@ def api_get_analytics(handler, scope: str):
                         "total_proceeds_eur": round(p.total_proceeds_eur, 2),
                         "realized_gain_eur": round(p.realized_gain_eur, 2),
                         "realized_gain_pct": round(p.realized_gain_pct, 2),
+                        "annualized_return_pct": round(c, 2) if (c := position_cagr(
+                            p.total_cost_eur, p.total_proceeds_eur,
+                            p.first_buy_date, p.last_sell_date,
+                        )) is not None else None,
                     }
                     for p in ac_analytics.closed_positions
                 ],
