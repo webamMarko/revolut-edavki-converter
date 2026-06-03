@@ -43,7 +43,9 @@ function buildTypeChips() {
       const type = btn.dataset.type;
       if (txTypeFilter.has(type)) txTypeFilter.delete(type); else txTypeFilter.add(type);
       btn.classList.toggle('active', txTypeFilter.has(type));
+      txPage = 0;
       applyTxFilter();
+      pushTxUrlState();
     });
   });
 }
@@ -59,7 +61,6 @@ function applyTxFilter() {
   if (toDate)       filtered = filtered.filter(t => t.date <= toDate);
   if (txTypeFilter.size > 0) filtered = filtered.filter(t => txTypeFilter.has(t.type));
   txFiltered = sortTxArray(filtered);
-  txPage = 0;
   renderTxPage();
 }
 
@@ -85,7 +86,46 @@ function updateTxStats() {
   ).join('');
 }
 
-function updateTransactions() { buildTypeChips(); updateTxStats(); applyTxFilter(); }
+function pushTxUrlState() {
+  const params = new URLSearchParams(window.location.search);
+  if (txPage > 0) params.set('page', txPage + 1); else params.delete('page');
+  if (txTypeFilter.size > 0) params.set('type', [...txTypeFilter].sort().join(',')); else params.delete('type');
+  const df = txDateFromEl && txDateFromEl.value;
+  if (df) params.set('dateFrom', df); else params.delete('dateFrom');
+  const dt = txDateToEl && txDateToEl.value;
+  if (dt) params.set('dateTo', dt); else params.delete('dateTo');
+  const sort = txSortEl && txSortEl.value;
+  if (sort && sort !== 'date-desc') params.set('sort', sort); else params.delete('sort');
+  const q = txFilterEl && txFilterEl.value;
+  if (q) params.set('q', q); else params.delete('q');
+  const qs = params.toString();
+  history.replaceState(null, '', (qs ? '?' + qs : window.location.pathname) + window.location.hash);
+}
+
+function restoreTxUrlState() {
+  const params = new URLSearchParams(window.location.search);
+  const typeParam = params.get('type');
+  if (typeParam) txTypeFilter = new Set(typeParam.split(',').filter(Boolean));
+  if (txDateFromEl) { const v = params.get('dateFrom'); if (v) txDateFromEl.value = v; }
+  if (txDateToEl)   { const v = params.get('dateTo');   if (v) txDateToEl.value = v; }
+  if (txSortEl)     { const v = params.get('sort');     if (v) txSortEl.value = v; }
+  if (txFilterEl)   { const v = params.get('q');        if (v) txFilterEl.value = v; }
+  return params.has('page') ? Math.max(0, parseInt(params.get('page'), 10) - 1) : 0;
+}
+
+function updateTransactions() {
+  const restoredPage = restoreTxUrlState();
+  txPage = restoredPage;
+  buildTypeChips();
+  updateTxStats();
+  applyTxFilter();
+  // Clamp to valid range in case URL page exceeds current data
+  const totalPages = Math.ceil(txFiltered.length / PAGE_SIZE);
+  if (txPage > 0 && txPage >= totalPages) {
+    txPage = Math.max(0, totalPages - 1);
+    renderTxPage();
+  }
+}
 
 function buildTxPagination(totalPages, currentPage) {
   if (totalPages <= 1) return '';
@@ -115,9 +155,9 @@ function renderTxPage() {
   txPag.innerHTML = buildTxPagination(totalPages, txPage);
   makeSortable(txTable);
 }
-window.txGoTo = function(page) { txPage = page; renderTxPage(); };
-window.txGo = function(dir) { txPage = Math.max(0, txPage + dir); renderTxPage(); };
-txFilterEl.addEventListener('input', function() { applyTxFilter(); });
-txDateFromEl && txDateFromEl.addEventListener('change', function() { applyTxFilter(); });
-txDateToEl   && txDateToEl.addEventListener('change', function() { applyTxFilter(); });
-txSortEl     && txSortEl.addEventListener('change', function() { applyTxFilter(); });
+window.txGoTo = function(page) { txPage = page; renderTxPage(); pushTxUrlState(); };
+window.txGo = function(dir) { txPage = Math.max(0, txPage + dir); renderTxPage(); pushTxUrlState(); };
+txFilterEl.addEventListener('input', function() { txPage = 0; applyTxFilter(); pushTxUrlState(); });
+txDateFromEl && txDateFromEl.addEventListener('change', function() { txPage = 0; applyTxFilter(); pushTxUrlState(); });
+txDateToEl   && txDateToEl.addEventListener('change', function() { txPage = 0; applyTxFilter(); pushTxUrlState(); });
+txSortEl     && txSortEl.addEventListener('change', function() { txPage = 0; applyTxFilter(); pushTxUrlState(); });
