@@ -251,3 +251,87 @@ class TestFireProjectionsLayout:
             f"Expected aria-expanded=false, got: {state['ariaExpanded']}"
         assert not state['bodyHasIsOpen'], \
             "Expected accordion body NOT to have is-open class (collapsed by default)"
+
+
+# ---------------------------------------------------------------------------
+# SAA-510: Animation polish — max-height transition + chevron rotation
+# ---------------------------------------------------------------------------
+
+class TestAccordionAnimation:
+    def test_accordion_body_uses_max_height_transition(self, premium_desktop_page, server_url):
+        """coll-panel-body has a CSS max-height transition in the 200-300ms range."""
+        premium_desktop_page.goto(f"{server_url}/report")
+        premium_desktop_page.wait_for_selector("#summary", timeout=15000)
+        _inject_fire_section(premium_desktop_page)
+
+        result = premium_desktop_page.evaluate(
+            """() => {
+                const body = document.getElementById('test-fire-additional-metrics');
+                if (!body) return null;
+                const cs = window.getComputedStyle(body);
+                return {
+                    transitionProperty: cs.transitionProperty,
+                    transitionDuration: cs.transitionDuration,
+                };
+            }"""
+        )
+
+        assert result is not None, "Could not find coll-panel-body element"
+
+        props = result['transitionProperty'].lower()
+        assert 'max-height' in props, \
+            f"Expected 'max-height' in transitionProperty, got: {props!r}"
+
+        dur_str = result['transitionDuration'].strip()
+        if dur_str.endswith('ms'):
+            duration_ms = float(dur_str[:-2])
+        else:
+            duration_ms = float(dur_str.rstrip('s')) * 1000
+
+        assert 200 <= duration_ms <= 300, \
+            f"Expected max-height transition 200-300ms, got {duration_ms}ms ({dur_str!r})"
+
+    def test_chevron_rotates_on_expand(self, premium_desktop_page, server_url):
+        """Chevron has no rotation when collapsed; rotates ~180° when aria-expanded is set."""
+        premium_desktop_page.goto(f"{server_url}/report")
+        premium_desktop_page.wait_for_selector("#summary", timeout=15000)
+        _inject_fire_section(premium_desktop_page)
+
+        result = premium_desktop_page.evaluate(
+            """() => {
+                const btn = document.querySelector('[data-role="fireSection"] .coll-panel-hdr');
+                const chev = document.querySelector('[data-role="fireSection"] .coll-panel-chevron');
+                if (!btn || !chev) return null;
+
+                const collapsedTransform = window.getComputedStyle(chev).transform;
+
+                // Suppress transition then expand so we read the final CSS value immediately
+                chev.style.transitionDuration = '0s';
+                btn.setAttribute('aria-expanded', 'true');
+                // Force synchronous style recalc
+                void window.getComputedStyle(chev).transform;
+
+                const expandedTransform = window.getComputedStyle(chev).transform;
+                return { collapsedTransform, expandedTransform };
+            }"""
+        )
+
+        assert result is not None, "Could not find accordion elements"
+
+        collapsed = result['collapsedTransform']
+        expanded = result['expandedTransform']
+
+        identity_values = ('none', 'matrix(1, 0, 0, 1, 0, 0)')
+        assert collapsed in identity_values, \
+            f"Collapsed chevron should have no rotation, got: {collapsed!r}"
+
+        assert expanded not in identity_values, \
+            f"Expanded chevron should be rotated (not identity/none), got: {expanded!r}"
+
+        # rotate(180deg) → matrix(-1, ~0, ~0, -1, 0, 0); verify cos component ≈ -1
+        import re as _re
+        m = _re.match(r'matrix\(([^,]+),', expanded)
+        if m:
+            a_val = float(m.group(1))
+            assert a_val < -0.9, \
+                f"Expected ~rotate(180deg) on expand, got matrix 'a'={a_val} in {expanded!r}"
