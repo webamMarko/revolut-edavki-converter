@@ -369,6 +369,18 @@ body {
 .metric-card:has(.pos) { border-top-color: rgba(52,211,153,0.35); }
 .metric-card:has(.neg) { border-top-color: rgba(248,113,113,0.35); }
 
+/* ---- MetricCardsRow: 4-card responsive wrapper ---- */
+.metric-cards-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 0.75rem;
+}
+.metric-cards-row > .metric-card {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ---- Charts ---- */
 .chart-section {
   background: var(--surface);
@@ -833,6 +845,8 @@ body {
   .two-col { grid-template-columns: 1fr; }
   .card-grid { grid-template-columns: repeat(2, 1fr); }
   .card-grid.small { grid-template-columns: repeat(2, 1fr); }
+  .metric-cards-row { display: grid; grid-template-columns: repeat(2, 1fr); flex-wrap: unset; }
+  .metric-cards-row > .metric-card { flex: unset; }
 
   /* Metric cards: smaller text so 2-up fits */
   .metric-card .value { font-size: 1.1rem; }
@@ -947,6 +961,8 @@ body {
 /* Very small phones (< 390px): single column metric cards */
 @media (max-width: 389px) {
   .card-grid, .card-grid.small { grid-template-columns: 1fr; }
+  .metric-cards-row { display: flex; flex-direction: column; }
+  .metric-cards-row > .metric-card { flex: unset; }
 }
 
 /* ---- Cost basis lots ---- */

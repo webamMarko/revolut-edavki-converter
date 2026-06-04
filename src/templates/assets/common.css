@@ -887,6 +887,19 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 }
 
 /* ──────────────────────────────────────────────────────────────────────
+   Collapsible panel (.coll-panel)
+   Supports: custom label, chevron rotation, CSS max-height transition,
+   defaultExpanded via aria-expanded="true" + is-open on body.
+   ────────────────────────────────────────────────────────────────────── */
+.coll-panel-hdr{display:flex;align-items:center;gap:0.5rem;width:100%;background:none;border:none;border-top:1px solid var(--border);padding:0.75rem 0;cursor:pointer;color:var(--text);font:inherit;font-weight:600;font-size:0.9rem;text-align:left}
+.coll-panel-hdr:hover{color:var(--accent)}
+.coll-panel-hdr:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--radius-sm)}
+.coll-panel-chevron{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-left:auto;flex-shrink:0;transition:transform 0.22s ease;color:var(--muted)}
+.coll-panel-hdr[aria-expanded="true"] .coll-panel-chevron{transform:rotate(180deg)}
+.coll-panel-body{overflow:hidden;max-height:0;transition:max-height 0.25s ease}
+.coll-panel-body.is-open{max-height:600px}
+
+/* ──────────────────────────────────────────────────────────────────────
    Column Mapping Inspector
    ────────────────────────────────────────────────────────────────────── */
 
