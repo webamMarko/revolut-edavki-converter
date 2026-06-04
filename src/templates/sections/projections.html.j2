@@ -11,7 +11,6 @@
 
   <section class="card" data-role="fireSection" style="display:none">
     <h2>FIRE Projection</h2>
-    <div data-role="fireCards" class="card-grid small" style="margin-bottom:1rem"></div>
     <div class="fire-config" style="display:flex;gap:0.75rem 1.25rem;flex-wrap:wrap;align-items:center;font-size:0.82rem;color:var(--muted);margin-bottom:1rem">
       <label style="display:flex;align-items:center;gap:0.35rem">Annual expenses
         <input data-role="projFireExpenses" type="number" class="fire-input" step="500" min="0" style="width:90px">
@@ -29,6 +28,14 @@
         <input data-role="projFireContrib" type="number" class="fire-input" step="50" min="0" style="width:90px">
       </label>
     </div>
+    <div data-role="fireCards" class="metric-cards-row" style="margin-bottom:1rem"></div>
     <div class="chart-wrap" style="height:300px"><canvas data-role="fireChart"></canvas></div>
+    <button class="coll-panel-hdr" aria-expanded="false" aria-controls="fire-additional-metrics">
+      Additional Metrics
+      <svg class="coll-panel-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+    </button>
+    <div class="coll-panel-body" id="fire-additional-metrics">
+      <div data-role="fireSecondaryCards" class="card-grid small" style="padding:0.75rem 0"></div>
+    </div>
   </section>
 </div>

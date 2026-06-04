@@ -109,3 +109,145 @@ class TestMetricCardsRow:
         flex_dir = _computed(premium_desktop_page, "#test-metric-cards-row", "flexDirection")
         assert display == "flex"
         assert flex_dir == "column"
+
+
+# ---------------------------------------------------------------------------
+# SAA-509: FIRE section layout — order, accordion wiring, label, default state
+# ---------------------------------------------------------------------------
+
+_MOCK_FIRE_HTML = """
+<section data-role="fireSection" id="test-fire-section" style="display:block">
+  <h2>FIRE Projection</h2>
+  <div class="fire-config" data-test-section="inputs">
+    <input type="number" placeholder="Annual expenses">
+  </div>
+  <div data-role="fireCards" class="metric-cards-row" style="margin-bottom:1rem">
+    <div class="metric-card"><div class="label">FIRE Progress</div><div class="value">75%</div></div>
+    <div class="metric-card"><div class="label">Target</div><div class="value">500000</div></div>
+    <div class="metric-card"><div class="label">Current Value</div><div class="value">375000</div></div>
+    <div class="metric-card"><div class="label">Est. Years</div><div class="value">~8</div></div>
+  </div>
+  <div class="chart-wrap" data-test-section="chart" style="height:300px">
+    <canvas></canvas>
+  </div>
+  <button class="coll-panel-hdr" aria-expanded="false" aria-controls="test-fire-additional-metrics">
+    Additional Metrics
+    <svg class="coll-panel-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="4,6 8,10 12,6"/>
+    </svg>
+  </button>
+  <div class="coll-panel-body" id="test-fire-additional-metrics">
+    <div data-role="fireSecondaryCards" class="card-grid small" style="padding:0.75rem 0">
+      <div class="metric-card"><div class="label">Remaining</div><div class="value">125000</div></div>
+      <div class="metric-card"><div class="label">Est. Year</div><div class="value">2034</div></div>
+    </div>
+  </div>
+</section>
+"""
+
+
+def _inject_fire_section(page):
+    page.evaluate(
+        """(html) => {
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = html;
+            document.body.appendChild(wrapper.firstElementChild);
+        }""",
+        _MOCK_FIRE_HTML,
+    )
+
+
+class TestFireProjectionsLayout:
+    def test_sections_render_in_order(self, premium_desktop_page, server_url):
+        """Inputs come first, then metrics row, then chart, then accordion."""
+        premium_desktop_page.goto(f"{server_url}/report")
+        premium_desktop_page.wait_for_selector("#summary", timeout=15000)
+        _inject_fire_section(premium_desktop_page)
+
+        order = premium_desktop_page.evaluate(
+            """() => {
+                const sec = document.querySelector('[data-role="fireSection"]');
+                if (!sec) return [];
+                const result = [];
+                for (const child of sec.children) {
+                    if (child.tagName === 'H2') { result.push('heading'); }
+                    else if (child.dataset.testSection === 'inputs' || child.classList.contains('fire-config')) { result.push('inputs'); }
+                    else if (child.dataset.role === 'fireCards') { result.push('metricsRow'); }
+                    else if (child.dataset.testSection === 'chart' || child.classList.contains('chart-wrap')) { result.push('chart'); }
+                    else if (child.classList.contains('coll-panel-hdr')) { result.push('accordion-hdr'); }
+                    else if (child.classList.contains('coll-panel-body')) { result.push('accordion-body'); }
+                }
+                return result;
+            }"""
+        )
+
+        inputs_idx = order.index('inputs')
+        metrics_idx = order.index('metricsRow')
+        chart_idx = order.index('chart')
+        accordion_idx = order.index('accordion-hdr')
+
+        assert inputs_idx < metrics_idx, f"inputs must precede metricsRow — got order: {order}"
+        assert metrics_idx < chart_idx, f"metricsRow must precede chart — got order: {order}"
+        assert chart_idx < accordion_idx, f"chart must precede accordion — got order: {order}"
+
+    def test_remaining_and_est_year_in_accordion(self, premium_desktop_page, server_url):
+        """Remaining and Est. Year metric cards are inside the accordion body."""
+        premium_desktop_page.goto(f"{server_url}/report")
+        premium_desktop_page.wait_for_selector("#summary", timeout=15000)
+        _inject_fire_section(premium_desktop_page)
+
+        labels = premium_desktop_page.evaluate(
+            """() => {
+                const body = document.getElementById('test-fire-additional-metrics');
+                if (!body) return [];
+                return Array.from(body.querySelectorAll('.metric-card .label'))
+                    .map(el => el.textContent.trim());
+            }"""
+        )
+
+        assert 'Remaining' in labels, f"Expected 'Remaining' in accordion, got: {labels}"
+        assert 'Est. Year' in labels, f"Expected 'Est. Year' in accordion, got: {labels}"
+
+    def test_accordion_label_is_additional_metrics(self, premium_desktop_page, server_url):
+        """Accordion header text reads 'Additional Metrics'."""
+        premium_desktop_page.goto(f"{server_url}/report")
+        premium_desktop_page.wait_for_selector("#summary", timeout=15000)
+        _inject_fire_section(premium_desktop_page)
+
+        label = premium_desktop_page.evaluate(
+            """() => {
+                const btn = document.querySelector('[data-role="fireSection"] .coll-panel-hdr');
+                if (!btn) return null;
+                return Array.from(btn.childNodes)
+                    .filter(n => n.nodeType === Node.TEXT_NODE)
+                    .map(n => n.textContent.trim())
+                    .filter(Boolean)
+                    .join('');
+            }"""
+        )
+
+        assert label == 'Additional Metrics', f"Expected 'Additional Metrics', got: {label!r}"
+
+    def test_accordion_collapsed_by_default(self, premium_desktop_page, server_url):
+        """Accordion body has aria-expanded=false and no is-open class on load."""
+        premium_desktop_page.goto(f"{server_url}/report")
+        premium_desktop_page.wait_for_selector("#summary", timeout=15000)
+        _inject_fire_section(premium_desktop_page)
+
+        state = premium_desktop_page.evaluate(
+            """() => {
+                const btn = document.querySelector('[data-role="fireSection"] .coll-panel-hdr');
+                const body = document.getElementById('test-fire-additional-metrics');
+                if (!btn || !body) return null;
+                return {
+                    ariaExpanded: btn.getAttribute('aria-expanded'),
+                    bodyHasIsOpen: body.classList.contains('is-open')
+                };
+            }"""
+        )
+
+        assert state is not None, "Could not find accordion elements"
+        assert state['ariaExpanded'] == 'false', \
+            f"Expected aria-expanded=false, got: {state['ariaExpanded']}"
+        assert not state['bodyHasIsOpen'], \
+            "Expected accordion body NOT to have is-open class (collapsed by default)"

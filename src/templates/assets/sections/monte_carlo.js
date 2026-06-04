@@ -229,20 +229,29 @@ function updateFire() {
 
   var fireYear = yearsToFire != null ? new Date().getFullYear() + Math.ceil(yearsToFire) : null;
 
-  var cards = [
+  function cardHtml(row) {
+    return '<div class="metric-card"><div class="label">' + row[0] + '</div><div class="value ' + (row[2] || '') + '">' + row[1] + '</div></div>';
+  }
+
+  var primaryCards = [
     [t('summary.fire_progress'), fmt(progress, 1) + '%', progress >= 100 ? 'pos' : ''],
     ['Target', fmtCcy(fireTarget), ''],
     ['Current Value', fmtCcy(portfolioVal), ''],
+  ];
+  if (yearsToFire != null) {
+    primaryCards.push(['Est. Years', '~' + fmt(yearsToFire, 1), '']);
+  }
+
+  var secondaryCards = [
     ['Remaining', remaining > 0 ? fmtCcy(remaining) : t('summary.fire_achieved'), remaining > 0 ? '' : 'pos'],
   ];
   if (yearsToFire != null) {
-    cards.push(['Est. Years', '~' + fmt(yearsToFire, 1), '']);
-    cards.push(['Est. Year', String(fireYear), '']);
+    secondaryCards.push(['Est. Year', String(fireYear), '']);
   }
 
-  scopedFind(null, 'fireCards').innerHTML = cards.map(function(row) {
-    return '<div class="metric-card"><div class="label">' + row[0] + '</div><div class="value ' + (row[2] || '') + '">' + row[1] + '</div></div>';
-  }).join('');
+  scopedFind(null, 'fireCards').innerHTML = primaryCards.map(cardHtml).join('');
+  var secondaryEl = scopedFind(null, 'fireSecondaryCards');
+  if (secondaryEl) secondaryEl.innerHTML = secondaryCards.map(cardHtml).join('');
 
   // --- FIRE projection chart ---
   if (_fireChart) { _fireChart.destroy(); _fireChart = null; }
@@ -333,5 +342,19 @@ function updateFire() {
       el.addEventListener('input', updateFire);
     }
   });
+
+  // Wire accordion toggle for collapsible panel inside fire section
+  var fireSection = scopedFind(null, 'fireSection');
+  if (fireSection) {
+    fireSection.querySelectorAll('.coll-panel-hdr').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var open = this.getAttribute('aria-expanded') === 'true';
+        this.setAttribute('aria-expanded', open ? 'false' : 'true');
+        var body = document.getElementById(this.getAttribute('aria-controls'));
+        if (body) body.classList.toggle('is-open', !open);
+      });
+    });
+  }
+
   updateFire();
 })();
