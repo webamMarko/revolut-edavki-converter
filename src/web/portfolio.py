@@ -419,6 +419,16 @@ def serve_settings_page(handler):
     if not session or session["role"] not in ("premium", "admin"):
         redirect(handler, "/login")
         return
+
+    conn = portfolio_conn(session, get_session_token(handler))
+    try:
+        from ..ibkr_sync import get_sync_status
+        ibkr_status = get_sync_status(conn)
+    except Exception:
+        ibkr_status = {"configured": False, "query_id": "", "last_sync": None, "last_error": None}
+    finally:
+        conn.close()
+
     template = page_env.get_template("pages/settings.html.j2")
     html = template.render(
         username=session["username"],
@@ -428,6 +438,7 @@ def serve_settings_page(handler):
         common_js=COMMON_JS,
         show_header=True,
         show_drop_import=True,
+        ibkr_status=ibkr_status,
     )
     html_response(handler, html)
 
@@ -457,5 +468,93 @@ def serve_pricing_page(handler):
         username=username,
         role=role,
         active_page="pricing"
+    )
+    html_response(handler, html)
+
+
+# ------------------------------------------------------------------
+# Real estate property pages
+# ------------------------------------------------------------------
+
+def serve_properties_list(handler):
+    """GET /properties — property list page."""
+    session = get_session(handler)
+    if not session:
+        redirect(handler, "/login")
+        return
+    conn = portfolio_conn(session, get_session_token(handler))
+    try:
+        from ..realestate import list_properties
+        portfolio_id = session.get("active_portfolio_id", 1)
+        props = list_properties(conn, portfolio_id=portfolio_id)
+    finally:
+        conn.close()
+
+    template = page_env.get_template("pages/properties_list.html.j2")
+    html = template.render(
+        fouc_script=FOUC_SCRIPT,
+        common_js=COMMON_JS,
+        show_header=True,
+        show_drop_import=False,
+        username=session.get("username"),
+        role=session.get("role"),
+        active_page="properties",
+        properties=props,
+    )
+    html_response(handler, html)
+
+
+def serve_property_new(handler):
+    """GET /properties/new — 3-step creation wizard."""
+    session = get_session(handler)
+    if not session:
+        redirect(handler, "/login")
+        return
+
+    from ..countries import COUNTRIES
+    template = page_env.get_template("pages/properties_new.html.j2")
+    html = template.render(
+        fouc_script=FOUC_SCRIPT,
+        common_js=COMMON_JS,
+        show_header=True,
+        show_drop_import=False,
+        username=session.get("username"),
+        role=session.get("role"),
+        active_page="properties",
+        countries=COUNTRIES,
+    )
+    html_response(handler, html)
+
+
+def serve_property_edit(handler, property_id: int):
+    """GET /properties/{id}/edit — single-page edit form."""
+    session = get_session(handler)
+    if not session:
+        redirect(handler, "/login")
+        return
+    conn = portfolio_conn(session, get_session_token(handler))
+    try:
+        from ..realestate import get_property
+        portfolio_id = session.get("active_portfolio_id", 1)
+        prop = get_property(conn, property_id, portfolio_id=portfolio_id)
+    finally:
+        conn.close()
+
+    if not prop:
+        error_response(handler, "Property not found", status=404)
+        return
+
+    from ..countries import COUNTRIES
+    template = page_env.get_template("pages/properties_edit.html.j2")
+    html = template.render(
+        fouc_script=FOUC_SCRIPT,
+        common_js=COMMON_JS,
+        show_header=True,
+        show_drop_import=False,
+        username=session.get("username"),
+        role=session.get("role"),
+        active_page="properties",
+        prop=prop,
+        countries=COUNTRIES,
     )
     html_response(handler, html)

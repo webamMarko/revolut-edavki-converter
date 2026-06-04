@@ -11,7 +11,7 @@ from typing import Optional
 from urllib.parse import urlparse
 
 from .templates import TEMPLATES_DIR
-from . import auth, admin, portfolio, api, exports, import_wizard, tickets
+from . import auth, admin, portfolio, api, exports, import_wizard, tickets, ibkr
 
 FORCE_HTTPS = os.environ.get("FORCE_HTTPS", "").lower() in ("true", "1", "yes")
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8080")
@@ -140,8 +140,30 @@ class UploadHandler(BaseHTTPRequestHandler):
         elif path.startswith("/api/analytics/"):
             scope = path[len("/api/analytics/"):]
             api.api_get_analytics(self, scope)
+        elif path == "/api/properties":
+            api.api_list_properties(self)
+        elif path.startswith("/api/properties/"):
+            prop_id_str = path[len("/api/properties/"):]
+            if prop_id_str.isdigit():
+                api.api_get_property(self, int(prop_id_str))
+            else:
+                self.send_error(404)
+        elif path == "/api/reference/countries":
+            api.api_list_countries(self)
+        elif path == "/properties":
+            portfolio.serve_properties_list(self)
+        elif path == "/properties/new":
+            portfolio.serve_property_new(self)
+        elif path.startswith("/properties/") and path.endswith("/edit"):
+            prop_id_str = path[len("/properties/"):-len("/edit")]
+            if prop_id_str.isdigit():
+                portfolio.serve_property_edit(self, int(prop_id_str))
+            else:
+                self.send_error(404)
         elif path == "/api/notes":
             api.api_list_notes(self)
+        elif path == "/api/ibkr/status":
+            ibkr.api_ibkr_status(self)
         elif path == "/api/onboarding-status":
             api.api_onboarding_status(self)
         elif path == "/api/shares":
@@ -255,6 +277,8 @@ class UploadHandler(BaseHTTPRequestHandler):
             import_wizard.handle_import_run(self)
 
         # API routes
+        elif path == "/api/properties":
+            api.api_create_property(self)
         elif path == "/api/portfolios":
             api.api_create_portfolio(self)
         elif path == "/api/switch-portfolio":
@@ -283,6 +307,14 @@ class UploadHandler(BaseHTTPRequestHandler):
             else:
                 self.send_error(404)
 
+        # IBKR integration routes
+        elif path == "/api/ibkr/credentials":
+            ibkr.api_ibkr_save_credentials(self)
+        elif path == "/api/ibkr/credentials/delete":
+            ibkr.api_ibkr_delete_credentials(self)
+        elif path == "/api/ibkr/sync":
+            ibkr.api_ibkr_sync(self)
+
         else:
             self.send_error(404)
 
@@ -303,6 +335,9 @@ class UploadHandler(BaseHTTPRequestHandler):
         # /api/goals/<id>
         elif len(parts) == 4 and parts[1] == "api" and parts[2] == "goals" and parts[3].isdigit():
             api.api_update_goal(self, int(parts[3]))
+        # /api/properties/<id>
+        elif len(parts) == 4 and parts[1] == "api" and parts[2] == "properties" and parts[3].isdigit():
+            api.api_update_property(self, int(parts[3]))
         else:
             self.send_error(404)
 
@@ -320,6 +355,9 @@ class UploadHandler(BaseHTTPRequestHandler):
         # /api/goals/<id>
         elif len(parts) == 4 and parts[1] == "api" and parts[2] == "goals" and parts[3].isdigit():
             api.api_delete_goal(self, int(parts[3]))
+        # /api/properties/<id>
+        elif len(parts) == 4 and parts[1] == "api" and parts[2] == "properties" and parts[3].isdigit():
+            api.api_delete_property(self, int(parts[3]))
         else:
             self.send_error(404)
 

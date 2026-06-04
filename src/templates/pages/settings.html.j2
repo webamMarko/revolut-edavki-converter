@@ -191,6 +191,59 @@
     <p style="font-size:0.82rem;color:var(--muted)">Subscription management not configured. Contact support to manage your plan.</p>
     {% endif %}
   </div>
+
+  <div class="card">
+    <h2>Interactive Brokers (IBKR) Integration</h2>
+    <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem">
+      Connect your IBKR account via the Flex Query API to automatically import transactions.
+      Set up a Flex Query in
+      <a href="https://www.interactivebrokers.com/en/software/reportassistant/reportassistant.htm" target="_blank" rel="noopener" style="color:var(--accent)">IBKR Report Assistant</a>,
+      then enter your Flex Token and Query ID below.
+    </p>
+
+    <div id="ibkrStatus" style="margin-bottom:1rem;font-size:0.82rem">
+      {% if ibkr_status.configured %}
+      <span style="color:var(--green)">&#10003; Connected</span>
+      — Query ID: <code>{{ ibkr_status.query_id }}</code>
+      {% if ibkr_status.last_sync %}
+      &nbsp;&middot;&nbsp;Last synced: <span id="ibkrLastSync">{{ ibkr_status.last_sync }}</span>
+      {% endif %}
+      {% if ibkr_status.last_error %}
+      <div style="color:var(--red);margin-top:0.4rem">Last error: {{ ibkr_status.last_error }}</div>
+      {% endif %}
+      {% else %}
+      <span style="color:var(--muted)">Not configured</span>
+      {% endif %}
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:0.75rem;max-width:480px">
+      <div>
+        <label style="font-size:0.85rem;font-weight:500;display:block;margin-bottom:0.3rem">Flex Token</label>
+        <input type="password" id="ibkrToken" autocomplete="off"
+          placeholder="{% if ibkr_status.configured %}(saved — enter to replace){% else %}Paste your Flex token{% endif %}"
+          style="width:100%;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.85rem">
+      </div>
+      <div>
+        <label style="font-size:0.85rem;font-weight:500;display:block;margin-bottom:0.3rem">Query ID</label>
+        <input type="text" id="ibkrQueryId"
+          placeholder="e.g. 123456"
+          value="{% if ibkr_status.configured %}{{ ibkr_status.query_id }}{% endif %}"
+          style="width:100%;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.85rem">
+      </div>
+      <div id="ibkrMsg" style="font-size:0.82rem;min-height:1.2em"></div>
+      <div style="display:flex;gap:0.75rem;flex-wrap:wrap">
+        <button id="ibkrSaveBtn" class="btn btn-primary" style="font-size:0.85rem">Save credentials</button>
+        {% if ibkr_status.configured %}
+        <button id="ibkrSyncBtn" class="btn btn-secondary" style="font-size:0.85rem">Sync now</button>
+        <button id="ibkrDeleteBtn" class="btn" style="font-size:0.85rem;color:var(--red)">Remove</button>
+        {% endif %}
+      </div>
+    </div>
+    <p style="font-size:0.75rem;color:var(--muted);margin-top:1rem">
+      Your Flex Token and Query ID are stored encrypted in your personal database and never shared.
+      Only accounts with Trades + Dividends + Corporate Actions data will import correctly.
+    </p>
+  </div>
 </div>
 {% endblock %}
 
@@ -410,5 +463,75 @@ document.getElementById('confirmDeleteBtn').addEventListener('click', async () =
 modal.addEventListener('click', (e) => {
   if (e.target === modal) { modal.style.display='none'; deletePortfolioId=null; }
 });
+
+// --- IBKR Integration ---
+const ibkrMsg = document.getElementById('ibkrMsg');
+
+function ibkrSetMsg(text, color) {
+  ibkrMsg.style.color = color || 'var(--muted)';
+  ibkrMsg.textContent = text;
+  if (text) setTimeout(() => { ibkrMsg.textContent = ''; }, 5000);
+}
+
+const ibkrSaveBtn = document.getElementById('ibkrSaveBtn');
+if (ibkrSaveBtn) {
+  ibkrSaveBtn.addEventListener('click', async () => {
+    const token = document.getElementById('ibkrToken').value.trim();
+    const queryId = document.getElementById('ibkrQueryId').value.trim();
+    if (!token || !queryId) {
+      ibkrSetMsg('Both Flex Token and Query ID are required.', 'var(--red)');
+      return;
+    }
+    ibkrSaveBtn.disabled = true;
+    try {
+      const resp = await fetch('/api/ibkr/credentials', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({token, query_id: queryId})
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        ibkrSetMsg('Credentials saved.', 'var(--green)');
+        document.getElementById('ibkrToken').value = '';
+        setTimeout(() => location.reload(), 1200);
+      } else {
+        ibkrSetMsg(data.error || 'Failed to save.', 'var(--red)');
+      }
+    } catch(e) { ibkrSetMsg('Network error.', 'var(--red)'); }
+    ibkrSaveBtn.disabled = false;
+  });
+}
+
+const ibkrSyncBtn = document.getElementById('ibkrSyncBtn');
+if (ibkrSyncBtn) {
+  ibkrSyncBtn.addEventListener('click', async () => {
+    ibkrSyncBtn.disabled = true;
+    ibkrSyncBtn.textContent = 'Syncing…';
+    try {
+      const resp = await fetch('/api/ibkr/sync', { method: 'POST' });
+      const data = await resp.json();
+      if (resp.ok) {
+        ibkrSetMsg(`Sync complete — ${data.rows_new} new, ${data.rows_skipped} skipped.`, 'var(--green)');
+        setTimeout(() => location.reload(), 2000);
+      } else {
+        ibkrSetMsg(data.error || 'Sync failed.', 'var(--red)');
+      }
+    } catch(e) { ibkrSetMsg('Network error.', 'var(--red)'); }
+    ibkrSyncBtn.disabled = false;
+    ibkrSyncBtn.textContent = 'Sync now';
+  });
+}
+
+const ibkrDeleteBtn = document.getElementById('ibkrDeleteBtn');
+if (ibkrDeleteBtn) {
+  ibkrDeleteBtn.addEventListener('click', async () => {
+    if (!confirm('Remove IBKR credentials? Your existing transactions will not be deleted.')) return;
+    try {
+      const resp = await fetch('/api/ibkr/credentials/delete', { method: 'POST' });
+      if (resp.ok) { location.reload(); }
+      else { ibkrSetMsg('Failed to remove credentials.', 'var(--red)'); }
+    } catch(e) { ibkrSetMsg('Network error.', 'var(--red)'); }
+  });
+}
 </script>
 {% endblock %}
