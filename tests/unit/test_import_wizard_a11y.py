@@ -45,7 +45,7 @@ class TestRadiogroupAriaPattern(unittest.TestCase):
         content = _template()
         # Find the acToggles section
         start = content.find('id="acToggles"')
-        end = content.find('</div>', start + 1)
+        content.find('</div>', start + 1)
         # Find next closing div that ends acToggles block
         section = content[start:content.find('id="overrideWarning"', start)]
         self.assertNotIn(

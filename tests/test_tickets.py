@@ -228,7 +228,7 @@ class TestTicketCRUD:
 
         # Create tickets for each user
         ticket1_id = tickets.create_ticket(user1.id, "bug", "User 1 bug", "Description", conn=conn)
-        ticket2_id = tickets.create_ticket(user2.id, "idea", "User 2 idea", "Description", conn=conn)
+        tickets.create_ticket(user2.id, "idea", "User 2 idea", "Description", conn=conn)
 
         # Get tickets for user1
         user1_tickets = tickets.get_tickets(user1.id, conn=conn)
@@ -302,8 +302,8 @@ class TestTicketCRUD:
         ticket_id = tickets.create_ticket(user.id, "bug", "Test bug", "Description", conn=conn)
 
         # Add multiple comments
-        comment1_id = tickets.add_comment(ticket_id, user.id, "First comment", conn=conn)
-        comment2_id = tickets.add_comment(ticket_id, user.id, "Second comment", conn=conn)
+        tickets.add_comment(ticket_id, user.id, "First comment", conn=conn)
+        tickets.add_comment(ticket_id, user.id, "Second comment", conn=conn)
 
         # Get comments
         comments = tickets.get_comments(ticket_id, conn=conn)

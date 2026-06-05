@@ -85,7 +85,7 @@ def api_get_analytics(handler, scope: str):
                         "realized_gain_eur": round(p.realized_gain_eur, 2),
                         "annualized_return_pct": round(c, 2) if (c := position_cagr(
                             p.cost_basis_eur, p.market_value_eur,
-                            min((l[2] for l in ac_analytics.position_lots.get(p.ticker, [])), default=None),
+                            min((lot[2] for lot in ac_analytics.position_lots.get(p.ticker, [])), default=None),
                         )) is not None else None,
                     }
                     for p in ac_analytics.positions
@@ -826,7 +826,7 @@ def api_delete_portfolio(handler, portfolio_id: int):
 def api_switch_portfolio(handler):
     """POST /api/switch-portfolio — set active portfolio in session."""
     from .. import users
-    session = get_session(handler)
+    get_session(handler)
     token = get_session_token(handler)
     try:
         body = json.loads(handler.rfile.read(int(handler.headers.get("Content-Length", 0))).decode())
@@ -882,7 +882,7 @@ DEFAULT_LAYOUT = {
 
 def save_dashboard_layout(user_id: int, layout: dict, conn=None):
     """Save dashboard layout for a user. Returns True on success.
-    
+
     Validates:
     - widgets is an array of 0-16 items
     - each widget id is in WIDGET_REGISTRY
@@ -950,7 +950,7 @@ def save_dashboard_layout(user_id: int, layout: dict, conn=None):
 
 def get_dashboard_layout(user_id: int, conn=None):
     """Get dashboard layout for a user. Returns saved layout or default.
-    
+
     Returns dict with:
     - widgets: array of widget objects
     - isDefault: boolean indicating if this is the default layout

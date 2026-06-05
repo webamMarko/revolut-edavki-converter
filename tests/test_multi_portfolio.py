@@ -447,8 +447,8 @@ class TestQueryScoping:
         # Compute analytics for each portfolio with portfolio_id parameter
         # If function signature doesn't accept it yet, this will fail
         try:
-            analytics_p1 = compute_analytics(conn, portfolio_id=p1_id)
-            analytics_p2 = compute_analytics(conn, portfolio_id=p2_id)
+            compute_analytics(conn, portfolio_id=p1_id)
+            compute_analytics(conn, portfolio_id=p2_id)
             # If we get here, the signature was updated
             assert True
         except TypeError as e:
@@ -592,7 +592,7 @@ class TestImporterPortfolioScoping:
                              "2000.00", "USD", "1.08"])
 
         from src.importer import import_csv
-        result = import_csv(conn, str(csv_file), portfolio_id=p2_id)
+        import_csv(conn, str(csv_file), portfolio_id=p2_id)
 
         # Check the transaction was tagged with p2_id
         row = conn.execute(

@@ -889,7 +889,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                     "realized_gain_eur": round(p.realized_gain_eur, 2),
                     "annualized_return_pct": round(c, 2) if (c := position_cagr(
                         p.cost_basis_eur, p.market_value_eur,
-                        min((l[2] for l in analytics.position_lots.get(p.ticker, [])), default=None),
+                        min((lot[2] for lot in analytics.position_lots.get(p.ticker, [])), default=None),
                     )) is not None else None,
                 }
                 for p in analytics.positions
@@ -1052,7 +1052,7 @@ def _serialize_report_data(analytics, tax_by_year, transactions: list[dict],
                             "realized_gain_eur": round(p.realized_gain_eur, 2),
                             "annualized_return_pct": round(c, 2) if (c := position_cagr(
                                 p.cost_basis_eur, p.market_value_eur,
-                                min((l[2] for l in ac_analytics.position_lots.get(p.ticker, [])), default=None),
+                                min((lot[2] for lot in ac_analytics.position_lots.get(p.ticker, [])), default=None),
                             )) is not None else None,
                         }
                         for p in ac_analytics.positions

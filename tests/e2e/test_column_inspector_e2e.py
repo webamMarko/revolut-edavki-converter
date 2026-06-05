@@ -54,7 +54,7 @@ class TestColumnInspectorPanel:
             pytest.skip("sample_transactions.csv not found")
 
         header = premium_desktop_page.locator(".ci-inspectable-th").first
-        col_name = header.inner_text().strip().replace("✓", "").strip()
+        header.inner_text().strip().replace("✓", "").strip()
         header.click()
         premium_desktop_page.wait_for_timeout(200)
 

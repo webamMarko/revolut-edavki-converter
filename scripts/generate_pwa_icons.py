@@ -32,7 +32,7 @@ def create_icon(size, output_path):
         # Try to use a nice font if available
         font_size = size // 3
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
-    except:
+    except Exception:
         # Fallback to default font
         font = ImageFont.load_default()
 
