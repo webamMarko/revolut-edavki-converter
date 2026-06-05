@@ -1,6 +1,5 @@
 """MetricCardsRow component layout tests — desktop/tablet/mobile responsive behaviour."""
 
-import pytest
 
 # ---------------------------------------------------------------------------
 # Viewports

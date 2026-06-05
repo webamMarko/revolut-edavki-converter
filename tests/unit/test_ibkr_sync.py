@@ -160,7 +160,7 @@ class TestFetchStatement:
         assert b"FlexQueryResponse" in result
 
     def test_max_retries_raises(self):
-        from src.ibkr_sync import _fetch_statement, IbkrFlexError, MAX_RETRIES
+        from src.ibkr_sync import _fetch_statement, IbkrFlexError
         mock_resp = MagicMock()
         mock_resp.content = FLEX_PROCESSING
         mock_resp.raise_for_status = MagicMock()

@@ -14,7 +14,6 @@ import sqlite3
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional
 
 import requests
 from lxml import etree

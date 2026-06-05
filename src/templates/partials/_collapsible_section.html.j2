@@ -1,0 +1,30 @@
+{% macro collapsible_section(title, subtitle, section_id, default_expanded=false) %}
+<div class="coll-panel" id="{{ section_id }}">
+  <div
+    class="coll-panel-hdr"
+    id="{{ section_id }}-hdr"
+    role="button"
+    tabindex="0"
+    aria-expanded="{{ 'true' if default_expanded else 'false' }}"
+    aria-controls="{{ section_id }}-body"
+  >
+    <span class="coll-panel-title">{{ title }}</span>
+    {% if subtitle %}
+    <span class="coll-panel-subtitle">{{ subtitle }}</span>
+    {% endif %}
+    <span class="coll-panel-chevron" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 6l4 4 4-4"/>
+      </svg>
+    </span>
+  </div>
+  <div
+    class="coll-panel-body{% if default_expanded %} is-open{% endif %}"
+    id="{{ section_id }}-body"
+    role="region"
+    aria-labelledby="{{ section_id }}-hdr"
+  >
+    {{ caller() }}
+  </div>
+</div>
+{% endmacro %}

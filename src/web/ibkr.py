@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from .auth import get_session, get_session_token
-from .portfolio import portfolio_conn, user_db_path
+from .portfolio import portfolio_conn
 from .templates import json_response
 
 

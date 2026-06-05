@@ -897,7 +897,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 .coll-panel-chevron{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-left:auto;flex-shrink:0;transition:transform 0.22s ease;color:var(--muted)}
 .coll-panel-hdr[aria-expanded="true"] .coll-panel-chevron{transform:rotate(180deg)}
 .coll-panel-body{overflow:hidden;max-height:0;transition:max-height 0.25s ease}
-.coll-panel-body.is-open{max-height:600px}
+.coll-panel-body.is-open{max-height:2000px}
+.coll-panel-subtitle{font-size:0.78rem;font-weight:400;color:var(--muted);margin-left:0.35rem}
 
 /* ──────────────────────────────────────────────────────────────────────
    Column Mapping Inspector
