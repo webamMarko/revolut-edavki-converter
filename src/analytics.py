@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
-from .importer import normalize_date
+from .parsers.utils import normalize_date
 
 
 def position_cagr(cost: float, value: float, first_date: str | None, end_date: str | None = None, min_days: int = 30) -> float | None:
