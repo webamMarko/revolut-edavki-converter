@@ -195,7 +195,7 @@ def build_dividend_entries(conn, year: int, portfolio_id: int | None = None) -> 
     })
 
     for row in rows:
-        from .importer import normalize_date
+        from .parsers.utils import normalize_date
         date_str = normalize_date(row["date"]) or row["date"][:10]
         ticker = row["ticker"] or ""
         tx_type = row["type"]

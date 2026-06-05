@@ -12,7 +12,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from .importer import normalize_date
+from .parsers.utils import normalize_date
 from .tax import (
     compute_tax_report,
     _get_rate_for_class,

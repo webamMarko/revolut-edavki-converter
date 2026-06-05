@@ -7,7 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 
-from .importer import normalize_date
+from .parsers.utils import normalize_date
 from .tax_regimes import TaxRegime, get_regime, get_tax_rate, DEFAULT_REGIME
 
 
