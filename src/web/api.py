@@ -891,20 +891,20 @@ def save_dashboard_layout(user_id: int, layout: dict, conn=None):
     - no duplicate widget IDs
     """
     from .. import users
-    
+
     close = conn is None
     if conn is None:
         conn = users.get_users_db()
-    
+
     try:
         widgets = layout.get("widgets", [])
-        
+
         # Validate widget count
         if not isinstance(widgets, list):
             raise ValueError("widgets must be an array")
         if len(widgets) > 16:
             raise ValueError("Too many widgets (max 16)")
-        
+
         # Validate each widget
         seen_ids = set()
         for widget in widgets:
@@ -913,26 +913,26 @@ def save_dashboard_layout(user_id: int, layout: dict, conn=None):
             y = widget.get("y")
             w = widget.get("w")
             h = widget.get("h")
-            
+
             # Validate widget ID
             if widget_id not in WIDGET_REGISTRY:
                 raise ValueError(f"Invalid widget ID: {widget_id}")
-            
+
             # Check for duplicates
             if widget_id in seen_ids:
                 raise ValueError(f"Duplicate widget ID: {widget_id}")
             seen_ids.add(widget_id)
-            
+
             # Validate coordinates
             if not all(isinstance(v, int) and v >= 0 for v in [x, y, w, h]):
                 raise ValueError("Invalid coordinates (must be non-negative integers)")
-            
+
             # Validate bounds
             if w > 12:
                 raise ValueError(f"Widget width {w} exceeds grid width (12)")
             if h > 8:
                 raise ValueError(f"Widget height {h} exceeds max height (8)")
-        
+
         # Save to database
         layout_json = json.dumps(layout)
         conn.execute(
@@ -940,9 +940,9 @@ def save_dashboard_layout(user_id: int, layout: dict, conn=None):
             (layout_json, user_id)
         )
         conn.commit()
-        
+
         return True
-    
+
     finally:
         if close:
             conn.close()
@@ -956,26 +956,26 @@ def get_dashboard_layout(user_id: int, conn=None):
     - isDefault: boolean indicating if this is the default layout
     """
     from .. import users
-    
+
     close = conn is None
     if conn is None:
         conn = users.get_users_db()
-    
+
     try:
         cursor = conn.execute(
             "SELECT dashboard_layout FROM users WHERE id = ?",
             (user_id,)
         )
         row = cursor.fetchone()
-        
+
         if not row or not row[0]:
             # No saved layout, return default
             return {"widgets": DEFAULT_LAYOUT["widgets"], "isDefault": True}
-        
+
         # Parse saved layout
         layout = json.loads(row[0])
         return {"widgets": layout.get("widgets", []), "isDefault": False}
-    
+
     finally:
         if close:
             conn.close()
@@ -984,28 +984,28 @@ def get_dashboard_layout(user_id: int, conn=None):
 def api_save_dashboard_layout(handler):
     """PUT /api/dashboard-layout — save user's dashboard layout."""
     from .. import users
-    
+
     session = get_session(handler)
     if not session:
         json_response(handler, {"error": "Unauthorized"}, status=401)
         return
-    
+
     # Role gate: premium/admin only
     if session.get("role") not in ("premium", "admin", "cofounder"):
         json_response(handler, {"error": "Forbidden: premium/admin access required"}, status=403)
         return
-    
+
     try:
         body = json.loads(handler.rfile.read(int(handler.headers.get("Content-Length", 0))).decode())
         user_id = session.get("user_id")
-        
+
         users_conn = users.get_users_db()
         try:
             save_dashboard_layout(user_id, body, users_conn)
             json_response(handler, {"status": "ok"})
         finally:
             users_conn.close()
-    
+
     except ValueError as e:
         json_response(handler, {"error": str(e)}, status=400)
     except Exception as e:
@@ -1015,12 +1015,12 @@ def api_save_dashboard_layout(handler):
 def api_get_dashboard_layout(handler):
     """GET /api/dashboard-layout — get user's dashboard layout."""
     from .. import users
-    
+
     session = get_session(handler)
     if not session:
         json_response(handler, {"error": "Unauthorized"}, status=401)
         return
-    
+
     try:
         user_id = session.get("user_id")
         users_conn = users.get_users_db()
@@ -1029,6 +1029,6 @@ def api_get_dashboard_layout(handler):
             json_response(handler, layout)
         finally:
             users_conn.close()
-    
+
     except Exception as e:
         json_response(handler, {"error": str(e)}, status=500)

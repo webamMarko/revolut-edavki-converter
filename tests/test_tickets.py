@@ -1,6 +1,5 @@
 """Tests for ticket system and credit management (co-founder-customer-type epic)."""
 
-import sqlite3
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path

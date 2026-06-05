@@ -1,6 +1,5 @@
 """TDD Tasks 18-22 (PR 2): Column Inspector — polish & edge cases."""
 
-import re
 import unittest
 from pathlib import Path
 

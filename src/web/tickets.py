@@ -1,6 +1,5 @@
 """Ticket management for co-founder role."""
 
-import json
 import os
 from urllib.parse import parse_qs
 

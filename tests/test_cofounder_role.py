@@ -2,7 +2,7 @@
 
 import sqlite3
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -339,8 +339,6 @@ class TestEmailNotifications:
 
     def test_status_change_notification_logic(self, conn):
         """Task 38: Verify status change can trigger email notification."""
-        from unittest.mock import Mock, patch
-        from src import tickets
 
         # Create a ticket
         user, _ = users.create_user("cofounder@example.com", role="cofounder", conn=conn)
@@ -434,7 +432,7 @@ class TestStripeCofounderPurchase:
         """Task 24: Verify Stripe checkout session creation for cofounder license."""
         import os
         import sys
-        from unittest.mock import Mock, patch, MagicMock
+        from unittest.mock import Mock, patch
 
         # Create a premium user with Stripe customer ID
         from src.users import create_stripe_user
@@ -491,7 +489,6 @@ class TestStripeCofounderPurchase:
         user, _ = create_stripe_user("user@example.com", "cus_123", conn=conn)
 
         # Simulate the webhook logic directly (avoid connection closing issues)
-        from datetime import datetime, timezone
         stripe_customer_id = "cus_123"
 
         # Simulate what the webhook does

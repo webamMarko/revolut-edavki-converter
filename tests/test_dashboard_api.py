@@ -1,7 +1,6 @@
 """Tests for custom dashboard API endpoints (SAA-88)."""
 
 import json
-import sqlite3
 import tempfile
 from pathlib import Path
 
@@ -88,7 +87,6 @@ class TestDashboardLayoutAPI:
         saved = cursor.fetchone()
         assert saved[0] is not None, "dashboard_layout should be saved"
 
-        import json
         saved_layout = json.loads(saved[0])
         assert len(saved_layout["widgets"]) == 2, "Should have 2 widgets"
 

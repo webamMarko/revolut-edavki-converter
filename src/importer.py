@@ -9,7 +9,6 @@ All broker-specific parsing logic lives in src/parsers/*.
 
 from __future__ import annotations
 
-import hashlib
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,7 +21,6 @@ from .parsers.default_registry import build_default_registry
 from .parsers.utils import (
     _parse_amount,
     _parse_eur_amount,
-    normalize_date,
     _parse_crypto_date,
     _file_hash,
 )
@@ -192,7 +190,6 @@ def import_csv_mapped(
     column_map: {db_field: csv_header_name}
     """
     import pandas as pd
-    from .parsers.utils import _parse_crypto_date
 
     path = Path(file_path)
     if not path.exists():

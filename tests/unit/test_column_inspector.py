@@ -1,6 +1,5 @@
 """TDD Tasks 1-17 (PR 1): Column Mapping Inspector — core inspector components."""
 
-import re
 import unittest
 from pathlib import Path
 

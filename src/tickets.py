@@ -6,7 +6,7 @@ Handles ticket CRUD operations, credit system (weekly reset), and Paperclip inte
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from . import users
 

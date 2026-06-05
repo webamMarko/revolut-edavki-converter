@@ -290,7 +290,7 @@ def handle_stripe_webhook(handler):
         if purpose == "cofounder_licence":
             # Cofounder one-time purchase → upgrade existing user to cofounder
             if stripe_customer_id:
-                from ..users import get_user_by_id, set_role, get_users_db
+                from ..users import set_role, get_users_db
                 from datetime import datetime, timezone
 
                 # Find user by stripe_customer_id

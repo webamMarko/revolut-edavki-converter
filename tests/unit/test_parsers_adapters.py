@@ -1,6 +1,5 @@
 """TDD Tasks 4-11: adapter parity tests for all broker parsers."""
 
-import os
 from pathlib import Path
 
 import pytest

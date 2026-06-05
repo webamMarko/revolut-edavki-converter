@@ -1,10 +1,8 @@
 """TDD Task 3: BrokerRegistry — register, two-stage detect, parse delegation, UnknownFormatError."""
 
-import io
 import os
 import tempfile
 
-import pandas as pd
 import pytest
 
 from src.parsers.base import CsvAdapter, XmlAdapter, ParsedTrade, UnknownFormatError

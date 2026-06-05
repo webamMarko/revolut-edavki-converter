@@ -1,6 +1,5 @@
 """Unit tests for detect_asset_class utility (Phase 2 TDD tasks 7-12)."""
 
-import pytest
 from src.web.detection_rules import detect_asset_class, CONFIDENCE_THRESHOLD
 
 

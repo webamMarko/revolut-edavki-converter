@@ -33,14 +33,14 @@ def main():
         print(f"Found existing user: {user.username} ({user.email})")
         success = change_password(user.id, new_password, conn)
         if success:
-            print(f"✅ Password reset successful")
+            print("✅ Password reset successful")
         else:
             print("ERROR: Failed to update password")
             conn.close()
             return 1
     else:
         # User doesn't exist, create them
-        print(f"User not found, creating new user...")
+        print("User not found, creating new user...")
         pw_hash = hash_password(new_password)
         try:
             conn.execute(
@@ -49,7 +49,7 @@ def main():
                 (username, email, pw_hash),
             )
             conn.commit()
-            print(f"✅ User created successfully")
+            print("✅ User created successfully")
         except Exception as e:
             print(f"ERROR: Failed to create user: {e}")
             conn.close()

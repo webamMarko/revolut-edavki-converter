@@ -12,7 +12,6 @@ import os
 import subprocess
 import sys
 import tempfile
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -227,12 +226,12 @@ Respond ONLY with valid JSON in this exact format:
 def generate_markdown_report(results: dict, output_path: Path):
     """Generate human-readable markdown report."""
     lines = [
-        f"# UX Audit Report",
-        f"",
+        "# UX Audit Report",
+        "",
         f"**Date:** {results['timestamp']}",
         f"**Base URL:** {results['base_url']}",
         f"**Pages audited:** {len(results['pages'])}",
-        f"",
+        "",
     ]
 
     # Summary
@@ -243,10 +242,10 @@ def generate_markdown_report(results: dict, output_path: Path):
         if v["impact"] in ("critical", "serious")
     )
     lines.extend([
-        f"## Summary",
-        f"",
-        f"| Metric | Value |",
-        f"|--------|-------|",
+        "## Summary",
+        "",
+        "| Metric | Value |",
+        "|--------|-------|",
         f"| Total axe violations | {total_violations} |",
         f"| Critical + Serious | {critical_serious} |",
         f"| CI threshold result | {'PASS' if results['ci_pass'] else 'FAIL'} |",
@@ -264,9 +263,9 @@ def generate_markdown_report(results: dict, output_path: Path):
     for page in results["pages"]:
         lines.extend([
             f"## {page['name']} ({page['viewport']})",
-            f"",
+            "",
             f"**URL:** `{page['page_data']['url']}`",
-            f"",
+            "",
         ])
 
         # Accessibility
@@ -311,8 +310,8 @@ def generate_markdown_report(results: dict, output_path: Path):
     lines.extend([
         "## CI Thresholds",
         "",
-        f"| Check | Threshold | Actual | Result |",
-        f"|-------|-----------|--------|--------|",
+        "| Check | Threshold | Actual | Result |",
+        "|-------|-----------|--------|--------|",
     ])
     for check in results.get("threshold_checks", []):
         status = "PASS" if check["pass"] else "FAIL"
@@ -380,7 +379,7 @@ def run_audit(config_path: Path, skip_claude: bool = False):
     screenshots_dir = output_dir / f"screenshots-{timestamp}"
     screenshots_dir.mkdir(exist_ok=True)
 
-    print(f"UX Audit Pipeline")
+    print("UX Audit Pipeline")
     print(f"  Base URL: {base_url}")
     print(f"  Output:   {output_dir}")
     print()
