@@ -40,23 +40,71 @@ try {
 
     const hist = RE.history || {};
     const reColors = ['#db2777','#f59e0b','#8b5cf6','#06b6d4','#10b981'];
-    const reDatasets = RE.properties.map(function(p, i) {
+    const reAllDatasets = RE.properties.map(function(p, i) {
       const h = hist[p.ticker];
       if (!h) return null;
       return {
         label: p.name,
-        data: h.dates.map(function(d, j) { return {x: d, y: h.values[j]}; }),
+        allData: h.dates.map(function(d, j) { return {x: d, y: h.values[j]}; }),
         borderColor: reColors[i % reColors.length],
         backgroundColor: reColors[i % reColors.length] + '18',
         fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2,
       };
     }).filter(Boolean);
 
-    if (reDatasets.length > 0 && typeof Chart !== 'undefined') {
+    // TimeRangeSelector — default to ALL
+    var reCurrentRange = 'ALL';
+    var reChart = null;
+
+    function reApplyTimeRange(range) {
+      reCurrentRange = range;
+      if (reChart) {
+        reChart.data.datasets.forEach(function(ds) {
+          ds.data = filterByTimeRange(ds.allData, range);
+        });
+        reChart.update();
+      }
+      // Update button states
+      var wrap = scopedFind(null, 'reTimeRange');
+      if (wrap) {
+        wrap.innerHTML = createTimeRangeSelector(range);
+        var btns = wrap.querySelectorAll('.time-range-btn');
+        btns.forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            reApplyTimeRange(btn.getAttribute('data-range'));
+          });
+        });
+      }
+    }
+
+    // Render initial time range selector
+    (function initTimeRangeSelector() {
+      var wrap = scopedFind(null, 'reTimeRange');
+      if (!wrap) return;
+      wrap.innerHTML = createTimeRangeSelector(reCurrentRange);
+      var btns = wrap.querySelectorAll('.time-range-btn');
+      btns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          reApplyTimeRange(btn.getAttribute('data-range'));
+        });
+      });
+    })();
+
+    if (reAllDatasets.length > 0 && typeof Chart !== 'undefined') {
       const ctx = scopedFind(null, 'reChart').getContext('2d');
-      new Chart(ctx, {
+      const chartDatasets = reAllDatasets.map(function(ds) {
+        return {
+          label: ds.label,
+          data: filterByTimeRange(ds.allData, reCurrentRange),
+          allData: ds.allData,
+          borderColor: ds.borderColor,
+          backgroundColor: ds.backgroundColor,
+          fill: ds.fill, tension: ds.tension, pointRadius: ds.pointRadius, borderWidth: ds.borderWidth,
+        };
+      });
+      reChart = new Chart(ctx, {
         type: 'line',
-        data: { datasets: reDatasets },
+        data: { datasets: chartDatasets },
         options: {
           responsive: true, maintainAspectRatio: false,
           interaction: {mode: 'index', intersect: false},
