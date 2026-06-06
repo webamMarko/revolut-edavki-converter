@@ -1,0 +1,51 @@
+<div class="tax-advanced-container" data-role="taxAdvancedContainer">
+
+  <!-- Accordion 1: Tax Bracket Timeline (default expanded) -->
+  <div class="tax-accordion" data-accordion-id="timeline" data-role="taxAccordion">
+    <button class="tax-accordion-header" data-accordion-toggle="timeline" aria-expanded="true">
+      <span class="tax-accordion-title">Tax Bracket Timeline</span>
+      <span class="tax-accordion-chevron" aria-hidden="true">&#9660;</span>
+    </button>
+    <div class="tax-accordion-content expanded" data-accordion-content="timeline">
+      {% include "sections/tax_timeline.html.j2" %}
+    </div>
+  </div>
+
+  <!-- Accordion 2: Calendar -->
+  <div class="tax-accordion" data-accordion-id="calendar" data-role="taxAccordion">
+    <button class="tax-accordion-header" data-accordion-toggle="calendar" aria-expanded="false">
+      <span class="tax-accordion-title">Calendar</span>
+      <span class="tax-accordion-chevron" aria-hidden="true">&#9660;</span>
+    </button>
+    <div class="tax-accordion-content" data-accordion-content="calendar">
+      {% include "sections/year_end_calendar.html.j2" %}
+    </div>
+  </div>
+
+  <!-- Accordion 3: Smart Sell -->
+  <div class="tax-accordion" data-accordion-id="smart-sell" data-role="taxAccordion">
+    <button class="tax-accordion-header" data-accordion-toggle="smart-sell" aria-expanded="false">
+      <span class="tax-accordion-title">Smart Sell</span>
+      <span class="tax-accordion-chevron" aria-hidden="true">&#9660;</span>
+    </button>
+    <div class="tax-accordion-content" data-accordion-content="smart-sell">
+      {% include "sections/smart_sell.html.j2" %}
+    </div>
+  </div>
+
+  <!-- Accordion 4: File -->
+  <div class="tax-accordion" data-accordion-id="file" data-role="taxAccordion">
+    <button class="tax-accordion-header" data-accordion-toggle="file" aria-expanded="false">
+      <span class="tax-accordion-title">File</span>
+      <span class="tax-accordion-chevron" aria-hidden="true">&#9660;</span>
+    </button>
+    <div class="tax-accordion-content" data-accordion-content="file">
+      {% include "sections/tax_wizard.html.j2" %}
+    </div>
+  </div>
+
+  <!-- Hidden helper sections managed by their own JS (not accordion-wrapped) -->
+  {% include "sections/tax_preview.html.j2" %}
+  {% include "sections/holding_countdown.html.j2" %}
+
+</div>

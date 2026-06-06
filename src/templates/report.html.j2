@@ -81,12 +81,7 @@
         {% include "sections/tax.html.j2" %}
       </div>
       <div class="tax-subtab-content" id="taxSubtabAdvanced" data-subtab-panel="advanced" style="display:none">
-        {% include "sections/tax_timeline.html.j2" %}
-        {% include "sections/tax_preview.html.j2" %}
-        {% include "sections/holding_countdown.html.j2" %}
-        {% include "sections/year_end_calendar.html.j2" %}
-        {% include "sections/smart_sell.html.j2" %}
-        {% include "sections/tax_wizard.html.j2" %}
+        {% include "sections/tax_advanced.html.j2" %}
       </div>
     </div>
     <div class="page" id="page-history">
@@ -122,6 +117,7 @@
 {% include "assets/sections/year_end_calendar.js" %}
 {% include "assets/sections/tax_wizard.js" %}
 {% include "assets/sections/smart_sell.js" %}
+{% include "assets/sections/tax_advanced.js" %}
 {% include "assets/sections/transactions.js" %}
 {% include "assets/sections/real_estate.js" %}
 {% include "assets/sections/notes.js" %}

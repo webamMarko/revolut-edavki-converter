@@ -2447,3 +2447,16 @@ body {
 .property-details-panel { max-height: 0; overflow: hidden; transition: max-height 0.25s ease; }
 .property-details-panel.is-open { max-height: 2000px; }
 .property-details-inner { padding-top: 0.75rem; }
+
+/* --- Tax Advanced accordion sections (SAA-583) --- */
+.tax-advanced-container { display: flex; flex-direction: column; gap: 0.5rem; }
+.tax-accordion { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.tax-accordion-header { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 0.75rem 1rem; border: none; background: var(--card-bg); color: var(--text); font-size: 0.9rem; font-weight: 600; cursor: pointer; text-align: left; transition: background 0.15s; }
+.tax-accordion-header:hover { background: var(--raised); }
+.tax-accordion-header:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tax-accordion-chevron { display: inline-block; transition: transform 0.25s ease-in-out; color: var(--muted); font-size: 0.85rem; }
+.tax-accordion-header[aria-expanded="true"] .tax-accordion-chevron { transform: rotate(180deg); color: var(--accent); }
+.tax-accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.25s ease-in-out; }
+.tax-accordion-content.expanded { max-height: 4000px; }
+.tax-accordion-content > .card,
+.tax-accordion-content > section { border-top-left-radius: 0; border-top-right-radius: 0; border-top: 1px solid var(--border); margin-top: 0; }
