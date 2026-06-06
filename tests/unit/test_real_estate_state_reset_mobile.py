@@ -7,7 +7,6 @@ Spec (from SAA-327 spec, Task 5):
 - Chart scales responsively (responsive:true, width follows container)
 - Property table has horizontal scroll on mobile
 """
-import re
 import unittest
 from pathlib import Path
 
@@ -252,9 +251,6 @@ class TestMetricsMobileLayout(unittest.TestCase):
             media_idx = css.find("max-width: 768px", search_start)
             if media_idx == -1:
                 break
-            block_end = css.find("}", media_idx)
-            # Expand to find the closing of the full media block (may span many rules)
-            # Use a generous window since blocks vary in size
             snippet = css[media_idx:media_idx + 3000]
             if "card-grid" in snippet and "grid-template-columns" in snippet:
                 found_card_grid_in_media = True
