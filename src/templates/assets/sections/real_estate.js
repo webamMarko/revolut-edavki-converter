@@ -10,17 +10,33 @@ try {
       poslovni: 'Commercial', zemljisce: 'Land'
     };
 
-    const reCards = [
-      ['Properties', RE.properties.length, ''],
-      ['Purchase Total', fmtEur(RE.total_purchase_eur), ''],
-      ['ETN Estimate', fmtEur(RE.total_estimated_eur), ''],
-      ['Unrealized Gain', signCcy(RE.total_gain_eur), cls(RE.total_gain_eur),
-       sign(RE.total_gain_pct) + '%'],
-    ];
-    scopedFind(null, 'reCards').innerHTML = reCards.map(([l, v, c, sub]) =>
-      '<div class="metric-card"><div class="label">' + l + '</div><div class="value ' + (c||'') + '">' + v + '</div>' +
-      (sub ? '<div class="sub ' + (c||'') + '">' + sub + '</div>' : '') + '</div>'
-    ).join('');
+    // Primary metrics: PROPERTIES and UNREALIZED GAIN % (visible by default)
+    scopedFind(null, 'reCards').innerHTML = createPrimaryMetrics(RE.properties.length, RE.total_gain_pct);
+
+    // Secondary metrics: PURCHASE TOTAL and ETN ESTIMATE (hidden by default)
+    scopedFind(null, 'reCardsSecondary').innerHTML = createSecondaryMetrics(RE.total_purchase_eur, RE.total_estimated_eur);
+
+    // Show all metrics toggle
+    (function initMetricsToggle() {
+      var toggleWrap = scopedFind(null, 'reMetricsToggle');
+      var secondary = scopedFind(null, 'reCardsSecondary');
+      if (!toggleWrap || !secondary) return;
+      toggleWrap.innerHTML = createShowAllMetricsToggle(false);
+      var btn = toggleWrap.querySelector('.metrics-toggle-link');
+      if (!btn) return;
+      btn.addEventListener('click', function() {
+        var isExpanded = btn.getAttribute('aria-expanded') === 'true';
+        if (isExpanded) {
+          secondary.style.display = 'none';
+          btn.setAttribute('aria-expanded', 'false');
+          btn.textContent = 'Show all metrics';
+        } else {
+          secondary.style.display = '';
+          btn.setAttribute('aria-expanded', 'true');
+          btn.textContent = 'Show fewer';
+        }
+      });
+    })();
 
     const hist = RE.history || {};
     const reColors = ['#db2777','#f59e0b','#8b5cf6','#06b6d4','#10b981'];
