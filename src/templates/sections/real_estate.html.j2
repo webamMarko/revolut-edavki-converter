@@ -3,8 +3,26 @@
   <h2>Real Estate</h2>
   <div data-role="reCards" class="card-grid small" style="margin-bottom:1rem"></div>
   <div class="chart-wrap" style="height:260px;margin-bottom:1rem"><canvas data-role="reChart"></canvas></div>
-  <div class="table-scroll">
-    <table data-role="reTable" class="data-table"></table>
+  <div class="property-details-accordion">
+    <div id="property-details-header"
+         class="property-details-header"
+         role="button"
+         aria-expanded="false"
+         aria-controls="property-details-panel"
+         tabindex="0">
+      <span class="property-details-title">Property Details</span>
+      <span class="property-details-chevron">&#8250;</span>
+    </div>
+    <div id="property-details-panel"
+         class="property-details-panel"
+         role="region"
+         aria-labelledby="property-details-header">
+      <div class="property-details-inner">
+        <div class="table-scroll">
+          <table data-role="reTable" class="data-table"></table>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 </div>

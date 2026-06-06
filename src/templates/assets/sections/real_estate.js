@@ -71,5 +71,30 @@ try {
           '</tr>';
       }).join('') + '</tbody>';
     makeSortable(pt);
+
+    // PropertyDetailsAccordion — wire header/panel toggle after table is rendered
+    (function initPropertyDetailsAccordion() {
+      var hdr = document.getElementById('property-details-header');
+      var panel = document.getElementById('property-details-panel');
+      if (!hdr || !panel) return;
+
+      function toggle() {
+        var isOpen = hdr.getAttribute('aria-expanded') === 'true';
+        hdr.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+        if (isOpen) {
+          panel.classList.remove('is-open');
+        } else {
+          panel.classList.add('is-open');
+        }
+      }
+
+      hdr.addEventListener('click', toggle);
+      hdr.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggle();
+        }
+      });
+    })();
   }
 } catch(e) { console.error('Real estate section error:', e); }
