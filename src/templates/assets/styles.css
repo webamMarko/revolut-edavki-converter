@@ -1667,6 +1667,18 @@ body {
 .tax-subtab:hover { color: var(--text); }
 .tax-subtab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
+/* ---- Tax Summary Metrics ---- */
+.tax-summary-metrics .card-grid { margin-bottom: 1rem; }
+.tax-metrics .card-grid { margin-bottom: 1rem; }
+@media (max-width: 600px) { .tax-summary-metrics .card-grid { grid-template-columns: 1fr; } }
+
+/* ---- Advanced Tools Link (AdvancedToolsLink) ---- */
+.tax-advanced-link { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 1rem; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); cursor: pointer; transition: border-color 0.15s; flex-wrap: wrap; }
+.tax-advanced-link:hover { border-color: var(--accent); }
+.tax-advanced-link-text { font-size: 0.85rem; color: var(--muted); }
+.tax-advanced-link-btn { background: none; border: 1px solid var(--accent); color: var(--accent); font-size: 0.8rem; font-weight: 600; padding: 0.3rem 0.75rem; border-radius: 6px; cursor: pointer; white-space: nowrap; transition: background 0.15s, color 0.15s; }
+.tax-advanced-link-btn:hover { background: var(--accent); color: #fff; }
+
 /* ---- Tax Wizard ---- */
 .tax-wizard-card { max-width: 780px; margin: 0 auto; }
 .wizard-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }

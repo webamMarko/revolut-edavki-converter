@@ -1,0 +1,30 @@
+<section class="card tax-summary-metrics" data-role="taxSummaryMetrics" style="display:none">
+  <div class="chart-header">
+    <h2>Tax Summary</h2>
+    <div class="range-bar" data-role="taxSummaryYearBar"></div>
+  </div>
+  <div data-role="taxSummaryCards" class="card-grid small"
+       data-metrics="realized-gains tax-liability unrealized-gains harvest-opportunities">
+    <div class="metric-card" data-role="taxSummaryRealizedGains">
+      <div class="label">Realized Gains / Losses YTD</div>
+      <div class="value" data-role="taxSummaryRealizedGainsValue">—</div>
+    </div>
+    <div class="metric-card" data-role="taxSummaryTaxLiability">
+      <div class="label">Estimated Tax Liability</div>
+      <div class="value" data-role="taxSummaryTaxLiabilityValue">—</div>
+    </div>
+    <div class="metric-card" data-role="taxSummaryUnrealizedGains">
+      <div class="label">Unrealized Gains</div>
+      <div class="value" data-role="taxSummaryUnrealizedGainsValue">—</div>
+    </div>
+    <div class="metric-card" data-role="taxSummaryHarvestOpportunities">
+      <div class="label">Tax-Loss Harvesting</div>
+      <div class="value" data-role="taxSummaryHarvestValue">—</div>
+    </div>
+  </div>
+
+  <div class="tax-advanced-link" id="taxAdvancedLink" role="button" tabindex="0" aria-label="Open advanced tax tools">
+    <span class="tax-advanced-link-text">Looking for tax planning tools?</span>
+    <button class="tax-advanced-link-btn">See Advanced tab &rarr;</button>
+  </div>
+</section>

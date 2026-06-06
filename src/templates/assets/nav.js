@@ -353,15 +353,20 @@
   var panels = document.querySelectorAll('.tax-subtab-content[data-subtab-panel]');
   if (!tabs.length) return;
 
-  var saved = localStorage.getItem('taxSubtab');
-  if (saved && document.querySelector('[data-subtab-panel="' + saved + '"]')) {
-    switchTaxSubtab(saved, true);
-  }
+  // Remap legacy sub-tab values that no longer exist as top-level tabs
+  var _legacyRemap = { 'calendar': 'advanced', 'smart-sell': 'advanced', 'file': 'advanced' };
 
   function switchTaxSubtab(id, silent) {
-    tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.subtab === id); });
-    panels.forEach(function(p) { p.style.display = p.dataset.subtabPanel === id ? '' : 'none'; });
-    if (!silent) localStorage.setItem('taxSubtab', id);
+    var resolved = _legacyRemap[id] || id;
+    if (!document.querySelector('[data-subtab-panel="' + resolved + '"]')) resolved = 'summary';
+    tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.subtab === resolved); });
+    panels.forEach(function(p) { p.style.display = p.dataset.subtabPanel === resolved ? '' : 'none'; });
+    if (!silent) localStorage.setItem('taxSubtab', resolved);
+  }
+
+  var saved = localStorage.getItem('taxSubtab');
+  if (saved) {
+    switchTaxSubtab(saved, true);
   }
 
   tabs.forEach(function(t) {

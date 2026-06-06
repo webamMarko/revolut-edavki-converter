@@ -74,23 +74,18 @@
     <div class="page" id="page-tax">
       <div class="tax-subtabs" id="taxSubtabs">
         <button class="tax-subtab active" data-subtab="summary">Summary</button>
-        <button class="tax-subtab" data-subtab="calendar">Calendar</button>
-        <button class="tax-subtab" data-subtab="smart-sell">Smart Sell</button>
-        <button class="tax-subtab" data-subtab="file">File</button>
+        <button class="tax-subtab" data-subtab="advanced">Advanced</button>
       </div>
       <div class="tax-subtab-content" id="taxSubtabSummary" data-subtab-panel="summary">
+        {% include "sections/tax_metrics_summary.html.j2" %}
+        {% include "sections/tax.html.j2" %}
+      </div>
+      <div class="tax-subtab-content" id="taxSubtabAdvanced" data-subtab-panel="advanced" style="display:none">
         {% include "sections/tax_timeline.html.j2" %}
         {% include "sections/tax_preview.html.j2" %}
         {% include "sections/holding_countdown.html.j2" %}
-        {% include "sections/tax.html.j2" %}
-      </div>
-      <div class="tax-subtab-content" id="taxSubtabCalendar" data-subtab-panel="calendar" style="display:none">
         {% include "sections/year_end_calendar.html.j2" %}
-      </div>
-      <div class="tax-subtab-content" id="taxSubtabSmartSell" data-subtab-panel="smart-sell" style="display:none">
         {% include "sections/smart_sell.html.j2" %}
-      </div>
-      <div class="tax-subtab-content" id="taxSubtabFile" data-subtab-panel="file" style="display:none">
         {% include "sections/tax_wizard.html.j2" %}
       </div>
     </div>
@@ -118,6 +113,7 @@
 {% include "assets/sections/dividends.js" %}
 {% include "assets/sections/benchmark_table.js" %}
 {% include "assets/sections/whatif.js" %}
+{% include "assets/sections/tax_metrics_summary.js" %}
 {% include "assets/sections/tax.js" %}
 {% include "assets/sections/dividend_tax.js" %}
 {% include "assets/sections/tax_timeline.js" %}
