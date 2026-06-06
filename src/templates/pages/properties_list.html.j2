@@ -1,0 +1,191 @@
+{% extends "base.html.j2" %}
+
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+
+{% block title %}Properties — WealthEagle{% endblock %}
+
+{% block extra_css %}
+<style>
+.prop-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem}
+.prop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem}
+.prop-card{background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:1.25rem;position:relative}
+.prop-card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:.75rem}
+.prop-ticker{font-size:.75rem;color:var(--muted);font-weight:600;font-family:monospace}
+.prop-name{font-size:1rem;font-weight:600;margin:.25rem 0}
+.prop-type{font-size:.75rem;text-transform:capitalize;background:var(--chip-bg,#e5e7eb);color:var(--chip-text,#374151);border-radius:4px;padding:2px 6px;display:inline-block}
+.prop-address{font-size:.82rem;color:var(--muted);margin:.5rem 0}
+.prop-value{margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border)}
+.prop-value-label{font-size:.72rem;color:var(--muted);margin-bottom:2px}
+.prop-value-num{font-size:1.05rem;font-weight:600}
+.prop-actions{display:flex;gap:.5rem;margin-top:.75rem}
+.btn-icon{background:none;border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:.8rem;color:var(--text)}
+.btn-icon:hover{background:var(--hover-bg,#f3f4f6)}
+.btn-danger{color:var(--red,#dc2626)}
+.btn-danger:hover{background:var(--red-bg,#fee2e2);border-color:var(--red,#dc2626)}
+.status-badge{font-size:.7rem;padding:2px 7px;border-radius:10px;font-weight:600;text-transform:capitalize}
+.status-active{background:#d1fae5;color:#065f46}
+.status-rented{background:#dbeafe;color:#1e40af}
+.status-for_sale{background:#fef3c7;color:#92400e}
+.status-sold{background:#f3f4f6;color:#6b7280}
+.status-inherited{background:#ede9fe;color:#5b21b6}
+.status-pending{background:#ffedd5;color:#9a3412}
+.empty-state{text-align:center;padding:3rem 1rem;color:var(--muted)}
+.empty-state h3{font-size:1.1rem;margin-bottom:.5rem}
+
+/* Delete modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.active{display:flex}
+.modal-box{background:var(--card-bg);border-radius:10px;padding:1.5rem;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-title{font-size:1.1rem;font-weight:700;margin-bottom:.5rem}
+.modal-body{font-size:.88rem;color:var(--muted);margin-bottom:1rem}
+.modal-summary{background:var(--bg,#f9fafb);border-radius:6px;padding:.75rem;font-size:.82rem;margin-bottom:1.25rem}
+.modal-summary dt{color:var(--muted);font-size:.75rem}
+.modal-summary dd{font-weight:600;margin:0 0 .5rem}
+.modal-actions{display:flex;gap:.75rem;justify-content:flex-end}
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;font-size:.88rem;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:2000;display:none}
+.toast.show{display:flex;align-items:center;gap:.5rem}
+.toast-success{border-color:#10b981;color:#065f46}
+.toast-error{border-color:var(--red,#dc2626);color:var(--red,#dc2626)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="app-main">
+  <div class="prop-header">
+    <h1 style="font-size:1.2rem;font-weight:700;margin:0">Real Estate Properties</h1>
+    <a href="/properties/new" class="btn btn-primary">+ Add Property</a>
+  </div>
+
+  {% if properties %}
+  <div class="prop-grid">
+    {% for p in properties %}
+    <div class="prop-card" id="prop-card-{{ p.id }}">
+      <div class="prop-card-header">
+        <div>
+          <span class="prop-ticker">{{ p.ticker }}</span>
+          <div class="prop-name">{{ p.property_name or p.name }}</div>
+        </div>
+        <span class="status-badge status-{{ p.status or 'active' }}">{{ (p.status or 'active').replace('_',' ') }}</span>
+      </div>
+      <span class="prop-type">{{ (p.property_type or '').replace('_',' ') }}</span>
+      <div class="prop-address">
+        {{ p.address_line_1 or p.address }}{% if p.city %}, {{ p.city }}{% endif %}
+        {% if p.country %} &middot; {{ p.country }}{% endif %}
+      </div>
+      <div class="prop-value">
+        <div class="prop-value-label">Acquisition price</div>
+        <div class="prop-value-num">
+          {% if p.acquisition_price %}
+            {{ "{:,.0f}".format(p.acquisition_price) }} {{ p.currency or 'EUR' }}
+          {% else %}
+            {{ "{:,.0f}".format(p.purchase_price_eur or 0) }} EUR
+          {% endif %}
+        </div>
+        {% if p.estimated_value_eur %}
+        <div class="prop-value-label" style="margin-top:.5rem">Est. market value</div>
+        <div class="prop-value-num">{{ "{:,.0f}".format(p.estimated_value_eur) }} EUR</div>
+        {% endif %}
+      </div>
+      <div class="prop-actions">
+        <a href="/properties/{{ p.id }}/edit" class="btn-icon">Edit</a>
+        <button class="btn-icon btn-danger"
+                onclick="openDeleteModal({{ p.id }}, '{{ (p.property_name or p.name)|e }}', '{{ (p.address_line_1 or p.address or '')|e }}', '{{ "{:,.0f}".format(p.acquisition_price or p.purchase_price_eur or 0) }} {{ p.currency or 'EUR' }}')"
+                aria-label="Delete property">
+          Delete
+        </button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <h3>No properties yet</h3>
+    <p style="margin-bottom:1rem">Add your first real estate property to track its value and include it in your portfolio.</p>
+    <a href="/properties/new" class="btn btn-primary">Add your first property</a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Delete confirmation modal -->
+<div class="modal-overlay" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+  <div class="modal-box">
+    <div class="modal-title" id="deleteModalTitle">Delete Property?</div>
+    <div class="modal-body">This action cannot be undone. The property will be marked as deleted and removed from your active portfolio.</div>
+    <dl class="modal-summary" id="deleteModalSummary"></dl>
+    <p style="font-size:.78rem;color:var(--muted);margin-bottom:1rem">This will affect your portfolio analytics and tax reports.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="deleteCancelBtn" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn" id="deleteConfirmBtn" style="background:var(--red,#dc2626);color:#fff;border:none"
+              onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div class="toast" id="toast" role="alert"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var _deleteId = null;
+
+function openDeleteModal(id, name, address, price) {
+  _deleteId = id;
+  var summary = document.getElementById('deleteModalSummary');
+  summary.innerHTML =
+    '<dt>Property</dt><dd>' + name + '</dd>' +
+    (address ? '<dt>Address</dt><dd>' + address + '</dd>' : '') +
+    '<dt>Acquisition price</dt><dd>' + price + '</dd>';
+  var modal = document.getElementById('deleteModal');
+  modal.classList.add('active');
+  document.getElementById('deleteCancelBtn').focus();
+  document.addEventListener('keydown', _trapFocus);
+}
+
+function closeDeleteModal() {
+  document.getElementById('deleteModal').classList.remove('active');
+  document.removeEventListener('keydown', _trapFocus);
+  _deleteId = null;
+}
+
+function _trapFocus(e) {
+  if (e.key === 'Escape') { closeDeleteModal(); return; }
+  if (e.key !== 'Tab') return;
+  var btns = document.querySelectorAll('#deleteModal button');
+  var first = btns[0], last = btns[btns.length - 1];
+  if (e.shiftKey ? document.activeElement === first : document.activeElement === last) {
+    e.preventDefault();
+    (e.shiftKey ? last : first).focus();
+  }
+}
+
+function confirmDelete() {
+  if (!_deleteId) return;
+  var btn = document.getElementById('deleteConfirmBtn');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+  fetch('/api/properties/' + _deleteId, { method: 'DELETE' })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+      closeDeleteModal();
+      if (res.ok) {
+        var card = document.getElementById('prop-card-' + _deleteId);
+        if (card) card.remove();
+        showToast('Property marked as deleted', 'success');
+      } else {
+        showToast(res.data.error || 'Delete failed', 'error');
+      }
+    })
+    .catch(function() { showToast('Network error', 'error'); })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Delete'; });
+}
+
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show toast-' + (type || 'success');
+  setTimeout(function() { t.className = 'toast'; }, 5000);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,443 @@
+{% extends "base.html.j2" %}
+
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+
+{% block title %}Edit {{ prop.property_name or prop.name }} — WealthEagle{% endblock %}
+
+{% block extra_css %}
+<style>
+.edit-wrap{max-width:680px;margin:0 auto}
+.edit-section{margin-bottom:2rem}
+.edit-section-title{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
+.form-group{margin-bottom:1.25rem}
+.form-group label{display:block;font-size:.85rem;font-weight:500;margin-bottom:.35rem}
+.form-group label .req{color:var(--red,#dc2626);margin-left:2px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:.55rem .75rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem;background:var(--input-bg,#fff);color:var(--text);box-sizing:border-box}
+.form-group textarea{resize:vertical;min-height:80px}
+.form-group .field-error{display:none;font-size:.78rem;color:var(--red,#dc2626);margin-top:3px}
+.form-group.has-error input,.form-group.has-error select,.form-group.has-error textarea{border-color:var(--red,#dc2626)}
+.form-group.has-error .field-error{display:block}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.edit-footer{display:flex;justify-content:space-between;align-items:center;padding-top:1rem;border-top:1px solid var(--border);margin-top:1.5rem}
+.last-modified{font-size:.75rem;color:var(--muted)}
+.optional-tag{font-size:.72rem;font-weight:400;color:var(--muted);margin-left:4px}
+.si-only{display:none}
+.si-visible .si-only{display:block}
+.delete-zone{margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+
+/* Delete modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.active{display:flex}
+.modal-box{background:var(--card-bg);border-radius:10px;padding:1.5rem;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-title{font-size:1.1rem;font-weight:700;margin-bottom:.5rem}
+.modal-body{font-size:.88rem;color:var(--muted);margin-bottom:1rem}
+.modal-actions{display:flex;gap:.75rem;justify-content:flex-end}
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;font-size:.88rem;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:2000;display:none}
+.toast.show{display:flex;align-items:center;gap:.5rem}
+.toast-success{border-color:#10b981;color:#065f46}
+.toast-error{border-color:var(--red,#dc2626);color:var(--red,#dc2626)}
+@media(max-width:640px){.form-row{grid-template-columns:1fr}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="app-main">
+  <div class="edit-wrap">
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">
+      <a href="/properties" style="color:var(--muted);font-size:.85rem">&larr; Properties</a>
+      <h1 style="font-size:1.2rem;font-weight:700;margin:0">{{ prop.property_name or prop.name }}</h1>
+      <span style="font-size:.75rem;font-family:monospace;color:var(--muted)">{{ prop.ticker }}</span>
+    </div>
+
+    <form id="editForm" novalidate>
+
+      <!-- Location -->
+      <div class="edit-section" id="location-section">
+        <div class="edit-section-title">Location</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="country">Country <span class="req" aria-hidden="true">*</span></label>
+            <select id="country" name="country" aria-required="true">
+              {% for c in countries %}
+              <option value="{{ c.code }}" {% if c.code == (prop.country or 'SI') %}selected{% endif %}>{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="status">Status <span class="req" aria-hidden="true">*</span></label>
+            <select id="status" name="status" aria-required="true">
+              {% for s in ['active','rented','for_sale','sold','inherited','pending'] %}
+              <option value="{{ s }}" {% if s == (prop.status or 'active') %}selected{% endif %}>{{ s.replace('_',' ').title() }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="address_line_1">Address line 1 <span class="req" aria-hidden="true">*</span></label>
+          <input type="text" id="address_line_1" name="address_line_1" maxlength="100"
+                 value="{{ prop.address_line_1 or prop.address or '' }}" aria-required="true">
+          <div class="field-error" id="err-address_line_1" aria-live="polite"></div>
+        </div>
+        <div class="form-group">
+          <label for="address_line_2">Address line 2 <span class="optional-tag">(optional)</span></label>
+          <input type="text" id="address_line_2" name="address_line_2" maxlength="100"
+                 value="{{ prop.address_line_2 or '' }}">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="city">City <span class="req" aria-hidden="true">*</span></label>
+            <input type="text" id="city" name="city" maxlength="50"
+                   value="{{ prop.city or prop.municipality or '' }}" aria-required="true">
+            <div class="field-error" id="err-city" aria-live="polite"></div>
+          </div>
+          <div class="form-group">
+            <label for="postal_code">Postal code <span class="req" aria-hidden="true">*</span></label>
+            <input type="text" id="postal_code" name="postal_code" maxlength="20"
+                   value="{{ prop.postal_code or '' }}" aria-required="true">
+            <div class="field-error" id="err-postal_code" aria-live="polite"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="state_province">State / Province <span class="optional-tag">(optional)</span></label>
+          <input type="text" id="state_province" name="state_province" maxlength="50"
+                 value="{{ prop.state_province or '' }}">
+        </div>
+
+        <!-- SI-only fields -->
+        <div class="si-only {% if (prop.country or 'SI') == 'SI' %}si-visible{% endif %}">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="municipality">Municipality <span class="req" aria-hidden="true">*</span></label>
+              <input type="text" id="municipality" name="municipality" maxlength="100"
+                     value="{{ prop.municipality or '' }}">
+              <div class="field-error" id="err-municipality" aria-live="polite"></div>
+            </div>
+            <div class="form-group">
+              <label for="cadastral_municipality">Cadastral municipality <span class="optional-tag">(optional)</span></label>
+              <input type="text" id="cadastral_municipality" name="cadastral_municipality" maxlength="100"
+                     value="{{ prop.cadastral_municipality or '' }}">
+            </div>
+          </div>
+          <div class="form-group" style="max-width:200px">
+            <label for="area_m2">Area (m²) <span class="req" aria-hidden="true">*</span></label>
+            <input type="number" id="area_m2" name="area_m2" min="0.1" step="0.1"
+                   value="{{ prop.area_m2 or '' }}">
+            <div class="field-error" id="err-area_m2" aria-live="polite"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Financial -->
+      <div class="edit-section">
+        <div class="edit-section-title">Financial</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="property_type">Property type <span class="req" aria-hidden="true">*</span></label>
+            <select id="property_type" name="property_type" aria-required="true">
+              {% for t in ['apartment','house','commercial','land','other'] %}
+              <option value="{{ t }}" {% if t == (prop.property_type or '') %}selected{% endif %}>{{ t.title() }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="property_name">Property name <span class="optional-tag">(optional)</span></label>
+            <input type="text" id="property_name" name="property_name" maxlength="100"
+                   value="{{ prop.property_name or prop.name or '' }}">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="purchase_date">Acquisition date <span class="req" aria-hidden="true">*</span></label>
+            <input type="date" id="purchase_date" name="purchase_date"
+                   value="{{ prop.purchase_date or '' }}"
+                   max="{{ '' }}" aria-required="true">
+            <div class="field-error" id="err-purchase_date" aria-live="polite"></div>
+          </div>
+          <div class="form-group">
+            <label for="currency">Currency</label>
+            <select id="currency" name="currency">
+              {% for cur in ['EUR','USD','GBP','CHF','CZK','HUF','PLN','NOK','SEK','DKK','HRK','RSD','AUD','CAD','JPY'] %}
+              <option value="{{ cur }}" {% if cur == (prop.currency or 'EUR') %}selected{% endif %}>{{ cur }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="acquisition_price">Acquisition price <span class="req" aria-hidden="true">*</span></label>
+            <input type="number" id="acquisition_price" name="acquisition_price"
+                   min="0.01" step="0.01"
+                   value="{{ prop.acquisition_price or prop.purchase_price_eur or '' }}" aria-required="true">
+            <div class="field-error" id="err-acquisition_price" aria-live="polite"></div>
+          </div>
+          <div class="form-group" id="fx_rate_group" style="{{ 'display:none' if (prop.currency or 'EUR') == 'EUR' else '' }}">
+            <label for="acquisition_fx_rate">FX rate to EUR</label>
+            <input type="number" id="acquisition_fx_rate" name="acquisition_fx_rate"
+                   min="0.0001" step="0.0001"
+                   value="{{ prop.acquisition_fx_rate or 1.0 }}">
+          </div>
+        </div>
+        <div class="form-group" style="max-width:320px">
+          <label for="current_market_value">Current market value <span class="optional-tag">(optional)</span></label>
+          <input type="number" id="current_market_value" name="current_market_value"
+                 min="0.01" step="0.01"
+                 value="{{ prop.current_market_value or '' }}">
+        </div>
+      </div>
+
+      <!-- Tax & Legal -->
+      <div class="edit-section">
+        <div class="edit-section-title">Tax &amp; Legal</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="tax_id">Tax ID / Assessment number <span class="optional-tag">(optional)</span></label>
+            <input type="text" id="tax_id" name="tax_id" maxlength="50"
+                   value="{{ prop.tax_id or '' }}">
+          </div>
+          <div class="form-group">
+            <label for="ownership_percentage">Ownership % <span class="optional-tag">(0–100)</span></label>
+            <input type="number" id="ownership_percentage" name="ownership_percentage"
+                   min="0" max="100" step="0.1"
+                   value="{{ prop.ownership_percentage or 100 }}">
+          </div>
+        </div>
+      </div>
+
+      <!-- Contacts -->
+      <div class="edit-section">
+        <div class="edit-section-title">Contacts</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="property_manager_name">Property manager name <span class="optional-tag">(optional)</span></label>
+            <input type="text" id="property_manager_name" name="property_manager_name" maxlength="100"
+                   value="{{ prop.property_manager_name or '' }}">
+          </div>
+          <div class="form-group">
+            <label for="property_manager_email">Property manager email <span class="optional-tag">(optional)</span></label>
+            <input type="email" id="property_manager_email" name="property_manager_email"
+                   value="{{ prop.property_manager_email or '' }}">
+            <div class="field-error" id="err-property_manager_email" aria-live="polite"></div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="agent_name">Agent name <span class="optional-tag">(optional)</span></label>
+            <input type="text" id="agent_name" name="agent_name" maxlength="100"
+                   value="{{ prop.agent_name or '' }}">
+          </div>
+          <div class="form-group">
+            <label for="agent_email">Agent email <span class="optional-tag">(optional)</span></label>
+            <input type="email" id="agent_email" name="agent_email"
+                   value="{{ prop.agent_email or '' }}">
+            <div class="field-error" id="err-agent_email" aria-live="polite"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div class="edit-section">
+        <div class="edit-section-title">Notes</div>
+        <div class="form-group">
+          <label for="description">Description <span class="optional-tag">(max 500 chars)</span></label>
+          <textarea id="description" name="description" maxlength="500" rows="3">{{ prop.description or '' }}</textarea>
+        </div>
+        <div class="form-group">
+          <label for="notes">Internal notes <span class="optional-tag">(max 1000 chars)</span></label>
+          <textarea id="notes" name="notes" maxlength="1000" rows="3">{{ prop.notes or '' }}</textarea>
+        </div>
+      </div>
+
+      <div class="edit-footer">
+        <div>
+          <button type="button" class="btn btn-secondary" id="cancelBtn" onclick="cancelEdit()">Cancel</button>
+          {% if prop.updated_at %}
+          <span class="last-modified" style="margin-left:1rem">Last modified: {{ prop.updated_at[:10] }}</span>
+          {% endif %}
+        </div>
+        <button type="button" class="btn btn-primary" id="saveBtn" onclick="submitEdit()">Save Changes</button>
+      </div>
+
+    </form>
+
+    <!-- Delete zone -->
+    <div class="delete-zone">
+      <p style="font-size:.82rem;color:var(--muted);margin-bottom:.75rem">
+        Deleting this property will mark it as deleted and remove it from your active portfolio. All transaction history is preserved.
+      </p>
+      <button type="button" class="btn" style="background:var(--red,#dc2626);color:#fff;border:none"
+              onclick="openDeleteModal()">Delete Property</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirmation modal -->
+<div class="modal-overlay" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+  <div class="modal-box">
+    <div class="modal-title" id="deleteModalTitle">Delete Property?</div>
+    <div class="modal-body">
+      This action cannot be undone. <strong>{{ prop.property_name or prop.name }}</strong> will be permanently removed from your active portfolio.<br><br>
+      <em>This will affect your portfolio analytics and tax reports.</em>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="deleteCancelBtn" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn" id="deleteConfirmBtn" style="background:var(--red,#dc2626);color:#fff;border:none"
+              onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="alert"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var _dirty = false;
+var _propId = {{ prop.id }};
+
+document.getElementById('purchase_date').max = new Date().toISOString().split('T')[0];
+
+// Track dirty state
+document.getElementById('editForm').addEventListener('input', function() { _dirty = true; });
+document.getElementById('editForm').addEventListener('change', function() { _dirty = true; });
+
+// Country -> SI fields toggle + currency auto-set
+document.getElementById('country').addEventListener('change', function() {
+  var isSI = this.value === 'SI';
+  document.querySelectorAll('.si-only').forEach(function(el) {
+    el.classList.toggle('si-visible', isSI);
+  });
+});
+
+document.getElementById('currency').addEventListener('change', function() {
+  var isEur = this.value === 'EUR';
+  document.getElementById('fx_rate_group').style.display = isEur ? 'none' : 'block';
+});
+
+function showErr(field, msg) {
+  var el = document.querySelector('[name="' + field + '"]');
+  if (!el) return;
+  var parent = el.closest('.form-group');
+  if (!parent) return;
+  parent.classList.add('has-error');
+  var errEl = document.getElementById('err-' + field);
+  if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+}
+function clearAllErrors() {
+  document.querySelectorAll('.form-group.has-error').forEach(function(el) { el.classList.remove('has-error'); });
+  document.querySelectorAll('.field-error').forEach(function(el) { el.textContent = ''; el.style.display = 'none'; });
+}
+
+function cancelEdit() {
+  if (_dirty && !confirm('You have unsaved changes. Leave anyway?')) return;
+  window.location.href = '/properties';
+}
+
+function collectChanges() {
+  var data = {};
+  var fields = [
+    'property_type','property_name','country','status',
+    'address_line_1','address_line_2','city','postal_code','state_province',
+    'municipality','cadastral_municipality',
+    'purchase_date','currency','acquisition_price','acquisition_fx_rate',
+    'current_market_value','tax_id','ownership_percentage',
+    'property_manager_name','property_manager_email','agent_name','agent_email',
+    'description','notes'
+  ];
+  fields.forEach(function(name) {
+    var el = document.getElementById(name);
+    if (!el) return;
+    var v = el.value.trim();
+    data[name] = v === '' ? null : v;
+  });
+  var areaEl = document.getElementById('area_m2');
+  if (areaEl) data.area_m2 = areaEl.value ? parseFloat(areaEl.value) : null;
+  if (data.acquisition_price) data.acquisition_price = parseFloat(data.acquisition_price);
+  if (data.acquisition_fx_rate) data.acquisition_fx_rate = parseFloat(data.acquisition_fx_rate);
+  if (data.current_market_value) data.current_market_value = parseFloat(data.current_market_value);
+  if (data.ownership_percentage) data.ownership_percentage = parseFloat(data.ownership_percentage);
+  return data;
+}
+
+function submitEdit() {
+  clearAllErrors();
+  var btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  var data = collectChanges();
+  fetch('/api/properties/' + _propId, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  })
+  .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, status: r.status, data: d}; }); })
+  .then(function(res) {
+    if (res.ok) {
+      _dirty = false;
+      showToast('Changes saved', 'success');
+    } else if (res.status === 422 && res.data.fields) {
+      Object.entries(res.data.fields).forEach(function(pair) { showErr(pair[0], pair[1]); });
+    } else {
+      showToast(res.data.error || 'Save failed', 'error');
+    }
+  })
+  .catch(function() { showToast('Network error', 'error'); })
+  .finally(function() { btn.disabled = false; btn.textContent = 'Save Changes'; });
+}
+
+function openDeleteModal() {
+  document.getElementById('deleteModal').classList.add('active');
+  document.getElementById('deleteCancelBtn').focus();
+  document.addEventListener('keydown', _trapFocus);
+}
+function closeDeleteModal() {
+  document.getElementById('deleteModal').classList.remove('active');
+  document.removeEventListener('keydown', _trapFocus);
+}
+function _trapFocus(e) {
+  if (e.key === 'Escape') { closeDeleteModal(); return; }
+  if (e.key !== 'Tab') return;
+  var btns = document.querySelectorAll('#deleteModal button');
+  var first = btns[0], last = btns[btns.length - 1];
+  if (e.shiftKey ? document.activeElement === first : document.activeElement === last) {
+    e.preventDefault();
+    (e.shiftKey ? last : first).focus();
+  }
+}
+function confirmDelete() {
+  var btn = document.getElementById('deleteConfirmBtn');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+  fetch('/api/properties/' + _propId, { method: 'DELETE' })
+    .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+    .then(function(res) {
+      if (res.ok) {
+        _dirty = false;
+        window.location.href = '/properties?deleted=1';
+      } else {
+        closeDeleteModal();
+        showToast(res.data.error || 'Delete failed', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+      }
+    })
+    .catch(function() {
+      showToast('Network error', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Delete';
+    });
+}
+
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show toast-' + (type || 'success');
+  setTimeout(function() { t.className = 'toast'; }, 5000);
+}
+
+// Show success/deleted toast from redirect query params
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('created')) showToast('Property created successfully', 'success');
+})();
+</script>
+{% endblock %}

@@ -5,7 +5,6 @@ section, collapsed by default. CSS max-height transition (~200-300ms). Chevron
 rotates 90° on expand. Full WAI-ARIA: role=button, aria-expanded, aria-controls,
 role=region, aria-labelledby. Keyboard: Enter/Space to toggle.
 """
-import re
 import unittest
 from pathlib import Path
 

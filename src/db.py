@@ -10,7 +10,7 @@ from pathlib import Path
 DB_DIR = Path.home() / ".revolut-edavki"
 DB_PATH = DB_DIR / "portfolio.db"
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS transactions (
@@ -82,14 +82,36 @@ CREATE TABLE IF NOT EXISTS real_estate_properties (
     ticker                  TEXT NOT NULL UNIQUE,
     name                    TEXT NOT NULL,
     address                 TEXT,
-    municipality            TEXT NOT NULL,
+    municipality            TEXT NOT NULL DEFAULT '',
     cadastral_municipality  TEXT,
-    property_type           TEXT NOT NULL,
-    area_m2                 REAL NOT NULL,
-    purchase_price_eur      REAL NOT NULL,
-    purchase_date           TEXT NOT NULL,
+    property_type           TEXT NOT NULL DEFAULT 'other',
+    area_m2                 REAL,
+    purchase_price_eur      REAL NOT NULL DEFAULT 0,
+    purchase_date           TEXT NOT NULL DEFAULT '',
     notes                   TEXT,
-    created_at              TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    country                 TEXT NOT NULL DEFAULT 'SI',
+    currency                TEXT NOT NULL DEFAULT 'EUR',
+    address_line_1          TEXT,
+    address_line_2          TEXT,
+    city                    TEXT,
+    state_province          TEXT,
+    postal_code             TEXT,
+    property_name           TEXT,
+    acquisition_price       REAL,
+    acquisition_fx_rate     REAL NOT NULL DEFAULT 1.0,
+    current_market_value    REAL,
+    current_market_value_date TEXT,
+    ownership_percentage    REAL DEFAULT 100.0,
+    tax_id                  TEXT,
+    status                  TEXT NOT NULL DEFAULT 'active',
+    description             TEXT,
+    property_manager_name   TEXT,
+    property_manager_email  TEXT,
+    agent_name              TEXT,
+    agent_email             TEXT,
+    updated_at              TEXT,
+    deleted_at              TEXT
 );
 
 CREATE TABLE IF NOT EXISTS investment_notes (
@@ -368,6 +390,57 @@ def _init_schema(conn: sqlite3.Connection):
                     "VALUES (?, 'USD', 'EUR', ?)",
                     [(r[0], r[1]) for r in old_rows],
                 )
+        conn.commit()
+
+    if current_version < 12:
+        # Extend real_estate_properties with new fields for international + financial data.
+        # All defaults must be constants (no function calls) because ALTER TABLE ADD COLUMN
+        # does not allow non-constant defaults in SQLite.
+        re_cols = {row[1] for row in conn.execute("PRAGMA table_info(real_estate_properties)")}
+        new_cols = [
+            ("country",                    "TEXT NOT NULL DEFAULT 'SI'"),
+            ("currency",                   "TEXT NOT NULL DEFAULT 'EUR'"),
+            ("address_line_1",             "TEXT"),
+            ("address_line_2",             "TEXT"),
+            ("city",                       "TEXT"),
+            ("state_province",             "TEXT"),
+            ("postal_code",                "TEXT"),
+            ("property_name",              "TEXT"),
+            ("acquisition_price",          "REAL"),
+            ("acquisition_fx_rate",        "REAL NOT NULL DEFAULT 1.0"),
+            ("current_market_value",       "REAL"),
+            ("current_market_value_date",  "TEXT"),
+            ("ownership_percentage",       "REAL DEFAULT 100.0"),
+            ("tax_id",                     "TEXT"),
+            ("status",                     "TEXT NOT NULL DEFAULT 'active'"),
+            ("description",                "TEXT"),
+            ("property_manager_name",      "TEXT"),
+            ("property_manager_email",     "TEXT"),
+            ("agent_name",                 "TEXT"),
+            ("agent_email",                "TEXT"),
+            ("updated_at",                 "TEXT"),
+            ("deleted_at",                 "TEXT"),
+        ]
+        for col, ddl in new_cols:
+            if col not in re_cols:
+                conn.execute(f"ALTER TABLE real_estate_properties ADD COLUMN {col} {ddl}")
+
+        # Backfill new columns from legacy columns where data exists
+        conn.execute("""
+            UPDATE real_estate_properties
+            SET address_line_1 = address
+            WHERE address IS NOT NULL AND address_line_1 IS NULL
+        """)
+        conn.execute("""
+            UPDATE real_estate_properties
+            SET city = municipality
+            WHERE municipality IS NOT NULL AND city IS NULL
+        """)
+        conn.execute("""
+            UPDATE real_estate_properties
+            SET acquisition_price = purchase_price_eur
+            WHERE purchase_price_eur IS NOT NULL AND acquisition_price IS NULL
+        """)
         conn.commit()
 
     if current_version < SCHEMA_VERSION:

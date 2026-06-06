@@ -1032,3 +1032,117 @@ def api_get_dashboard_layout(handler):
 
     except Exception as e:
         json_response(handler, {"error": str(e)}, status=500)
+
+
+def api_list_properties(handler):
+    """GET /api/properties — list non-deleted properties."""
+    session = get_session(handler)
+    conn = portfolio_conn(session, get_session_token(handler))
+    try:
+        portfolio_id = _get_portfolio_id(session)
+        from ..realestate import list_properties
+        props = list_properties(conn, portfolio_id=portfolio_id)
+        json_response(handler, {"properties": props, "count": len(props)})
+    except Exception as e:
+        json_response(handler, {"error": str(e)}, status=500)
+    finally:
+        conn.close()
+
+
+def api_get_property(handler, property_id: int):
+    """GET /api/properties/{id} — get a single property."""
+    session = get_session(handler)
+    conn = portfolio_conn(session, get_session_token(handler))
+    try:
+        portfolio_id = _get_portfolio_id(session)
+        from ..realestate import get_property
+        prop = get_property(conn, property_id, portfolio_id=portfolio_id)
+        if not prop:
+            json_response(handler, {"error": "Property not found"}, status=404)
+            return
+        json_response(handler, {"property": prop})
+    except Exception as e:
+        json_response(handler, {"error": str(e)}, status=500)
+    finally:
+        conn.close()
+
+
+def api_create_property(handler):
+    """POST /api/properties — create a new property."""
+    session = get_session(handler)
+    if not session:
+        json_response(handler, {"error": "Unauthorized"}, status=401)
+        return
+    conn = portfolio_conn(session, get_session_token(handler))
+    try:
+        body = json.loads(handler._read_body())
+    except (json.JSONDecodeError, Exception):
+        json_response(handler, {"error": "Invalid JSON"}, status=400)
+        conn.close()
+        return
+    try:
+        portfolio_id = _get_portfolio_id(session)
+        from ..realestate import create_property
+        ticker, prop = create_property(conn, body, portfolio_id=portfolio_id)
+        json_response(handler, {"property": prop, "ticker": ticker}, status=201)
+    except ValueError as e:
+        json_response(handler, {"error": "validation_error", "fields": e.args[0]}, status=422)
+    except Exception as e:
+        json_response(handler, {"error": str(e)}, status=500)
+    finally:
+        conn.close()
+
+
+def api_update_property(handler, property_id: int):
+    """PATCH /api/properties/{id} — update a property."""
+    session = get_session(handler)
+    if not session:
+        json_response(handler, {"error": "Unauthorized"}, status=401)
+        return
+    conn = portfolio_conn(session, get_session_token(handler))
+    try:
+        body = json.loads(handler._read_body())
+    except (json.JSONDecodeError, Exception):
+        json_response(handler, {"error": "Invalid JSON"}, status=400)
+        conn.close()
+        return
+    try:
+        portfolio_id = _get_portfolio_id(session)
+        from ..realestate import update_property
+        prop = update_property(conn, property_id, body, portfolio_id=portfolio_id)
+        json_response(handler, {"property": prop})
+    except KeyError:
+        json_response(handler, {"error": "Property not found"}, status=404)
+    except ValueError as e:
+        json_response(handler, {"error": "validation_error", "fields": e.args[0]}, status=422)
+    except Exception as e:
+        json_response(handler, {"error": str(e)}, status=500)
+    finally:
+        conn.close()
+
+
+def api_delete_property(handler, property_id: int):
+    """DELETE /api/properties/{id} — soft-delete a property."""
+    session = get_session(handler)
+    if not session:
+        json_response(handler, {"error": "Unauthorized"}, status=401)
+        return
+    conn = portfolio_conn(session, get_session_token(handler))
+    try:
+        portfolio_id = _get_portfolio_id(session)
+        from ..realestate import soft_delete_property
+        deleted = soft_delete_property(conn, property_id, portfolio_id=portfolio_id)
+        if not deleted:
+            json_response(handler, {"error": "Property not found"}, status=404)
+            return
+        json_response(handler, {"success": True})
+    except Exception as e:
+        json_response(handler, {"error": str(e)}, status=500)
+    finally:
+        conn.close()
+
+
+def api_list_countries(handler):
+    """GET /api/reference/countries — ISO 3166-1 countries with default currencies."""
+    from ..countries import COUNTRIES
+    json_response(handler, COUNTRIES)

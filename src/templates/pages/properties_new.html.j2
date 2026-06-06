@@ -1,0 +1,450 @@
+{% extends "base.html.j2" %}
+
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+
+{% block title %}Add Property — WealthEagle{% endblock %}
+
+{% block extra_css %}
+<style>
+.wizard-wrap{max-width:680px;margin:0 auto}
+.wizard-steps{display:flex;gap:0;margin-bottom:2rem;border-bottom:2px solid var(--border)}
+.wizard-step{flex:1;padding:.75rem 1rem;font-size:.82rem;font-weight:500;color:var(--muted);cursor:default;position:relative;text-align:center}
+.wizard-step.active{color:var(--primary,#4f46e5);font-weight:700}
+.wizard-step.active::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:2px;background:var(--primary,#4f46e5)}
+.wizard-step.done{color:var(--green,#10b981)}
+.step-panel{display:none}
+.step-panel.active{display:block}
+.form-group{margin-bottom:1.25rem}
+.form-group label{display:block;font-size:.85rem;font-weight:500;margin-bottom:.35rem}
+.form-group label .req{color:var(--red,#dc2626);margin-left:2px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:.55rem .75rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem;background:var(--input-bg,#fff);color:var(--text);box-sizing:border-box}
+.form-group textarea{resize:vertical;min-height:80px}
+.form-group .field-error{display:none;font-size:.78rem;color:var(--red,#dc2626);margin-top:3px}
+.form-group.has-error input,.form-group.has-error select,.form-group.has-error textarea{border-color:var(--red,#dc2626)}
+.form-group.has-error .field-error{display:block}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.si-only{display:none}
+.si-visible .si-only{display:block}
+.wizard-footer{display:flex;justify-content:space-between;margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border)}
+.section-heading{font-size:.95rem;font-weight:600;margin:1.5rem 0 1rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-size:.7rem}
+.optional-tag{font-size:.72rem;font-weight:400;color:var(--muted);margin-left:4px}
+@media(max-width:640px){.form-row{grid-template-columns:1fr}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="app-main">
+  <div class="wizard-wrap">
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">
+      <a href="/properties" style="color:var(--muted);font-size:.85rem">&larr; Properties</a>
+      <h1 style="font-size:1.2rem;font-weight:700;margin:0">Add Property</h1>
+    </div>
+
+    <nav class="wizard-steps" aria-label="Form steps">
+      <div class="wizard-step active" id="tab1" aria-current="step">1. Basic Info</div>
+      <div class="wizard-step" id="tab2">2. Financial</div>
+      <div class="wizard-step" id="tab3">3. Additional</div>
+    </nav>
+
+    <form id="propForm" novalidate>
+      <!-- Step 1: Basic Info -->
+      <fieldset class="step-panel active" id="step1" aria-label="Basic info">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="property_type">Property type <span class="req" aria-hidden="true">*</span></label>
+            <select id="property_type" name="property_type" aria-required="true">
+              <option value="">Select type…</option>
+              <option value="apartment">Apartment</option>
+              <option value="house">House</option>
+              <option value="commercial">Commercial</option>
+              <option value="land">Land</option>
+              <option value="other">Other</option>
+            </select>
+            <div class="field-error" id="err-property_type" aria-live="polite"></div>
+          </div>
+          <div class="form-group">
+            <label for="property_name">Property name <span class="optional-tag">(optional)</span></label>
+            <input type="text" id="property_name" name="property_name" maxlength="100" placeholder="e.g. Summer Home">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="country">Country <span class="req" aria-hidden="true">*</span></label>
+            <select id="country" name="country" aria-required="true">
+              {% for c in countries %}
+              <option value="{{ c.code }}" {% if c.code == 'SI' %}selected{% endif %}>{{ c.name }}</option>
+              {% endfor %}
+            </select>
+            <div class="field-error" id="err-country" aria-live="polite"></div>
+          </div>
+          <div class="form-group">
+            <label for="status">Status <span class="req" aria-hidden="true">*</span></label>
+            <select id="status" name="status" aria-required="true">
+              <option value="active" selected>Active</option>
+              <option value="rented">Rented</option>
+              <option value="for_sale">For sale</option>
+              <option value="inherited">Inherited</option>
+              <option value="pending">Pending</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="address_line_1">Address line 1 <span class="req" aria-hidden="true">*</span></label>
+          <input type="text" id="address_line_1" name="address_line_1" maxlength="100"
+                 placeholder="Street address" aria-required="true">
+          <div class="field-error" id="err-address_line_1" aria-live="polite"></div>
+        </div>
+        <div class="form-group">
+          <label for="address_line_2">Address line 2 <span class="optional-tag">(optional)</span></label>
+          <input type="text" id="address_line_2" name="address_line_2" maxlength="100" placeholder="Apartment, suite, etc.">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="city">City <span class="req" aria-hidden="true">*</span></label>
+            <input type="text" id="city" name="city" maxlength="50" aria-required="true">
+            <div class="field-error" id="err-city" aria-live="polite"></div>
+          </div>
+          <div class="form-group">
+            <label for="postal_code">Postal code <span class="req" aria-hidden="true">*</span></label>
+            <input type="text" id="postal_code" name="postal_code" maxlength="20" aria-required="true">
+            <div class="field-error" id="err-postal_code" aria-live="polite"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="state_province">State / Province <span class="optional-tag">(optional)</span></label>
+          <input type="text" id="state_province" name="state_province" maxlength="50">
+        </div>
+
+        <!-- Slovenia-specific fields -->
+        <div class="si-only">
+          <div class="section-heading">Slovenian Details</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="municipality">Municipality <span class="req" aria-hidden="true">*</span></label>
+              <input type="text" id="municipality" name="municipality" maxlength="100" placeholder="e.g. Ljubljana">
+              <div class="field-error" id="err-municipality" aria-live="polite"></div>
+            </div>
+            <div class="form-group">
+              <label for="cadastral_municipality">Cadastral municipality <span class="optional-tag">(optional)</span></label>
+              <input type="text" id="cadastral_municipality" name="cadastral_municipality" maxlength="100">
+            </div>
+          </div>
+          <div class="form-group" style="max-width:200px">
+            <label for="area_m2">Area (m²) <span class="req" aria-hidden="true">*</span></label>
+            <input type="number" id="area_m2" name="area_m2" min="0.1" step="0.1" placeholder="65.5">
+            <div class="field-error" id="err-area_m2" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="wizard-footer">
+          <a href="/properties" class="btn btn-secondary">Cancel</a>
+          <button type="button" class="btn btn-primary" onclick="nextStep(1)">Continue &rarr;</button>
+        </div>
+      </fieldset>
+
+      <!-- Step 2: Financial -->
+      <fieldset class="step-panel" id="step2" aria-label="Financial info">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="purchase_date">Acquisition date <span class="req" aria-hidden="true">*</span></label>
+            <input type="date" id="purchase_date" name="purchase_date" max="{{ '' }}" aria-required="true">
+            <div class="field-error" id="err-purchase_date" aria-live="polite"></div>
+          </div>
+          <div class="form-group">
+            <label for="currency">Currency <span class="req" aria-hidden="true">*</span></label>
+            <select id="currency" name="currency">
+              <option value="EUR" selected>EUR — Euro</option>
+              <option value="USD">USD — US Dollar</option>
+              <option value="GBP">GBP — Pound Sterling</option>
+              <option value="CHF">CHF — Swiss Franc</option>
+              <option value="CZK">CZK — Czech Koruna</option>
+              <option value="HUF">HUF — Hungarian Forint</option>
+              <option value="PLN">PLN — Polish Zloty</option>
+              <option value="NOK">NOK — Norwegian Krone</option>
+              <option value="SEK">SEK — Swedish Krona</option>
+              <option value="DKK">DKK — Danish Krone</option>
+              <option value="HRK">HRK — Croatian Kuna</option>
+              <option value="RSD">RSD — Serbian Dinar</option>
+              <option value="AUD">AUD — Australian Dollar</option>
+              <option value="CAD">CAD — Canadian Dollar</option>
+              <option value="JPY">JPY — Japanese Yen</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="acquisition_price">Acquisition price <span class="req" aria-hidden="true">*</span></label>
+            <input type="number" id="acquisition_price" name="acquisition_price"
+                   min="0.01" step="0.01" placeholder="185000" aria-required="true">
+            <div class="field-error" id="err-acquisition_price" aria-live="polite"></div>
+          </div>
+          <div class="form-group" id="fx_rate_group" style="display:none">
+            <label for="acquisition_fx_rate">FX rate to EUR <span class="req" aria-hidden="true">*</span></label>
+            <input type="number" id="acquisition_fx_rate" name="acquisition_fx_rate"
+                   min="0.0001" step="0.0001" value="1" placeholder="1.0">
+            <div class="field-error" id="err-acquisition_fx_rate" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="current_market_value">Current market value <span class="optional-tag">(optional)</span></label>
+          <input type="number" id="current_market_value" name="current_market_value"
+                 min="0.01" step="0.01" placeholder="220000">
+        </div>
+
+        <div class="wizard-footer">
+          <button type="button" class="btn btn-secondary" onclick="gotoStep(1)">&larr; Back</button>
+          <button type="button" class="btn btn-primary" onclick="nextStep(2)">Continue &rarr;</button>
+        </div>
+      </fieldset>
+
+      <!-- Step 3: Additional Details -->
+      <fieldset class="step-panel" id="step3" aria-label="Additional details">
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:1.5rem">All fields on this step are optional.</p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="tax_id">Tax ID / Assessment number</label>
+            <input type="text" id="tax_id" name="tax_id" maxlength="50">
+          </div>
+          <div class="form-group">
+            <label for="ownership_percentage">Ownership % <span class="optional-tag">(0–100)</span></label>
+            <input type="number" id="ownership_percentage" name="ownership_percentage"
+                   min="0" max="100" step="0.1" value="100">
+          </div>
+        </div>
+
+        <div class="section-heading">Property Manager</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="property_manager_name">Name</label>
+            <input type="text" id="property_manager_name" name="property_manager_name" maxlength="100">
+          </div>
+          <div class="form-group">
+            <label for="property_manager_email">Email</label>
+            <input type="email" id="property_manager_email" name="property_manager_email">
+            <div class="field-error" id="err-property_manager_email" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="section-heading">Agent</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="agent_name">Name</label>
+            <input type="text" id="agent_name" name="agent_name" maxlength="100">
+          </div>
+          <div class="form-group">
+            <label for="agent_email">Email</label>
+            <input type="email" id="agent_email" name="agent_email">
+            <div class="field-error" id="err-agent_email" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea id="description" name="description" maxlength="500"
+                    placeholder="Brief notes about the property…" rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="notes">Internal notes</label>
+          <textarea id="notes" name="notes" maxlength="1000"
+                    placeholder="Status, pending work, reminders…" rows="3"></textarea>
+        </div>
+
+        <div class="wizard-footer">
+          <button type="button" class="btn btn-secondary" onclick="gotoStep(2)">&larr; Back</button>
+          <button type="button" class="btn btn-primary" id="createBtn" onclick="submitForm()">Create Property</button>
+        </div>
+      </fieldset>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var _step = 1;
+var _countryCurrencies = {{ countries | tojson }};
+var _currencyMap = {};
+_countryCurrencies.forEach(function(c) { _currencyMap[c.code] = c.currency; });
+
+// Set max date for acquisition date to today
+document.getElementById('purchase_date').max = new Date().toISOString().split('T')[0];
+
+// Country -> currency auto-set + SI fields toggle
+document.getElementById('country').addEventListener('change', function() {
+  var code = this.value;
+  var cur = _currencyMap[code] || 'EUR';
+  document.getElementById('currency').value = cur;
+  updateFxVisibility();
+  var isSI = code === 'SI';
+  document.querySelectorAll('.si-only').forEach(function(el) {
+    el.classList.toggle('si-visible', isSI);
+  });
+});
+
+// Trigger on load for default SI
+(function() {
+  var isSI = document.getElementById('country').value === 'SI';
+  document.querySelectorAll('.si-only').forEach(function(el) {
+    el.classList.toggle('si-visible', isSI);
+  });
+})();
+
+document.getElementById('currency').addEventListener('change', updateFxVisibility);
+
+function updateFxVisibility() {
+  var cur = document.getElementById('currency').value;
+  var grp = document.getElementById('fx_rate_group');
+  grp.style.display = cur !== 'EUR' ? 'block' : 'none';
+}
+
+function showErr(field, msg) {
+  var grp = document.querySelector('[name="' + field + '"]');
+  if (!grp) return;
+  var parent = grp.closest('.form-group');
+  if (!parent) return;
+  parent.classList.add('has-error');
+  var errEl = document.getElementById('err-' + field);
+  if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+}
+function clearErr(field) {
+  var grp = document.querySelector('[name="' + field + '"]');
+  if (!grp) return;
+  var parent = grp.closest('.form-group');
+  if (!parent) return;
+  parent.classList.remove('has-error');
+  var errEl = document.getElementById('err-' + field);
+  if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+}
+function clearAllErrors() {
+  document.querySelectorAll('.form-group.has-error').forEach(function(el) { el.classList.remove('has-error'); });
+  document.querySelectorAll('.field-error').forEach(function(el) { el.textContent = ''; el.style.display = 'none'; });
+}
+
+function validateStep1() {
+  clearAllErrors();
+  var ok = true;
+  var country = document.getElementById('country').value;
+  var checks = [
+    ['property_type', 'Property type is required'],
+    ['country', 'Country is required'],
+    ['address_line_1', 'Address is required'],
+    ['city', 'City is required'],
+    ['postal_code', 'Postal code is required'],
+  ];
+  checks.forEach(function(c) {
+    var val = (document.getElementById(c[0]) || {}).value || '';
+    if (!val.trim()) { showErr(c[0], c[1]); ok = false; }
+  });
+  if (country === 'SI') {
+    var muni = (document.getElementById('municipality') || {}).value || '';
+    if (!muni.trim()) { showErr('municipality', 'Required for Slovenian properties'); ok = false; }
+    var area = (document.getElementById('area_m2') || {}).value || '';
+    if (!area || parseFloat(area) <= 0) { showErr('area_m2', 'Required for Slovenian properties'); ok = false; }
+  }
+  return ok;
+}
+
+function validateStep2() {
+  clearAllErrors();
+  var ok = true;
+  var pd = document.getElementById('purchase_date').value;
+  if (!pd) { showErr('purchase_date', 'Acquisition date is required'); ok = false; }
+  else if (pd > new Date().toISOString().split('T')[0]) { showErr('purchase_date', 'Cannot be a future date'); ok = false; }
+  var ap = document.getElementById('acquisition_price').value;
+  if (!ap || parseFloat(ap) <= 0) { showErr('acquisition_price', 'Must be greater than 0'); ok = false; }
+  return ok;
+}
+
+function gotoStep(n) {
+  document.getElementById('step' + _step).classList.remove('active');
+  document.getElementById('tab' + _step).classList.remove('active');
+  if (n < _step) document.getElementById('tab' + _step).classList.remove('done');
+  _step = n;
+  document.getElementById('step' + n).classList.add('active');
+  document.getElementById('tab' + n).classList.add('active');
+  document.querySelectorAll('.wizard-step').forEach(function(el, i) {
+    if (i + 1 < n) el.classList.add('done');
+  });
+  window.scrollTo(0, 0);
+}
+
+function nextStep(from) {
+  if (from === 1 && !validateStep1()) return;
+  if (from === 2 && !validateStep2()) return;
+  document.getElementById('tab' + from).classList.remove('active');
+  document.getElementById('tab' + from).classList.add('done');
+  gotoStep(from + 1);
+}
+
+function collectForm() {
+  var data = {};
+  var form = document.getElementById('propForm');
+  ['property_type','property_name','country','status','address_line_1','address_line_2',
+   'city','postal_code','state_province','municipality','cadastral_municipality',
+   'purchase_date','currency','acquisition_price','acquisition_fx_rate',
+   'current_market_value','tax_id','ownership_percentage',
+   'property_manager_name','property_manager_email','agent_name','agent_email',
+   'description','notes'].forEach(function(name) {
+    var el = form.querySelector('[name="' + name + '"]');
+    if (!el) return;
+    var v = el.value.trim();
+    if (v !== '') data[name] = v;
+  });
+  if (data.area_m2 !== undefined) data.area_m2 = parseFloat(data.area_m2);
+  if (data.acquisition_price) data.acquisition_price = parseFloat(data.acquisition_price);
+  if (data.acquisition_fx_rate) data.acquisition_fx_rate = parseFloat(data.acquisition_fx_rate);
+  if (data.current_market_value) data.current_market_value = parseFloat(data.current_market_value);
+  if (data.ownership_percentage) data.ownership_percentage = parseFloat(data.ownership_percentage);
+  // area_m2
+  var areaEl = document.getElementById('area_m2');
+  if (areaEl && areaEl.value) data.area_m2 = parseFloat(areaEl.value);
+  return data;
+}
+
+function submitForm() {
+  var btn = document.getElementById('createBtn');
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+  var data = collectForm();
+  fetch('/api/properties', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  })
+  .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, status: r.status, data: d}; }); })
+  .then(function(res) {
+    if (res.ok) {
+      window.location.href = '/properties?created=1';
+    } else if (res.status === 422 && res.data.fields) {
+      clearAllErrors();
+      Object.entries(res.data.fields).forEach(function(pair) {
+        showErr(pair[0], pair[1]);
+      });
+      // Go to step that has first error
+      var step1Fields = ['property_type','country','address_line_1','city','postal_code','municipality','area_m2'];
+      var step2Fields = ['purchase_date','acquisition_price','acquisition_fx_rate'];
+      var errField = Object.keys(res.data.fields)[0];
+      if (step1Fields.includes(errField)) gotoStep(1);
+      else if (step2Fields.includes(errField)) gotoStep(2);
+      btn.disabled = false;
+      btn.textContent = 'Create Property';
+    } else {
+      alert(res.data.error || 'Failed to create property');
+      btn.disabled = false;
+      btn.textContent = 'Create Property';
+    }
+  })
+  .catch(function() {
+    alert('Network error. Please try again.');
+    btn.disabled = false;
+    btn.textContent = 'Create Property';
+  });
+}
+</script>
+{% endblock %}
