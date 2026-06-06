@@ -2460,3 +2460,39 @@ body {
 .tax-accordion-content.expanded { max-height: 4000px; }
 .tax-accordion-content > .card,
 .tax-accordion-content > section { border-top-left-radius: 0; border-top-right-radius: 0; border-top: 1px solid var(--border); margin-top: 0; }
+
+/* --- Tax Tab: Mobile Optimizations (SAA-584) --- */
+@media (max-width: 768px) {
+  /* AC9: Summary metrics stack vertically in a single column */
+  .tax-summary-metrics .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* AC10: Full-width accordions with WCAG 2.5.5 touch targets */
+  .tax-accordion {
+    width: 100%;
+  }
+  .tax-accordion-header {
+    min-height: 48px;
+    padding: 12px 16px;
+  }
+
+  /* AC11: Sub-tab selector fixed at bottom of screen */
+  .tax-subtabs {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+    margin-bottom: 0;
+    padding: 0 1rem;
+  }
+
+  /* Prevent content from being hidden under the fixed sub-tab bar */
+  #page-tax {
+    padding-bottom: 3rem;
+  }
+}
