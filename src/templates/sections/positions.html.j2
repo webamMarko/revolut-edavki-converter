@@ -1,3 +1,4 @@
+{% from "partials/_collapsible_section.html.j2" import collapsible_section %}
 <div class="page-stack">
 <div class="two-col" data-role="chartsRow">
   <section class="card" data-role="allocationSection" style="display:none">
@@ -9,6 +10,19 @@
       <div class="allocation-legend" data-role="allocationLegend"></div>
     </div>
   </section>
+  <section class="card" data-role="sectorSection" style="display:none">
+    <h2 data-role="sectorTitle">Sector Allocation</h2>
+    <div class="allocation-wrap">
+      <div class="allocation-chart-col">
+        <canvas data-role="sectorChart"></canvas>
+      </div>
+      <div class="allocation-legend" data-role="sectorLegend"></div>
+    </div>
+  </section>
+</div>
+
+{% call collapsible_section('Additional Breakdowns', 'Currency Exposure · Industry Breakdown', 'additional-breakdowns') %}
+<div class="two-col">
   <section class="card" data-role="currencySection" style="display:none">
     <h2>Currency Exposure</h2>
     <div class="allocation-wrap">
@@ -18,25 +32,14 @@
       <div class="allocation-legend" data-role="currencyLegend"></div>
     </div>
   </section>
-</div>
-
-<div class="two-col" data-role="sectorRow" style="display:none">
-  <section class="card" data-role="sectorSection">
-    <h2 data-role="sectorTitle">Sector Allocation</h2>
-    <div class="allocation-wrap">
-      <div class="allocation-chart-col">
-        <canvas data-role="sectorChart"></canvas>
-      </div>
-      <div class="allocation-legend" data-role="sectorLegend"></div>
-    </div>
-  </section>
-  <section class="card" data-role="industrySection">
+  <section class="card" data-role="industrySection" style="display:none">
     <h2 data-role="industryTitle">Industry Breakdown</h2>
     <div class="table-scroll">
       <table data-role="industryTable" class="data-table sortable"></table>
     </div>
   </section>
 </div>
+{% endcall %}
 
 <section class="card" data-role="concentrationSection" style="display:none">
   <h2>Diversification</h2>

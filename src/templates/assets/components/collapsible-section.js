@@ -7,11 +7,13 @@ function initCollapsibleSection(sectionId, persistenceKey) {
   if (!hdr || !body) return;
 
   if (persistenceKey) {
-    var stored = localStorage.getItem(persistenceKey);
-    if (stored === 'open' && !body.classList.contains('is-open')) {
+    var storedState = window._layoutGetSectionState
+      ? window._layoutGetSectionState(persistenceKey)
+      : (function() { var v = localStorage.getItem(persistenceKey); return v === 'open' ? true : v === 'closed' ? false : null; })();
+    if (storedState === true && !body.classList.contains('is-open')) {
       body.classList.add('is-open');
       hdr.setAttribute('aria-expanded', 'true');
-    } else if (stored === 'closed' && body.classList.contains('is-open')) {
+    } else if (storedState === false && body.classList.contains('is-open')) {
       body.classList.remove('is-open');
       hdr.setAttribute('aria-expanded', 'false');
     }
@@ -21,7 +23,11 @@ function initCollapsibleSection(sectionId, persistenceKey) {
     var isOpen = body.classList.toggle('is-open');
     hdr.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     if (persistenceKey) {
-      localStorage.setItem(persistenceKey, isOpen ? 'open' : 'closed');
+      if (window._layoutSetSectionState) {
+        window._layoutSetSectionState(persistenceKey, isOpen);
+      } else {
+        localStorage.setItem(persistenceKey, isOpen ? 'open' : 'closed');
+      }
     }
     if (isOpen) {
       section.dispatchEvent(new CustomEvent('section-expanded', { bubbles: true, detail: { sectionId: sectionId } }));

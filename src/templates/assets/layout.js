@@ -46,7 +46,9 @@
   }
 
   function getLayout() {
-    return loadLayout() || { navOrder: DEFAULT_NAV_ORDER.slice(), cardOrder: DEFAULT_CARD_ORDER.slice(), hiddenCards: [] };
+    var layout = loadLayout() || { navOrder: DEFAULT_NAV_ORDER.slice(), cardOrder: DEFAULT_CARD_ORDER.slice(), hiddenCards: [] };
+    if (!layout.collapsedSections) layout.collapsedSections = {};
+    return layout;
   }
 
   // --- Nav reordering ---
@@ -329,6 +331,17 @@
     initNavDrag();
     initCardDrag();
   }
+
+  window._layoutGetSectionState = function(key) {
+    var cs = getLayout().collapsedSections;
+    return key in cs ? cs[key] : null;
+  };
+
+  window._layoutSetSectionState = function(key, expanded) {
+    var layout = getLayout();
+    layout.collapsedSections[key] = expanded;
+    saveLayout(layout);
+  };
 
   window._layoutToggleCardVisibility = toggleCardVisibility;
   window._layoutIsCustomizeMode = function() { return customizeMode; };

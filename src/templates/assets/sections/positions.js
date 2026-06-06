@@ -855,6 +855,17 @@ function updateClosedPositions() {
     }).join('');
   }
 
+  // --- Collapsible: Additional Breakdowns ---
+  (function() {
+    initCollapsibleSection('additional-breakdowns', 'positions.additionalBreakdowns');
+    var panel = document.getElementById('additional-breakdowns');
+    if (panel) {
+      panel.addEventListener('section-expanded', function() {
+        if (_currencyChart) _currencyChart.resize();
+      });
+    }
+  })();
+
   // --- Correlation matrix ---
   window.updateCorrelation = function() {
     const section = scopedFind(null, 'correlationSection');
@@ -911,19 +922,22 @@ function updateClosedPositions() {
 
   window.updateSectorAllocation = function() {
     const sa = D.sector_allocation;
-    const row = scopedFind(null, 'sectorRow');
+    const sectorSec = scopedFind(null, 'sectorSection');
+    const industrySec = scopedFind(null, 'industrySection');
     if (!sa || !sa.sectors || sa.sectors.length === 0) {
-      if (row) row.style.display = 'none';
+      if (sectorSec) sectorSec.style.display = 'none';
+      if (industrySec) industrySec.style.display = 'none';
       return;
     }
 
     // Filter out "Other" if it's the only sector
     const sectors = sa.sectors.filter(s => s.pct > 0);
     if (sectors.length === 0 || (sectors.length === 1 && sectors[0].name === 'Other')) {
-      if (row) row.style.display = 'none';
+      if (sectorSec) sectorSec.style.display = 'none';
+      if (industrySec) industrySec.style.display = 'none';
       return;
     }
-    row.style.display = '';
+    if (sectorSec) sectorSec.style.display = '';
 
     scopedFind(null, 'sectorTitle').textContent = t('sector.title');
     scopedFind(null, 'industryTitle').textContent = t('sector.industry_title');
@@ -972,6 +986,7 @@ function updateClosedPositions() {
     const industries = (sa.industries || []).filter(i => i.pct > 0);
     const it = scopedFind(null, 'industryTable');
     if (industries.length > 0) {
+      if (industrySec) industrySec.style.display = '';
       it.innerHTML =
         '<thead><tr><th>'+t('sector.col.industry')+'</th><th>'+t('sector.col.value')+'</th><th>'+t('sector.col.pct')+'</th></tr></thead><tbody>' +
         industries.map(function(ind, i) {
@@ -983,6 +998,8 @@ function updateClosedPositions() {
         }).join('') +
         '</tbody>';
       makeSortable(it);
+    } else {
+      if (industrySec) industrySec.style.display = 'none';
     }
   };
 })();
