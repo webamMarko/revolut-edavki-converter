@@ -4,6 +4,7 @@ try {
   if (RE && RE.properties && RE.properties.length > 0) {
     scopedFind(null, 'realEstateSection').style.display = '';
 
+
     const propTypeLabels = {
       stanovanje: 'Apartment', hisa: 'House', garaza: 'Garage',
       poslovni: 'Commercial', zemljisce: 'Land'
@@ -96,5 +97,14 @@ try {
         }
       });
     })();
+  } else {
+    // RealEstateEmptyState — no properties yet
+    scopedFind(null, 'realEstateSection').style.display = '';
+    var emptyEl = scopedFind(null, 'reEmptyState');
+    if (emptyEl) {
+      var addPropertyUrl = (RE && RE.add_property_url) || '/properties/new';
+      emptyEl.innerHTML = createRealEstateEmptyState(addPropertyUrl);
+      emptyEl.style.display = '';
+    }
   }
 } catch(e) { console.error('Real estate section error:', e); }
