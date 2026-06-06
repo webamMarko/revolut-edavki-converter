@@ -11,6 +11,12 @@ from .templates import page_env, FOUC_SCRIPT, COMMON_JS, html_response, json_res
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8080")
 
 
+def _get_portfolio_id(session):
+    if not session:
+        return 1
+    return session.get("active_portfolio_id", 1)
+
+
 # ------------------------------------------------------------------
 # Analytics API (lazy-load per-class)
 # ------------------------------------------------------------------

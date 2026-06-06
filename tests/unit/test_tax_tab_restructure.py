@@ -229,7 +229,6 @@ class TestTaxSummaryNoTimeline(unittest.TestCase):
         html = _report_html()
         advanced_panel_start = html.find('data-subtab-panel="advanced"')
         self.assertGreater(advanced_panel_start, -1)
-        advanced_panel_end = html.find('</div>', advanced_panel_start)
         # Look for it anywhere after the advanced panel start
         rest = html[advanced_panel_start:]
         self.assertIn('tax_timeline', rest,
