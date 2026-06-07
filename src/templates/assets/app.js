@@ -141,7 +141,6 @@ function updateAll() {
   updateSummary();
   updateRiskMetrics();
   updateTopMovers();
-  updateMilestones();
   updateGains();
   if (typeof updateRiskPage === 'function') updateRiskPage();
   updateAttribution();
@@ -159,6 +158,7 @@ function updateAll() {
   if (typeof updateFire === 'function') updateFire();
   if (typeof updateWhatIf === 'function') updateWhatIf();
   if (typeof updateAchievements === 'function') updateAchievements();
+  if (typeof updateMilestones === 'function') updateMilestones();
   if (typeof updateDCAStrategy === 'function') updateDCAStrategy();
   if (typeof updateWaterfall === 'function') updateWaterfall();
 }

@@ -185,45 +185,11 @@ function updateRiskMetrics() {
   }).join('');
 }
 
-function updateTopMovers() {
-  const positions = getActivePositions();
-  const section = scopedFind(null, 'topMoversSection');
-  if (positions.length < 2) { section.style.display = 'none'; return; }
-  section.style.display = '';
-
-  const names = D.company_names || {};
-
-  // Sort by unrealized gain % for meaningful ranking
-  const sorted = [...positions].filter(p => p.cost_basis_eur > 0);
-  const gainers = sorted.filter(p => p.unrealized_gain_eur > 0)
-    .sort((a, b) => b.unrealized_gain_pct - a.unrealized_gain_pct).slice(0, 5);
-  const losers = sorted.filter(p => p.unrealized_gain_eur < 0)
-    .sort((a, b) => a.unrealized_gain_pct - b.unrealized_gain_pct).slice(0, 5);
-
-  function renderList(items, el) {
-    if (items.length === 0) { el.innerHTML = '<div style="color:var(--muted);font-size:0.8rem;padding:0.5rem">' + t('movers.none') + '</div>'; return; }
-    el.innerHTML = items.map(p => {
-      const name = names[p.ticker] || '';
-      return `<div class="mover-row">
-        <div>
-          <div class="mover-ticker">${p.ticker}</div>
-          ${name ? `<div class="mover-name">${name}</div>` : ''}
-        </div>
-        <div class="mover-right">
-          <div class="mover-gain ${cls(p.unrealized_gain_eur)}">${signCcy(p.unrealized_gain_eur)}</div>
-          <div class="mover-pct">${sign(p.unrealized_gain_pct)}%</div>
-        </div>
-      </div>`;
-    }).join('');
-  }
-
-  renderList(gainers, scopedFind(null, 'topGainers'));
-  renderList(losers, scopedFind(null, 'topLosers'));
-}
-
 function updateMilestones() {
-  const section = scopedFind(null, 'milestonesSection');
-  if (isZoomed || !ds.dates || ds.dates.length < 10) { section.style.display = 'none'; return; }
+  const grid = scopedFind(null, 'achievementsGrid');
+  const section = scopedFind(null, 'achievementsSection');
+  if (!grid || !section) return;
+  if (isZoomed || !ds.dates || ds.dates.length < 10) return;
 
   const events = [];
   const dates = ds.dates;
@@ -289,56 +255,31 @@ function updateMilestones() {
     events.push({ date: dates[dates.length - 1], icon: '&#x1F4C5;', text: t('milestones.portfolio_age') + ': ' + ageStr, detail: days + ' ' + t('milestones.days') });
   }
 
-  if (events.length < 2) { section.style.display = 'none'; return; }
-  section.style.display = '';
+  if (events.length < 2) return;
 
   // Sort by date
   events.sort((a, b) => a.date.localeCompare(b.date));
 
-  // Format date as short "Mon 'YY"
-  function shortDate(d) {
-    var parts = d.split('-');
-    var m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(parts[1],10)-1];
-    return m + " '" + parts[0].slice(2);
-  }
-
-  // Compact badge strip (top 6 most interesting)
-  var priority = events.filter(function(e) {
-    return e.text.indexOf('ATH') >= 0 || e.text.indexOf('ath') >= 0
-        || e.text.indexOf('first') >= 0 || e.text.indexOf('First') >= 0
-        || e.text.indexOf('age') >= 0 || e.text.indexOf('Age') >= 0
-        || e.text.indexOf('Reached') >= 0 || e.text.indexOf('reached') >= 0;
-  });
-  var badges = (priority.length >= 3 ? priority : events).slice(0, 6);
-
-  var strip = scopedFind(null, 'milestonesStrip');
-  strip.innerHTML = badges.map(function(e) {
-    return '<span class="ms-badge">' + e.icon + ' ' + e.text + ' <span class="ms-date">' + shortDate(e.date) + '</span></span>';
-  }).join('<span class="ms-sep">&middot;</span>')
-    + (events.length > 6 ? ' <button class="ms-expand" id="msExpandBtn">Show all &#x25BE;</button>' : '');
-
-  // Full expandable list
-  var el = scopedFind(null, 'milestonesList');
-  el.innerHTML = events.map(function(e) {
-    return '<div class="milestone-item">'
-      + '<div class="milestone-icon">' + e.icon + '</div>'
-      + '<div class="milestone-body">'
-      + '<div class="milestone-date">' + e.date + '</div>'
-      + '<div class="milestone-text">' + e.text + '</div>'
-      + '<div class="milestone-detail">' + e.detail + '</div>'
+  // Render as achievement-style cards (same markup as .ach-card) and inject
+  // them into the shared achievements grid, ahead of any locked-achievement row.
+  var cardsHtml = events.map(function(e) {
+    return '<div class="ach-card" data-milestone-card>'
+      + '<div class="ach-card-icon">' + e.icon + '</div>'
+      + '<div class="ach-card-body">'
+      + '<div class="ach-card-title">' + e.text + '</div>'
+      + '<div class="ach-card-detail">' + e.detail + '</div>'
+      + '<span class="ach-date">' + e.date + '</span>'
       + '</div></div>';
   }).join('');
 
-  // Toggle expand
-  var expandBtn = scopedFind(null, 'msExpandBtn');
-  if (expandBtn) {
-    expandBtn.addEventListener('click', function() {
-      var list = scopedFind(null, 'milestonesList');
-      var showing = list.style.display !== 'none';
-      list.style.display = showing ? 'none' : '';
-      expandBtn.innerHTML = showing ? 'Show all &#x25BE;' : 'Hide &#x25B4;';
-    });
+  var lockedRow = grid.querySelector('.ach-locked-row');
+  if (lockedRow) {
+    lockedRow.insertAdjacentHTML('beforebegin', cardsHtml);
+  } else {
+    grid.insertAdjacentHTML('beforeend', cardsHtml);
   }
+
+  section.style.display = '';
 }
 
 // --- Metrics toggle (progressive disclosure) ---
@@ -371,6 +312,36 @@ function updateMilestones() {
   btn.addEventListener('click', function() {
     var expanded = btn.getAttribute('aria-expanded') === 'true';
     setExpanded(!expanded);
+  });
+})();
+
+// --- Achievements toggle (show/hide grid, persisted) ---
+(function() {
+  var btn = scopedFind(null, 'achievementsToggle');
+  var grid = scopedFind(null, 'achievementsGrid');
+  if (!btn || !grid) return;
+
+  var STORAGE_KEY = 'overview-achievements-visible';
+
+  function setVisible(val) {
+    btn.setAttribute('aria-expanded', val ? 'true' : 'false');
+    grid.style.display = val ? '' : 'none';
+    btn.textContent = val ? 'Hide' : 'Show';
+    try {
+      localStorage.setItem(STORAGE_KEY, val ? '1' : '0');
+    } catch (e) {}
+  }
+
+  var initial = true;
+  try {
+    var stored = localStorage.getItem(STORAGE_KEY);
+    if (stored === '0') initial = false;
+  } catch (e) {}
+  setVisible(initial);
+
+  btn.addEventListener('click', function() {
+    var expanded = btn.getAttribute('aria-expanded') === 'true';
+    setVisible(!expanded);
   });
 })();
 

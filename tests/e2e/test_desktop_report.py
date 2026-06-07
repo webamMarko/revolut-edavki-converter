@@ -190,6 +190,113 @@ class TestAssetFilter:
         assert "active" not in target_btn.get_attribute("class")
 
 
+class TestOverviewLayout:
+    """SAA-572: Overview page section order, achievements/milestones unification,
+    achievements toggle, and Top Movers relocation to the Positions tab."""
+
+    def test_section_order_metrics_chart_health_achievements_gains(self, premium_desktop_page, server_url):
+        premium_desktop_page.goto(f"{server_url}/report")
+        premium_desktop_page.wait_for_selector('[data-role="summary"] .metric-card', timeout=15000)
+
+        roles = premium_desktop_page.evaluate(
+            "() => Array.from(document.querySelectorAll('#page-overview [data-role]'))"
+            ".map(el => el.getAttribute('data-role'))"
+        )
+
+        def idx(role):
+            assert role in roles, f"{role} not found in #page-overview"
+            return roles.index(role)
+
+        assert idx("summary") < idx("portfolioChart") < idx("healthScoreSection") \
+            < idx("achievementsSection") < idx("gainsTable"), \
+            f"expected order metrics -> chart -> health -> achievements -> gains, got: {roles}"
+
+    def test_secondary_metrics_collapsed_by_default(self, premium_desktop_page, server_url):
+        premium_desktop_page.goto(f"{server_url}/report")
+        premium_desktop_page.wait_for_selector('[data-role="summary"] .metric-card', timeout=15000)
+        premium_desktop_page.evaluate("localStorage.removeItem('overview-metrics-expanded')")
+        premium_desktop_page.reload()
+        premium_desktop_page.wait_for_selector('[data-role="summary"] .metric-card', timeout=15000)
+
+        toggle = premium_desktop_page.locator('[data-role="overviewMetricsToggle"]')
+        panel = premium_desktop_page.locator('[data-role="overviewMetricsPanel"]')
+        assert toggle.get_attribute("aria-expanded") == "false"
+        assert "is-expanded" not in (panel.get_attribute("class") or "")
+
+    def test_no_duplicate_or_separate_milestone_strip(self, premium_desktop_page, server_url):
+        premium_desktop_page.goto(f"{server_url}/report")
+        premium_desktop_page.wait_for_selector('[data-role="summary"] .metric-card', timeout=15000)
+
+        assert premium_desktop_page.locator('[data-role="milestonesSection"]').count() == 0
+        assert premium_desktop_page.locator(".milestones-strip").count() == 0
+        assert premium_desktop_page.locator('#page-overview [data-role="achievementsSection"]').count() == 1
+
+    def test_milestones_render_as_achievement_cards(self, premium_desktop_page, server_url):
+        premium_desktop_page.goto(f"{server_url}/report")
+        premium_desktop_page.wait_for_selector('[data-role="summary"] .metric-card', timeout=15000)
+
+        grid = premium_desktop_page.locator('[data-role="achievementsGrid"]')
+        milestone_cards = grid.locator("[data-milestone-card]")
+        if milestone_cards.count() == 0:
+            pytest.skip("No milestone events detected for this portfolio")
+
+        card = milestone_cards.first
+        assert "ach-card" in (card.get_attribute("class") or "")
+        assert card.locator(".ach-card-icon").count() == 1
+        assert card.locator(".ach-card-title").count() == 1
+        assert card.locator(".ach-card-detail").count() == 1
+
+    def test_achievements_toggle_hides_grid_without_affecting_chart(self, premium_desktop_page, server_url):
+        premium_desktop_page.goto(f"{server_url}/report")
+        premium_desktop_page.wait_for_selector('[data-role="summary"] .metric-card', timeout=15000)
+
+        section = premium_desktop_page.locator('[data-role="achievementsSection"]')
+        if not section.is_visible():
+            pytest.skip("No achievements/milestones earned for this portfolio")
+
+        toggle = premium_desktop_page.locator('[data-role="achievementsToggle"]')
+        grid = premium_desktop_page.locator('[data-role="achievementsGrid"]')
+        chart = premium_desktop_page.locator('[data-role="portfolioChart"]')
+
+        assert grid.is_visible()
+        assert chart.is_visible()
+
+        try:
+            toggle.click()
+            premium_desktop_page.wait_for_timeout(150)
+            assert not grid.is_visible()
+            assert toggle.get_attribute("aria-expanded") == "false"
+            assert chart.is_visible(), "toggling achievements must not affect the chart"
+
+            stored = premium_desktop_page.evaluate("localStorage.getItem('overview-achievements-visible')")
+            assert stored == "0"
+
+            premium_desktop_page.reload()
+            premium_desktop_page.wait_for_selector('[data-role="summary"] .metric-card', timeout=15000)
+            assert not premium_desktop_page.locator('[data-role="achievementsGrid"]').is_visible()
+        finally:
+            # Restore visible state for test isolation
+            premium_desktop_page.evaluate("localStorage.setItem('overview-achievements-visible', '1')")
+
+    def test_top_movers_absent_from_overview(self, premium_desktop_page, server_url):
+        premium_desktop_page.goto(f"{server_url}/report")
+        premium_desktop_page.wait_for_selector('[data-role="summary"] .metric-card', timeout=15000)
+        assert premium_desktop_page.locator('#page-overview [data-role="topMoversSection"]').count() == 0
+
+    def test_top_movers_present_in_positions_below_table(self, premium_desktop_page, server_url):
+        premium_desktop_page.goto(f"{server_url}/report")
+        premium_desktop_page.wait_for_selector('[data-role="summary"] .metric-card', timeout=15000)
+        premium_desktop_page.locator('.nav-item[data-page="positions"]').click()
+        premium_desktop_page.wait_for_timeout(300)
+
+        roles = premium_desktop_page.evaluate(
+            "() => Array.from(document.querySelectorAll('#page-positions [data-role]'))"
+            ".map(el => el.getAttribute('data-role'))"
+        )
+        assert "topMoversSection" in roles
+        assert roles.index("positionsTable") < roles.index("topMoversSection")
+
+
 class TestPositions:
     def test_positions_expand_collapse(self, premium_desktop_page, server_url):
         premium_desktop_page.goto(f"{server_url}/report")

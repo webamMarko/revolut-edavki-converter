@@ -1080,74 +1080,34 @@ body {
   .allocation-chart-col { width: 220px; margin: 0 auto; }
 }
 
-/* ---- Milestones ---- */
-.milestones-strip-wrap {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.6rem 1rem;
-}
-.milestones-strip {
+/* ---- Achievements ---- */
+.ach-section-header {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.3rem 0.15rem;
-  font-size: 0.78rem;
-  line-height: 1.6;
-}
-.ms-badge {
-  white-space: nowrap;
-  color: var(--text);
-}
-.ms-badge .ms-date {
-  color: var(--muted);
-  font-size: 0.72rem;
-}
-.ms-sep {
-  color: var(--subtle);
-  margin: 0 0.2rem;
-}
-.ms-expand {
-  background: none;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-  font-size: 0.72rem;
-  font-weight: 600;
-  font-family: inherit;
-  padding: 0 0.25rem;
-  white-space: nowrap;
-}
-.ms-expand:hover { opacity: 0.8; }
-
-.milestones-list {
-  display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   gap: 0.5rem;
-  margin-top: 0.75rem;
+  margin: 0 0 0.75rem;
 }
-.milestone-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.6rem 0.8rem;
-  background: var(--raised);
-  border-radius: 6px;
-  border-left: 3px solid var(--border);
-}
-.milestone-icon { font-size: 1.2rem; flex-shrink: 0; line-height: 1.4; }
-.milestone-body { flex: 1; min-width: 0; }
-.milestone-date { font-size: 0.7rem; color: var(--muted); }
-.milestone-text { font-size: 0.85rem; font-weight: 600; }
-.milestone-detail { font-size: 0.75rem; color: var(--muted); }
-
-/* ---- Achievements ---- */
 .ach-section-title {
   font-size: 0.9rem;
   font-weight: 600;
-  margin: 0 0 0.75rem;
+  margin: 0;
   color: var(--text);
 }
+.ach-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.ach-toggle-btn:hover { color: var(--text); border-color: var(--accent); }
 .ach-grid {
   display: flex;
   flex-wrap: wrap;

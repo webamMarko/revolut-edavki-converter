@@ -14,9 +14,9 @@
 const WIDGET_INIT_MAP = {
   'quick-glance':  function(c) { if (typeof renderQuickGlanceWidget === 'function') renderQuickGlanceWidget(c); },
   'health-score':  function(c) { if (typeof initHealthScore === 'function') initHealthScore(c); },
-  'summary':       function(c) { if (typeof updateSummary === 'function') updateSummary(c); if (typeof updateTopMovers === 'function') updateTopMovers(c); if (typeof updateMilestones === 'function') updateMilestones(c); },
+  'summary':       function(c) { if (typeof updateSummary === 'function') updateSummary(c); if (typeof updateMilestones === 'function') updateMilestones(c); },
   'charts':        function(c) { if (typeof buildPortfolioChartIn === 'function') buildPortfolioChartIn(c); },
-  'positions':     function(c) { if (typeof updatePositions === 'function') updatePositions(c); },
+  'positions':     function(c) { if (typeof updatePositions === 'function') updatePositions(c); if (typeof updateTopMovers === 'function') updateTopMovers(c); },
   'dividends':     function(c) { if (typeof updateDividends === 'function') updateDividends(c); },
   'projections':   function(c) { if (typeof updateFire === 'function') updateFire(c); },
   'notes':         function(c) { if (typeof initNotesWidget === 'function') initNotesWidget(c); },

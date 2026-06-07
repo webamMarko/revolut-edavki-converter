@@ -28,16 +28,6 @@
     </div>
   </div>
 
-  <section data-role="milestonesSection" class="milestones-strip-wrap" style="display:none">
-    <div data-role="milestonesStrip" class="milestones-strip"></div>
-    <div data-role="milestonesList" class="milestones-list" style="display:none"></div>
-  </section>
-
-  <section data-role="achievementsSection" class="card" style="display:none">
-    <h3 class="ach-section-title">Achievements</h3>
-    <div data-role="achievementsGrid" class="ach-grid"></div>
-  </section>
-
   <section class="chart-section">
     <div class="chart-header">
       <h2>Portfolio Value</h2>
@@ -55,15 +45,14 @@
     <div class="chart-wrap"><canvas data-role="portfolioChart"></canvas></div>
   </section>
 
-  <section class="two-col" data-role="topMoversSection" style="display:none">
-    <div class="card">
-      <h3>Top Gainers</h3>
-      <div data-role="topGainers" class="movers-list"></div>
+  {% include "sections/health_score.html.j2" %}
+
+  <section data-role="achievementsSection" class="card" style="display:none">
+    <div class="ach-section-header">
+      <h3 class="ach-section-title">Achievements</h3>
+      <button class="ach-toggle-btn" data-role="achievementsToggle" aria-expanded="true" aria-controls="achievementsGrid">Hide</button>
     </div>
-    <div class="card">
-      <h3>Top Losers</h3>
-      <div data-role="topLosers" class="movers-list"></div>
-    </div>
+    <div data-role="achievementsGrid" class="ach-grid"></div>
   </section>
 
   <section class="two-col">
