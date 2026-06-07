@@ -143,11 +143,6 @@ function updateAll() {
   updateTopMovers();
   updateMilestones();
   updateGains();
-  updateAllocation();
-  updateCurrencyExposure();
-  if (typeof updateSectorAllocation === 'function') updateSectorAllocation();
-  if (typeof updateCorrelation === 'function') updateCorrelation();
-  updateConcentration();
   if (typeof updateRiskPage === 'function') updateRiskPage();
   updateAttribution();
   updatePositions();

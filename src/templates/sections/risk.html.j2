@@ -22,35 +22,16 @@
   </div>
 </section>
 
-<div class="metrics-toggle-wrap" data-role="riskGeoToggleWrap" style="display:none">
-  <button class="metrics-toggle" data-role="riskGeoToggle" aria-expanded="false" aria-controls="riskGeoPanel">
-    <span class="metrics-toggle-label" data-role="riskGeoToggleLabel">Show geographic exposure</span>
-    <svg class="metrics-toggle-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  </button>
-</div>
-<div class="overview-metrics-panel" data-role="riskGeoPanel">
-  <div class="overview-metrics-inner">
-    <div class="two-col" data-role="riskGeoRow" style="display:none">
-      <section class="card" data-role="geoSection">
-        <h2>Geographic Exposure</h2>
-        <div class="allocation-wrap">
-          <div class="allocation-chart-col">
-            <canvas data-role="geoChart"></canvas>
-          </div>
-          <div class="allocation-legend" data-role="geoLegend"></div>
-        </div>
-      </section>
-      <section class="card" data-role="geoTableSection">
-        <h2>Country Breakdown</h2>
-        <div class="table-scroll">
-          <table data-role="geoTable" class="data-table sortable"></table>
-        </div>
-      </section>
+<div class="two-col" data-role="riskChartsRow" style="display:none">
+  <section class="card" data-role="riskAllocationSection">
+    <h2>Portfolio Allocation</h2>
+    <div class="allocation-wrap">
+      <div class="allocation-chart-col">
+        <canvas data-role="riskAllocationChart"></canvas>
+      </div>
+      <div class="allocation-legend" data-role="riskAllocationLegend"></div>
     </div>
-  </div>
-</div>
-
-<div class="two-col" data-role="riskSectorRow" style="display:none">
+  </section>
   <section class="card" data-role="riskSectorSection">
     <h2>Sector Concentration</h2>
     <div class="allocation-wrap">
@@ -60,6 +41,18 @@
       <div class="allocation-legend" data-role="riskSectorLegend"></div>
     </div>
   </section>
+</div>
+
+<div class="two-col" data-role="riskBreakdownRow" style="display:none">
+  <section class="card" data-role="riskCurrencySection">
+    <h2>Currency Exposure</h2>
+    <div class="allocation-wrap">
+      <div class="allocation-chart-col">
+        <canvas data-role="riskCurrencyChart"></canvas>
+      </div>
+      <div class="allocation-legend" data-role="riskCurrencyLegend"></div>
+    </div>
+  </section>
   <section class="card" data-role="riskIndustrySection">
     <h2>Industry Breakdown</h2>
     <div class="table-scroll">
@@ -67,6 +60,29 @@
     </div>
   </section>
 </div>
+
+<div class="two-col" data-role="riskGeoRow" style="display:none">
+  <section class="card" data-role="geoSection">
+    <h2>Geographic Exposure</h2>
+    <div class="allocation-wrap">
+      <div class="allocation-chart-col">
+        <canvas data-role="geoChart"></canvas>
+      </div>
+      <div class="allocation-legend" data-role="geoLegend"></div>
+    </div>
+  </section>
+  <section class="card" data-role="geoTableSection">
+    <h2>Country Breakdown</h2>
+    <div class="table-scroll">
+      <table data-role="geoTable" class="data-table sortable"></table>
+    </div>
+  </section>
+</div>
+
+<section class="card" data-role="riskDiversificationSection" style="display:none">
+  <h2>Diversification</h2>
+  <div data-role="riskDiversificationCards" class="card-grid"></div>
+</section>
 
 <section class="card" data-role="riskCorrelationSection" style="display:none">
   <h2>Correlation Heatmap</h2>

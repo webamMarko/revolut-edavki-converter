@@ -1,8 +1,10 @@
 // --- Risk page rendering ---
 let _geoChart = null;
 let _riskSectorChart = null;
+let _riskAllocationChart = null;
+let _riskCurrencyChart = null;
 
-const _GEO_COLORS = [
+const _RISK_COLORS = [
   '#6366f1','#34d399','#f59e0b','#f87171','#a78bfa',
   '#38bdf8','#fb923c','#4ade80','#e879f9','#fbbf24',
   '#22d3ee','#c084fc','#f472b6','#2dd4bf','#818cf8',
@@ -23,12 +25,14 @@ function _initRiskToggle(btnRole, labelRole, panelRole, showText, hideText) {
 
 function updateRiskPage() {
   updateRiskWarnings();
-  updateRiskMetrics();
-  updateGeoAllocation();
+  updateRiskConcentrationMetrics();
+  updateRiskAllocation();
   updateRiskSector();
+  updateRiskCurrency();
+  updateGeoAllocation();
+  updateRiskDiversification();
   updateRiskCorrelation();
   _initRiskToggle('riskMetricsToggle', 'riskMetricsToggleLabel', 'riskMetricsPanel', 'Show more metrics', 'Hide extra metrics');
-  _initRiskToggle('riskGeoToggle', 'riskGeoToggleLabel', 'riskGeoPanel', 'Show geographic exposure', 'Hide geographic exposure');
 }
 
 function updateRiskWarnings() {
@@ -52,7 +56,7 @@ function updateRiskWarnings() {
   ).join('');
 }
 
-function updateRiskMetrics() {
+function updateRiskConcentrationMetrics() {
   const section = scopedFind(null, 'riskMetricsSection');
   const cr = D.concentration_risk;
   if (!cr || !cr.metrics || !cr.metrics.total_positions) {
@@ -84,26 +88,134 @@ function updateRiskMetrics() {
   ]);
 }
 
+function updateRiskAllocation() {
+  const positions = getActivePositions();
+  const row = scopedFind(null, 'riskChartsRow');
+  const section = scopedFind(null, 'riskAllocationSection');
+  if (positions.length === 0) { section.style.display = 'none'; return; }
+  section.style.display = '';
+  row.style.display = '';
+
+  const sorted = [...positions].sort((a, b) => b.market_value_eur - a.market_value_eur);
+  const totalMV = sorted.reduce((s, p) => s + p.market_value_eur, 0) || 1;
+  const items = [];
+  let otherVal = 0;
+  for (const p of sorted) {
+    const pct = p.market_value_eur / totalMV * 100;
+    if (pct >= 2 || items.length < 10) {
+      items.push({ ticker: p.ticker, value: p.market_value_eur, pct });
+    } else {
+      otherVal += p.market_value_eur;
+    }
+  }
+  if (otherVal > 0) {
+    items.push({ ticker: 'Other', value: otherVal, pct: otherVal / totalMV * 100 });
+  }
+
+  if (_riskAllocationChart) { _riskAllocationChart.destroy(); _riskAllocationChart = null; }
+  const canvas = scopedFind(null, 'riskAllocationChart');
+  _riskAllocationChart = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: items.map(i => i.ticker),
+      datasets: [{
+        data: items.map(i => i.value),
+        backgroundColor: items.map((_, i) => _RISK_COLORS[i % _RISK_COLORS.length]),
+        borderWidth: 0,
+        hoverOffset: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      cutout: '55%',
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: c => c.label + ': ' + fmtEur(c.parsed) + ' (' + fmt(items[c.dataIndex].pct, 1) + '%)',
+          },
+        },
+      },
+    },
+  });
+
+  const legend = scopedFind(null, 'riskAllocationLegend');
+  legend.innerHTML = items.map((item, i) =>
+    `<div class="alloc-item">`
+    + `<span class="alloc-dot" style="background:${_RISK_COLORS[i % _RISK_COLORS.length]}"></span>`
+    + `<span>${item.ticker}</span>`
+    + `<span class="alloc-pct">${fmt(item.pct, 1)}%</span>`
+    + `</div>`
+  ).join('');
+}
+
+function updateRiskCurrency() {
+  const row = scopedFind(null, 'riskBreakdownRow');
+  const section = scopedFind(null, 'riskCurrencySection');
+  const data = D.currency_exposure;
+  if (!data || data.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+  row.style.display = '';
+
+  if (_riskCurrencyChart) { _riskCurrencyChart.destroy(); _riskCurrencyChart = null; }
+  const canvas = scopedFind(null, 'riskCurrencyChart');
+  _riskCurrencyChart = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: data.map(d => d.currency),
+      datasets: [{
+        data: data.map(d => d.value_eur),
+        backgroundColor: data.map((_, i) => _RISK_COLORS[i % _RISK_COLORS.length]),
+        borderWidth: 0,
+        hoverOffset: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      cutout: '55%',
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: c => c.label + ': ' + fmtEur(c.parsed) + ' (' + fmt(data[c.dataIndex].pct, 1) + '%)',
+          },
+        },
+      },
+    },
+  });
+
+  const legend = scopedFind(null, 'riskCurrencyLegend');
+  legend.innerHTML = data.map((d, i) =>
+    `<div class="alloc-item">`
+    + `<span class="alloc-dot" style="background:${_RISK_COLORS[i % _RISK_COLORS.length]}"></span>`
+    + `<span>${d.currency}</span>`
+    + `<span class="alloc-pct">${fmt(d.pct, 1)}%</span>`
+    + `</div>`
+  ).join('');
+}
+
 function updateGeoAllocation() {
   const row = scopedFind(null, 'riskGeoRow');
-  const toggleWrap = scopedFind(null, 'riskGeoToggleWrap');
   const ga = D.geographic_allocation;
   if (!ga || !ga.countries || ga.countries.length === 0) {
     row.style.display = 'none';
-    toggleWrap.style.display = 'none';
     return;
   }
 
   const countries = ga.countries.filter(c => c.pct > 0);
   if (countries.length === 0 || (countries.length === 1 && countries[0].name === 'Other')) {
     row.style.display = 'none';
-    toggleWrap.style.display = 'none';
     return;
   }
   row.style.display = '';
-  toggleWrap.style.display = '';
 
-  // Geo donut chart
   if (_geoChart) { _geoChart.destroy(); _geoChart = null; }
   const canvas = scopedFind(null, 'geoChart');
   _geoChart = new Chart(canvas.getContext('2d'), {
@@ -112,7 +224,7 @@ function updateGeoAllocation() {
       labels: countries.map(c => c.name),
       datasets: [{
         data: countries.map(c => c.value_eur),
-        backgroundColor: countries.map((_, i) => _GEO_COLORS[i % _GEO_COLORS.length]),
+        backgroundColor: countries.map((_, i) => _RISK_COLORS[i % _RISK_COLORS.length]),
         borderWidth: 0,
         hoverOffset: 6,
       }],
@@ -133,17 +245,15 @@ function updateGeoAllocation() {
     },
   });
 
-  // Legend
   const legend = scopedFind(null, 'geoLegend');
   legend.innerHTML = countries.map((c, i) =>
     `<div class="alloc-item">`
-    + `<span class="alloc-dot" style="background:${_GEO_COLORS[i % _GEO_COLORS.length]}"></span>`
+    + `<span class="alloc-dot" style="background:${_RISK_COLORS[i % _RISK_COLORS.length]}"></span>`
     + `<span>${c.name}</span>`
     + `<span class="alloc-pct">${fmt(c.pct, 1)}%</span>`
     + `</div>`
   ).join('');
 
-  // Country table
   const table = scopedFind(null, 'geoTable');
   table.innerHTML = '<thead><tr><th>Country</th><th>Value</th><th>Weight</th></tr></thead><tbody>'
     + countries.map(c =>
@@ -154,21 +264,22 @@ function updateGeoAllocation() {
 }
 
 function updateRiskSector() {
-  const row = scopedFind(null, 'riskSectorRow');
+  const row = scopedFind(null, 'riskChartsRow');
+  const section = scopedFind(null, 'riskSectorSection');
   const sa = D.sector_allocation;
   if (!sa || !sa.sectors || sa.sectors.length === 0) {
-    row.style.display = 'none';
+    section.style.display = 'none';
     return;
   }
 
   const sectors = sa.sectors.filter(s => s.pct > 0);
   if (sectors.length === 0 || (sectors.length === 1 && sectors[0].name === 'Other')) {
-    row.style.display = 'none';
+    section.style.display = 'none';
     return;
   }
+  section.style.display = '';
   row.style.display = '';
 
-  // Sector donut chart (for risk page)
   if (_riskSectorChart) { _riskSectorChart.destroy(); _riskSectorChart = null; }
   const canvas = scopedFind(null, 'riskSectorChart');
   _riskSectorChart = new Chart(canvas.getContext('2d'), {
@@ -177,7 +288,7 @@ function updateRiskSector() {
       labels: sectors.map(s => s.name),
       datasets: [{
         data: sectors.map(s => s.value_eur),
-        backgroundColor: sectors.map((_, i) => _GEO_COLORS[i % _GEO_COLORS.length]),
+        backgroundColor: sectors.map((_, i) => _RISK_COLORS[i % _RISK_COLORS.length]),
         borderWidth: 0,
         hoverOffset: 6,
       }],
@@ -198,11 +309,10 @@ function updateRiskSector() {
     },
   });
 
-  // Legend
   const legend = scopedFind(null, 'riskSectorLegend');
   legend.innerHTML = sectors.map((s, i) =>
     `<div class="alloc-item">`
-    + `<span class="alloc-dot" style="background:${_GEO_COLORS[i % _GEO_COLORS.length]}"></span>`
+    + `<span class="alloc-dot" style="background:${_RISK_COLORS[i % _RISK_COLORS.length]}"></span>`
     + `<span>${s.name}</span>`
     + `<span class="alloc-pct">${fmt(s.pct, 1)}%</span>`
     + `</div>`
@@ -210,13 +320,56 @@ function updateRiskSector() {
 
   // Industry table
   const industries = (sa.industries || []).filter(i => i.pct > 0);
+  const breakdownRow = scopedFind(null, 'riskBreakdownRow');
+  const industrySec = scopedFind(null, 'riskIndustrySection');
   const table = scopedFind(null, 'riskIndustryTable');
-  table.innerHTML = '<thead><tr><th>Industry</th><th>Value</th><th>Weight</th></tr></thead><tbody>'
-    + industries.map(ind =>
-      `<tr><td>${ind.name}</td><td>${fmtCcy(ind.value_eur)}</td><td>${fmt(ind.pct, 1)}%</td></tr>`
-    ).join('')
-    + '</tbody>';
-  makeSortable(table);
+  if (industries.length > 0) {
+    industrySec.style.display = '';
+    breakdownRow.style.display = '';
+    table.innerHTML = '<thead><tr><th>Industry</th><th>Value</th><th>Weight</th></tr></thead><tbody>'
+      + industries.map(ind =>
+        `<tr><td>${ind.name}</td><td>${fmtCcy(ind.value_eur)}</td><td>${fmt(ind.pct, 1)}%</td></tr>`
+      ).join('')
+      + '</tbody>';
+    makeSortable(table);
+  } else {
+    industrySec.style.display = 'none';
+  }
+}
+
+function updateRiskDiversification() {
+  const positions = getActivePositions();
+  const section = scopedFind(null, 'riskDiversificationSection');
+  if (positions.length < 3) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  const totalMV = positions.reduce((s, p) => s + p.market_value_eur, 0) || 1;
+  const weights = positions.map(p => p.market_value_eur / totalMV);
+
+  const hhi = Math.round(weights.reduce((s, w) => s + w * w, 0) * 10000);
+  const hhiLabel = hhi < 1500 ? t('concentration.well_diversified') : hhi < 2500 ? t('concentration.moderate') : t('concentration.concentrated');
+
+  const sorted = [...weights].sort((a, b) => b - a);
+  const top5Pct = sorted.slice(0, 5).reduce((s, w) => s + w, 0) * 100;
+  const top10Pct = sorted.slice(0, 10).reduce((s, w) => s + w, 0) * 100;
+
+  const effective = weights.reduce((s, w) => s + w * w, 0);
+  const effectiveN = effective > 0 ? Math.round(1 / effective) : positions.length;
+
+  const largest = positions.reduce((a, b) => a.market_value_eur > b.market_value_eur ? a : b);
+  const largestPct = largest.market_value_eur / totalMV * 100;
+
+  const el = scopedFind(null, 'riskDiversificationCards');
+  el.innerHTML = [
+    [t('concentration.positions'), positions.length, ''],
+    [t('concentration.effective'), effectiveN, '', t('concentration.effective_sub')],
+    [t('concentration.hhi'), hhi.toLocaleString(_locale), '', hhiLabel],
+    [t('concentration.top5'), fmt(top5Pct, 1) + '%', ''],
+    [t('concentration.top10'), fmt(top10Pct, 1) + '%', ''],
+    [t('concentration.largest'), largest.ticker, '', fmt(largestPct, 1) + '% ' + t('alloc.of_portfolio')],
+  ].map(([l, v, c, sub]) =>
+    `<div class="metric-card"><div class="label">${l}</div><div class="value ${c || ''}">${v}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`
+  ).join('');
 }
 
 function updateRiskCorrelation() {
