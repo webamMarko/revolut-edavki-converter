@@ -171,8 +171,8 @@
     return '<div class="shortcut-key"><kbd>' + key + '</kbd></div><div class="shortcut-desc">' + desc + '</div>';
   }
 
-  // Show real estate nav item only when data exists
-  if (D.real_estate && D.real_estate.properties && D.real_estate.properties.length > 0) {
+  // Show real estate nav item for premium/admin users regardless of property count
+  if (D.user && D.user.role && ['premium', 'admin', 'cofounder'].includes(D.user.role)) {
     var navRE = document.getElementById('navRealestate');
     if (navRE) navRE.style.display = '';
   }
