@@ -1661,11 +1661,11 @@ body {
 .perf-detail-toggle-icon { transition: transform 0.2s; flex-shrink: 0; }
 .perf-detail-panel { }
 
-/* ---- Tax Sub-tabs ---- */
-.tax-subtabs { display: flex; gap: 0; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); }
-.tax-subtab { padding: 0.6rem 1.25rem; border: none; background: none; color: var(--muted); font-size: 0.85rem; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
-.tax-subtab:hover { color: var(--text); }
-.tax-subtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+/* ---- Sub-tabs (shared) ---- */
+.tax-subtabs, .proj-subtabs { display: flex; gap: 0; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); }
+.tax-subtab, .proj-subtab { padding: 0.6rem 1.25rem; border: none; background: none; color: var(--muted); font-size: 0.85rem; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+.tax-subtab:hover, .proj-subtab:hover { color: var(--text); }
+.tax-subtab.active, .proj-subtab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
 /* ---- Tax Summary Metrics ---- */
 .tax-summary-metrics .card-grid { margin-bottom: 1rem; }
@@ -2484,7 +2484,7 @@ body {
   }
 
   /* AC11: Sub-tab selector fixed at bottom of screen */
-  .tax-subtabs {
+  .tax-subtabs, .proj-subtabs {
     position: fixed;
     bottom: 0;
     left: 0;
@@ -2498,7 +2498,7 @@ body {
   }
 
   /* Prevent content from being hidden under the fixed sub-tab bar */
-  #page-tax {
+  #page-tax, #page-projections {
     padding-bottom: 3rem;
   }
 }

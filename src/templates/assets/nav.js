@@ -177,8 +177,8 @@
     if (navRE) navRE.style.display = '';
   }
 
-  // Show projections nav item when Monte Carlo or FIRE data exists
-  if ((D.summary && D.summary.cagr_pct != null) || D.fire != null) {
+  // Show projections nav item when Monte Carlo, FIRE, or dividend data exists
+  if ((D.summary && D.summary.cagr_pct != null) || D.fire != null || (D.dividends && D.dividends.by_month && D.dividends.by_month.length > 0)) {
     var navProj = document.getElementById('navProjections');
     if (navProj) navProj.style.display = '';
   }

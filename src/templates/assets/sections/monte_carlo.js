@@ -358,3 +358,241 @@ function updateFire() {
 
   updateFire();
 })();
+
+// --- Projection sub-tab switching ---
+(function() {
+  var tabBar = scopedFind(null, 'projSubtabs');
+  if (!tabBar) return;
+
+  var tabs = tabBar.querySelectorAll('[data-proj-tab]');
+  var panels = document.querySelectorAll('[data-proj-panel]');
+
+  function switchTab(tabId) {
+    tabs.forEach(function(t) {
+      t.classList.toggle('active', t.getAttribute('data-proj-tab') === tabId);
+    });
+    panels.forEach(function(p) {
+      var match = p.getAttribute('data-proj-panel') === tabId;
+      var hasData = p.getAttribute('data-has-data') !== 'false';
+      p.style.display = match && hasData ? '' : 'none';
+    });
+  }
+
+  tabs.forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      switchTab(this.getAttribute('data-proj-tab'));
+    });
+  });
+
+  // Mark panels that have data; hide tabs with no data
+  setTimeout(function() {
+    panels.forEach(function(p) {
+      if (p.style.display === 'none' && !p.getAttribute('data-has-data')) {
+        p.setAttribute('data-has-data', 'false');
+      }
+    });
+    tabs.forEach(function(tab) {
+      var tabId = tab.getAttribute('data-proj-tab');
+      var panel = document.querySelector('[data-proj-panel="' + tabId + '"]');
+      if (panel && panel.getAttribute('data-has-data') === 'false') {
+        tab.style.opacity = '0.4';
+      }
+    });
+    // Show the first tab that has data
+    var activeTab = tabBar.querySelector('.proj-subtab.active');
+    var activePanel = activeTab ? document.querySelector('[data-proj-panel="' + activeTab.getAttribute('data-proj-tab') + '"]') : null;
+    if (activePanel && activePanel.getAttribute('data-has-data') === 'false') {
+      var firstAvailable = null;
+      tabs.forEach(function(t) {
+        if (!firstAvailable) {
+          var p = document.querySelector('[data-proj-panel="' + t.getAttribute('data-proj-tab') + '"]');
+          if (p && p.getAttribute('data-has-data') !== 'false') firstAvailable = t.getAttribute('data-proj-tab');
+        }
+      });
+      if (firstAvailable) switchTab(firstAvailable);
+    } else if (activeTab) {
+      switchTab(activeTab.getAttribute('data-proj-tab'));
+    }
+  }, 100);
+})();
+
+// --- Dividend Projection on Projections page ---
+(function() {
+  var section = scopedFind(null, 'projDividendSection');
+  if (!section) return;
+
+  var div = D.dividends;
+  if (!div || !div.by_month || div.by_month.length === 0) {
+    section.setAttribute('data-has-data', 'false');
+    return;
+  }
+
+  var monthly = div.by_month;
+  var yearTotals = {};
+  monthly.forEach(function(m) {
+    var y = m.month.slice(0, 4);
+    yearTotals[y] = (yearTotals[y] || 0) + m.total_eur;
+  });
+  var years = Object.keys(yearTotals).sort();
+  var currentYear = new Date().getFullYear().toString();
+  var completeYears = years.filter(function(y) { return y < currentYear; });
+  if (completeYears.length < 2) {
+    section.setAttribute('data-has-data', 'false');
+    return;
+  }
+
+  section.style.display = '';
+  section.setAttribute('data-has-data', 'true');
+
+  var firstYear = completeYears[0];
+  var lastYear = completeYears[completeYears.length - 1];
+  var firstVal = yearTotals[firstYear];
+  var lastVal = yearTotals[lastYear];
+  var numYears = parseInt(lastYear) - parseInt(firstYear);
+  var cagr = numYears > 0 && firstVal > 0 ? Math.pow(lastVal / firstVal, 1 / numYears) - 1 : 0;
+
+  var last12 = monthly.slice(-12);
+  var ttmIncome = last12.reduce(function(s, m) { return s + m.total_eur; }, 0);
+
+  var projectionYears = 5;
+  var startYear = parseInt(currentYear);
+  var projectedYears = [], projectedValues = [], projectedLow = [], projectedHigh = [];
+
+  for (var i = 0; i <= projectionYears; i++) {
+    projectedYears.push((startYear + i).toString());
+    projectedValues.push(Math.round(ttmIncome * Math.pow(1 + cagr, i)));
+    projectedLow.push(Math.round(ttmIncome * Math.pow(1 + cagr * 0.5, i)));
+    projectedHigh.push(Math.round(ttmIncome * Math.pow(1 + Math.min(cagr * 1.5, 0.25), i)));
+  }
+
+  var titleEl = scopedFind(null, 'projDivTitle');
+  if (titleEl) titleEl.textContent = t('div.projection.title') || 'Dividend Income Projection';
+  var descEl = scopedFind(null, 'projDivDesc');
+  if (descEl) descEl.textContent = (t('div.projection.desc', {years: numYears, cagr: fmt(cagr * 100, 1)}) || 'Based on ' + numYears + ' years of data, ' + fmt(cagr * 100, 1) + '% CAGR');
+
+  var year5 = projectedValues[projectionYears];
+  var cardsEl = scopedFind(null, 'projDivCards');
+  if (cardsEl) {
+    cardsEl.innerHTML = [
+      [t('div.projection.ttm') || 'TTM Income', fmtCcy(ttmIncome), ''],
+      [t('div.projection.growth_rate') || 'Growth Rate', (cagr >= 0 ? '+' : '') + fmt(cagr * 100, 1) + '% CAGR', cagr >= 0 ? 'pos' : 'neg'],
+      [t('div.projection.year5') || '5-Year Est.', fmtCcy(year5), ''],
+    ].map(function(row) {
+      return '<div class="metric-card"><div class="label">' + row[0] + '</div><div class="value ' + row[2] + '">' + row[1] + '</div></div>';
+    }).join('');
+  }
+
+  var noteEl = scopedFind(null, 'projDivBandNote');
+  if (noteEl) noteEl.textContent = (t('div.projection.band_note', {years: numYears, cagr: fmt(cagr * 100, 1)}) || 'Shaded band shows conservative (0.5x) to optimistic (1.5x) growth scenarios.');
+
+  // Chart
+  var historicalYears = completeYears.slice();
+  if (years.indexOf(currentYear) >= 0) historicalYears.push(currentYear);
+  var allLabels = historicalYears.slice();
+  for (i = 1; i <= projectionYears; i++) {
+    var fy = (startYear + i).toString();
+    if (allLabels.indexOf(fy) < 0) allLabels.push(fy);
+  }
+  allLabels.sort();
+
+  var histData = allLabels.map(function(y) { return yearTotals[y] != null ? yearTotals[y] : null; });
+  var projLine = allLabels.map(function(y) { var idx = projectedYears.indexOf(y); return idx >= 0 ? projectedValues[idx] : null; });
+  var bandLow = allLabels.map(function(y) { var idx = projectedYears.indexOf(y); return idx >= 0 ? projectedLow[idx] : null; });
+  var bandHigh = allLabels.map(function(y) { var idx = projectedYears.indexOf(y); return idx >= 0 ? projectedHigh[idx] : null; });
+
+  var canvas = scopedFind(null, 'projDividendChart');
+  if (!canvas) return;
+  new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: allLabels,
+      datasets: [
+        { label: t('div.projection.historical') || 'Historical', data: histData, backgroundColor: 'rgba(52,211,153,0.5)', borderColor: '#34d399', borderWidth: 1, borderRadius: 4, order: 2 },
+        { label: t('div.projection.projected') || 'Projected', data: projLine, type: 'line', borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', borderWidth: 2, pointRadius: 3, fill: false, tension: 0.3, order: 1 },
+        { label: 'Optimistic', data: bandHigh, type: 'line', borderColor: 'transparent', backgroundColor: 'rgba(99,102,241,0.06)', fill: '+1', pointRadius: 0, tension: 0.3, order: 0 },
+        { label: 'Conservative', data: bandLow, type: 'line', borderColor: 'transparent', backgroundColor: 'transparent', fill: false, pointRadius: 0, tension: 0.3, order: 0 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#556075', font: { size: 10 } } },
+        y: { ticks: { color: '#556075', callback: function(v) { return fmtCcy(v); } }, grid: { color: 'rgba(30,42,58,0.5)' } },
+      },
+      plugins: {
+        legend: { display: true, labels: { filter: function(item) { return item.text !== 'Optimistic' && item.text !== 'Conservative'; }, font: { size: 10 } } },
+        tooltip: { callbacks: { label: function(c) { if (c.dataset.label === 'Optimistic' || c.dataset.label === 'Conservative') return ''; return c.dataset.label + ': ' + fmtCcy(c.parsed.y); } } },
+      },
+    },
+  });
+})();
+
+// --- Goal Projections on Projections page ---
+(function() {
+  var section = scopedFind(null, 'projGoalsSection');
+  if (!section) return;
+
+  var listEl = scopedFind(null, 'projGoalsList');
+  var emptyEl = scopedFind(null, 'projGoalsEmpty');
+  if (!listEl) return;
+
+  fetch('/api/goals', { credentials: 'same-origin' })
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(); })
+    .then(function(goals) {
+      if (!goals || goals.length === 0) {
+        section.setAttribute('data-has-data', 'false');
+        if (emptyEl) emptyEl.style.display = '';
+        return;
+      }
+
+      section.style.display = '';
+      section.setAttribute('data-has-data', 'true');
+
+      var fetches = goals.map(function(g) {
+        return fetch('/api/goals/' + g.id + '/projection', { credentials: 'same-origin' })
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .catch(function() { return null; });
+      });
+
+      Promise.all(fetches).then(function(projections) {
+        var html = '';
+        goals.forEach(function(goal, idx) {
+          var proj = projections[idx];
+          if (!proj || proj.error) return;
+
+          var progressPct = Math.min(proj.progress_pct || 0, 100);
+          var progressColor = progressPct >= 75 ? '#34d399' : progressPct >= 50 ? '#f59e0b' : '#6366f1';
+
+          html += '<div class="card" style="margin-bottom:0.75rem;padding:1rem">'
+            + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">'
+            + '<strong>' + (goal.name || 'Goal') + '</strong>'
+            + '<span style="font-size:0.8rem;color:var(--muted)">' + fmt(progressPct, 1) + '% complete</span>'
+            + '</div>'
+            + '<div style="background:var(--border);border-radius:4px;height:8px;overflow:hidden;margin-bottom:0.75rem">'
+            + '<div style="width:' + progressPct + '%;height:100%;background:' + progressColor + ';border-radius:4px;transition:width 0.3s"></div>'
+            + '</div>'
+            + '<div class="card-grid small">'
+            + '<div class="metric-card"><div class="label">Current</div><div class="value">' + fmtCcy(proj.current_value_eur) + '</div></div>'
+            + '<div class="metric-card"><div class="label">Target</div><div class="value">' + fmtCcy(proj.target_amount_eur) + '</div></div>'
+            + (proj.months_remaining != null ? '<div class="metric-card"><div class="label">Est. Months</div><div class="value">' + Math.round(proj.months_remaining) + '</div></div>' : '')
+            + (proj.required_monthly_eur != null ? '<div class="metric-card"><div class="label">Monthly Needed</div><div class="value">' + fmtCcy(proj.required_monthly_eur) + '</div></div>' : '')
+            + (proj.probability_of_success != null ? '<div class="metric-card"><div class="label">Success Prob.</div><div class="value">' + fmt(proj.probability_of_success, 0) + '%</div></div>' : '')
+            + '</div>'
+            + (proj.percentile_10 != null ? '<div style="font-size:0.75rem;color:var(--muted);margin-top:0.5rem">Range: ' + fmtCcy(proj.percentile_10) + ' (10th) — ' + fmtCcy(proj.percentile_50) + ' (50th) — ' + fmtCcy(proj.percentile_90) + ' (90th)</div>' : '')
+            + '</div>';
+        });
+
+        if (html) {
+          listEl.innerHTML = html;
+        } else {
+          section.setAttribute('data-has-data', 'false');
+          if (emptyEl) emptyEl.style.display = '';
+        }
+      });
+    })
+    .catch(function() {
+      section.setAttribute('data-has-data', 'false');
+      if (emptyEl) emptyEl.style.display = '';
+    });
+})();

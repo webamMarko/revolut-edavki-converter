@@ -1,5 +1,12 @@
+<div class="proj-subtabs" data-role="projSubtabs">
+  <button class="proj-subtab active" data-proj-tab="montecarlo">Monte Carlo</button>
+  <button class="proj-subtab" data-proj-tab="fire">FIRE</button>
+  <button class="proj-subtab" data-proj-tab="dividend">Dividend</button>
+  <button class="proj-subtab" data-proj-tab="goals">Goals</button>
+</div>
+
 <div class="page-stack">
-  <section class="card" data-role="monteCarloSection" style="display:none">
+  <section class="card proj-tab-content" data-proj-panel="montecarlo" data-role="monteCarloSection" style="display:none">
     <div class="chart-header">
       <h2 data-role="mcTitle">Monte Carlo Projection</h2>
       <div class="range-bar" data-role="mcHorizonBar"></div>
@@ -9,7 +16,7 @@
     <div class="chart-wrap" style="height:300px"><canvas data-role="mcChart"></canvas></div>
   </section>
 
-  <section class="card" data-role="fireSection" style="display:none">
+  <section class="card proj-tab-content" data-proj-panel="fire" data-role="fireSection" style="display:none">
     <h2>FIRE Projection</h2>
     <div class="fire-config" style="display:flex;gap:0.75rem 1.25rem;flex-wrap:wrap;align-items:center;font-size:0.82rem;color:var(--muted);margin-bottom:1rem">
       <label style="display:flex;align-items:center;gap:0.35rem">Annual expenses
@@ -36,6 +43,25 @@
     </button>
     <div class="coll-panel-body" id="fire-additional-metrics">
       <div data-role="fireSecondaryCards" class="card-grid small" style="padding:0.75rem 0"></div>
+    </div>
+  </section>
+
+  <section class="card proj-tab-content" data-proj-panel="dividend" data-role="projDividendSection" style="display:none">
+    <h3 data-role="projDivTitle">Dividend Income Projection</h3>
+    <p data-role="projDivDesc" style="color:var(--muted);font-size:0.8rem;margin:-0.25rem 0 0.75rem"></p>
+    <div data-role="projDivCards" class="card-grid small"></div>
+    <p data-role="projDivBandNote" style="color:var(--muted);font-size:0.75rem;margin:0.5rem 0 0.75rem"></p>
+    <div class="chart-wrap" style="height:280px">
+      <canvas data-role="projDividendChart"></canvas>
+    </div>
+  </section>
+
+  <section class="card proj-tab-content" data-proj-panel="goals" data-role="projGoalsSection" style="display:none">
+    <h3>Goal Projections</h3>
+    <p style="color:var(--muted);font-size:0.8rem;margin:-0.25rem 0 0.75rem">Monte Carlo simulations for each investment goal.</p>
+    <div data-role="projGoalsList"></div>
+    <div data-role="projGoalsEmpty" class="empty-state-box" style="display:none">
+      <p style="color:var(--muted);font-size:0.85rem">No investment goals set. Create goals from the sidebar to see projections here.</p>
     </div>
   </section>
 </div>
