@@ -19,7 +19,7 @@ from .auth import get_session
 from .templates import page_env, FOUC_SCRIPT, COMMON_JS, html_response, json_response, redirect
 
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
-APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8080")
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8081")
 
 if STRIPE_API_KEY:
     stripe.api_key = STRIPE_API_KEY

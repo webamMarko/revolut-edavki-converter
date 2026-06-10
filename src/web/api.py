@@ -8,7 +8,7 @@ from .auth import get_session, get_session_token
 from .portfolio import portfolio_conn, _DEMO_VIEW
 from .templates import page_env, FOUC_SCRIPT, COMMON_JS, html_response, json_response
 
-APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8080")
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8081")
 
 
 def _get_portfolio_id(session):

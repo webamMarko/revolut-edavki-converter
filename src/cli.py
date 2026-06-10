@@ -886,7 +886,7 @@ Examples:
     # --- web ---
     p_web = subparsers.add_parser("web", help="Start web UI for CSV upload and import")
     p_web.add_argument("--host", default="127.0.0.1", help="Bind address (default: 127.0.0.1)")
-    p_web.add_argument("--port", type=int, default=8080, help="Port (default: 8080)")
+    p_web.add_argument("--port", type=int, default=8081, help="Port (default: 8081)")
     p_web.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     p_web.add_argument("--reload", "-r", action="store_true",
                        help="Auto-reload on file changes (development mode)")

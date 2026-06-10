@@ -102,7 +102,7 @@ $SSH "${REMOTE_USER}@${REMOTE_HOST}" "
   ${SUDO} docker run -d \
     --name ${CONTAINER_NAME} \
     --restart unless-stopped \
-    -p 8081:8080 \
+    -p 8081:8081 \
     -v ${REMOTE_DIR}/data:/data \
     --env-file ${REMOTE_DIR}/.env \
     ${IMAGE_NAME}

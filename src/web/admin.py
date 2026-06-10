@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, urlparse
 from .auth import get_session, get_client_ip
 from .templates import page_env, FOUC_SCRIPT, COMMON_JS, html_response, json_response, redirect
 
-APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8080")
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8081")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
 

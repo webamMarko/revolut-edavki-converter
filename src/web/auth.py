@@ -14,7 +14,7 @@ RATE_LIMIT_WINDOW_SECONDS = 900  # 15 minutes
 _login_attempts: dict[str, list[float]] = {}  # ip -> [timestamps]
 
 SESSION_TTL = 86400 * 7  # 7 days
-APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8080")
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8081")
 
 
 def get_client_ip(handler) -> str:

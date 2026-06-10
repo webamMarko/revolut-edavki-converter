@@ -42,7 +42,7 @@ def cmd_invite(args):
         print("Usage: hash_password.py invite <email>", file=sys.stderr)
         sys.exit(1)
     email = args[0]
-    base_url = os.environ.get("APP_BASE_URL", "http://localhost:8080")
+    base_url = os.environ.get("APP_BASE_URL", "http://localhost:8081")
     user, raw_token = u.create_user(email, role="premium")
     invite_url = f"{base_url}/invite/{raw_token}"
     print(f"Created user: {user.username} <{user.email}>")

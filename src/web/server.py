@@ -14,7 +14,7 @@ from .templates import TEMPLATES_DIR
 from . import auth, admin, portfolio, api, exports, import_wizard, tickets, ibkr
 
 FORCE_HTTPS = os.environ.get("FORCE_HTTPS", "").lower() in ("true", "1", "yes")
-APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8080")
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8081")
 
 
 class UploadHandler(BaseHTTPRequestHandler):
@@ -490,7 +490,7 @@ class UploadHandler(BaseHTTPRequestHandler):
 # Server entry point
 # ---------------------------------------------------------------------------
 
-def start_server(host="0.0.0.0", port=8080, verbose=False, reload=False):
+def start_server(host="0.0.0.0", port=8081, verbose=False, reload=False):
     """Start the web server, optionally with file-watching auto-reload."""
     if reload:
         _run_with_reloader(host, port, verbose)

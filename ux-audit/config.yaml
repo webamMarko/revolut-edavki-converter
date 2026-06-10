@@ -1,7 +1,7 @@
 # UX Audit Configuration
 # Defines pages to audit, user flows, viewports, and CI thresholds.
 
-base_url: "http://127.0.0.1:8080"
+base_url: "http://127.0.0.1:8081"
 
 viewports:
   desktop:

@@ -13,7 +13,7 @@ from .templates import page_env, FOUC_SCRIPT, COMMON_JS, html_response, json_res
 
 DATA_DIR = Path(os.environ.get("REVOLUT_DATA_DIR", Path(__file__).resolve().parent.parent.parent / "data"))
 DEMO_DB = DATA_DIR / "_demo" / "portfolio.db"
-APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8080")
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8081")
 STRIPE_BILLING_PORTAL_URL = os.environ.get("STRIPE_BILLING_PORTAL_URL", "")
 
 # Import wizard staging: token -> {path, dir, filename, expires}

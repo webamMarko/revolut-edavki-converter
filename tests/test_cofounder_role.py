@@ -440,7 +440,7 @@ class TestStripeCofounderPurchase:
 
         # Set STRIPE_API_KEY in environment and reload module
         os.environ["STRIPE_API_KEY"] = "sk_test_123"
-        os.environ["APP_BASE_URL"] = "http://localhost:8080"
+        os.environ["APP_BASE_URL"] = "http://localhost:8081"
 
         # Remove the module from sys.modules to force reimport
         if "src.web.tickets" in sys.modules:
