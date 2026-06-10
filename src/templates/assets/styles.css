@@ -693,6 +693,18 @@ body {
 .pos-chevron-open { transform: rotate(90deg); color: var(--accent); }
 .pos-chevron-placeholder { display: inline-block; width: 0.6rem; flex-shrink: 0; }
 
+.dt-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  font: inherit;
+}
+
 .pos-detail-row td { padding: 0 !important; border-bottom: 1px solid var(--border); }
 .pos-detail-row:hover { background: transparent !important; }
 
