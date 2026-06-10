@@ -161,8 +161,8 @@ try {
         }
       });
     })();
-  } else {
-    // RealEstateEmptyState — no properties yet
+  } else if (D.user && D.user.role && ['premium', 'admin', 'cofounder'].includes(D.user.role)) {
+    // RealEstateEmptyState — no properties yet (premium/admin/cofounder only)
     scopedFind(null, 'realEstateSection').style.display = '';
     var emptyEl = scopedFind(null, 'reEmptyState');
     if (emptyEl) {

@@ -506,6 +506,13 @@ body {
 .pagination button:not(:disabled):hover { background: var(--raised); border-color: var(--accent); color: var(--accent); }
 .pagination button.active { background: var(--accent); color: #fff; border-color: var(--accent); opacity: 1; font-weight: 600; }
 .pagination-ellipsis { padding: 0.3rem 0.2rem; color: var(--muted); font-size: 0.83rem; user-select: none; }
+.pagination-size { display: flex; align-items: center; gap: 0.35rem; margin-right: 0.25rem; color: var(--muted); }
+.pagination-size-select {
+  padding: 0.3rem 0.5rem; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--card-bg);
+  color: var(--text); cursor: pointer; font-size: 0.77rem; font-family: inherit;
+}
+.pagination-info { color: var(--muted); white-space: nowrap; margin-left: 0.25rem; }
 
 /* ---- Transaction empty state ---- */
 .tx-empty-state {
