@@ -377,21 +377,13 @@
 })();
 
 // --- Performance detail panel toggle ---
-(function() {
-  var btn = document.getElementById('perfDetailToggle');
-  var panel = document.getElementById('perfDetailPanel');
-  if (!btn || !panel) return;
-
-  function open() {
-    panel.style.display = '';
-    btn.setAttribute('aria-expanded', 'true');
-  }
-  function close() {
-    panel.style.display = 'none';
-    btn.setAttribute('aria-expanded', 'false');
-  }
-
-  btn.addEventListener('click', function() {
-    btn.getAttribute('aria-expanded') === 'true' ? close() : open();
-  });
-})();
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('#perfDetailToggle');
+  if (!btn) return;
+  var stack = btn.closest('.page-stack');
+  var panel = stack && stack.querySelector('#perfDetailPanel');
+  if (!panel) return;
+  var expanded = btn.getAttribute('aria-expanded') === 'true';
+  panel.style.display = expanded ? 'none' : '';
+  btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+});

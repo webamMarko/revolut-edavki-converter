@@ -392,6 +392,18 @@ body {
 .chart-section h2 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; }
 .chart-wrap { position: relative; height: 340px; }
 
+.skeleton-chart {
+  height: 300px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--surface) 25%, var(--raised) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+@keyframes skeletonPulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .chart-header { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.5rem; min-width: 0; }
 .chart-header h2 { margin-bottom: 0; }
 .chart-hint { font-size: 0.7rem; color: var(--muted); }

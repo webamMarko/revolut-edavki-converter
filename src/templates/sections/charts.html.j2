@@ -1,8 +1,9 @@
 <div class="page-stack">
-  <section class="card" data-role="yearlyTableSection">
-    <h2>Annual Summary</h2>
-    <div class="table-scroll">
-      <table data-role="yearlyTable" class="data-table sortable"></table>
+  <section class="chart-section" data-role="benchmarkSection">
+    <h2 data-role="benchmarkSectionTitle">Performance vs Benchmarks</h2>
+    <div class="chart-wrap">
+      <div data-role="benchmarkSkeleton" class="skeleton-chart"></div>
+      <canvas data-role="benchmarkChart" style="display:none"></canvas>
     </div>
   </section>
 
@@ -25,9 +26,11 @@
     </div>
   </div>
 
-  <section class="chart-section" data-role="benchmarkSection" style="display:none">
-    <h2 data-role="benchmarkSectionTitle">Performance vs Benchmarks</h2>
-    <div class="chart-wrap"><canvas data-role="benchmarkChart"></canvas></div>
+  <section class="card" data-role="yearlyTableSection">
+    <h2>Annual Summary</h2>
+    <div class="table-scroll">
+      <table data-role="yearlyTable" class="data-table sortable"></table>
+    </div>
   </section>
 
   {% include "sections/whatif.html.j2" %}

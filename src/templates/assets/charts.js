@@ -86,8 +86,11 @@ function _benchmarkDatasets() {
 }
 
 function buildBenchmarkChart() {
-  scopedFind(null, 'benchmarkSection').style.display = '';
-  if (bKeys.length > 0) {
+  scopedFind(null, 'benchmarkSkeleton').style.display = 'none';
+  scopedFind(null, 'benchmarkChart').style.display = '';
+  if (bKeys.length === 0) {
+    scopedFind(null, 'benchmarkSection').style.display = 'none';
+  } else {
     scopedFind(null, 'benchmarkTableCard').style.display = '';
     scopedFind(null, 'benchmarkSectionTitle').textContent = 'Performance vs Benchmarks';
   }
