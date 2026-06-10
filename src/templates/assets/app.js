@@ -1,11 +1,12 @@
 // --- Scoped element finder ---
 // Finds an element by its data-role attribute within an optional container scope.
-// Key behaviour: when container is null/undefined, skips elements inside #widgetTemplates
-// (the hidden GridStack template pool) to avoid binding charts/tables to invisible clones.
-// Final fallback: document.getElementById for global elements (header, nav) that use plain IDs.
+// When container is null, uses _widgetScope if set (dashboard widget init context),
+// otherwise skips elements inside #widgetTemplates.
+var _widgetScope = null;
 function scopedFind(container, role) {
-  if (container) {
-    var el = container.querySelector('[data-role="' + role + '"]');
+  var scope = container || _widgetScope;
+  if (scope) {
+    var el = scope.querySelector('[data-role="' + role + '"]');
     if (el) return el;
     return null;
   }

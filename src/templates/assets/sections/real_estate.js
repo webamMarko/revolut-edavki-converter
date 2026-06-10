@@ -1,4 +1,5 @@
 // --- Real Estate section ---
+function updateRealEstate() {
 try {
   const RE = D.real_estate;
   if (RE && RE.properties && RE.properties.length > 0) {
@@ -172,3 +173,5 @@ try {
     }
   }
 } catch(e) { console.error('Real estate section error:', e); }
+}
+updateRealEstate();

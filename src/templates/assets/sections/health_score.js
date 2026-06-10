@@ -1,4 +1,5 @@
 // --- Portfolio Health Score ---
+function initHealthScore() {
 (function() {
   var hs = D.health_score;
   var section = scopedFind(null, 'healthScoreSection');
@@ -80,3 +81,5 @@
     actionsSection.style.display = '';
   }
 })();
+}
+initHealthScore();

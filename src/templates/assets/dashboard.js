@@ -12,22 +12,22 @@
  * populated lazily on first access via getWidgetInitFn().
  */
 const WIDGET_INIT_MAP = {
-  'quick-glance':  function(c) { if (typeof renderQuickGlanceWidget === 'function') renderQuickGlanceWidget(c); },
-  'health-score':  function(c) { if (typeof initHealthScore === 'function') initHealthScore(c); },
-  'summary':       function(c) { if (typeof updateSummary === 'function') updateSummary(c); if (typeof updateMilestones === 'function') updateMilestones(c); },
-  'charts':        function(c) { if (typeof buildPortfolioChartIn === 'function') buildPortfolioChartIn(c); },
-  'positions':     function(c) { if (typeof updatePositions === 'function') updatePositions(c); if (typeof updateTopMovers === 'function') updateTopMovers(c); },
-  'dividends':     function(c) { if (typeof updateDividends === 'function') updateDividends(c); },
-  'projections':   function(c) { if (typeof updateFire === 'function') updateFire(c); },
-  'notes':         function(c) { if (typeof initNotesWidget === 'function') initNotesWidget(c); },
-  'real-estate':   function(c) { if (typeof updateRealEstate === 'function') updateRealEstate(c); },
-  'risk':          function(c) { if (typeof updateRiskPage === 'function') updateRiskPage(c); },
-  'dca-strategy':  function(c) { if (typeof updateDCAStrategy === 'function') updateDCAStrategy(c); },
-  'tax-summary':   function(c) { if (typeof updateTaxTable === 'function') updateTaxTable(c); },
-  'tax-calendar':  function(c) { if (typeof updateYearEndCalendar === 'function') updateYearEndCalendar(c); },
-  'smart-sell':    function(c) { if (typeof updateSmartSell === 'function') updateSmartSell(c); },
-  'tax-wizard':    function(c) { if (typeof initTaxWizardWidget === 'function') initTaxWizardWidget(c); },
-  'transactions':  function(c) { if (typeof updateTransactions === 'function') updateTransactions(c); },
+  'quick-glance':  function() { if (window._quickGlanceRefresh) window._quickGlanceRefresh(); },
+  'health-score':  function() { if (typeof initHealthScore === 'function') initHealthScore(); },
+  'summary':       function() { if (typeof updateSummary === 'function') updateSummary(); if (typeof updateMilestones === 'function') updateMilestones(); },
+  'charts':        function() { if (typeof buildPortfolioChart === 'function') buildPortfolioChart(); },
+  'positions':     function() { if (typeof updatePositions === 'function') updatePositions(); if (typeof updateTopMovers === 'function') updateTopMovers(); },
+  'dividends':     function() { if (typeof updateDividends === 'function') updateDividends(); },
+  'projections':   function() { if (typeof updateFire === 'function') updateFire(); },
+  'notes':         function() { if (typeof initNotesWidget === 'function') initNotesWidget(); },
+  'real-estate':   function() { if (typeof updateRealEstate === 'function') updateRealEstate(); },
+  'risk':          function() { if (typeof updateRiskPage === 'function') updateRiskPage(); },
+  'dca-strategy':  function() { if (typeof updateDCAStrategy === 'function') updateDCAStrategy(); },
+  'tax-summary':   function() { if (typeof updateTaxTable === 'function') updateTaxTable(); },
+  'tax-calendar':  function() { if (typeof updateYearEndCalendar === 'function') updateYearEndCalendar(); },
+  'smart-sell':    function() { if (typeof updateSmartSell === 'function') updateSmartSell(); },
+  'tax-wizard':    function() { if (typeof initTaxWizard === 'function') initTaxWizard(); },
+  'transactions':  function() { if (typeof updateTransactions === 'function') updateTransactions(); },
 };
 
 /**
@@ -129,13 +129,17 @@ function initGridstack() {
   const container = document.getElementById('dashboardGrid');
   if (!container) return;
 
-  // Create grid with 12 columns, auto-height, and mobile responsive
   if (typeof GridStack === 'undefined') return;
+  var isMobile = window.innerWidth <= 768;
   gridstack = GridStack.init({
-    column: 12,
+    column: isMobile ? 1 : 12,
     float: true,
     animate: false,
     disableOneColumnMode: false,
+    oneColumnSize: 768,
+    cellHeight: 80,
+    draggable: { handle: '.grid-stack-item-content' },
+    resizable: { handles: isMobile ? '' : 'se' },
   }, container);
 
   // Disable dragging/resizing initially
@@ -214,12 +218,12 @@ function renderWidgets(widgets) {
     // Add to grid
     gridstack.addWidget(item);
 
-    // Initialize section inside the widget clone so charts/tables bind
-    // to this specific container rather than the hidden #widgetTemplates pool.
     const initFn = WIDGET_INIT_MAP[id];
     if (initFn) {
-      // Use requestAnimationFrame so the widget is visible/sized before init
-      requestAnimationFrame(function() { initFn(innerDiv); });
+      requestAnimationFrame(function() {
+        _widgetScope = innerDiv;
+        try { initFn(innerDiv); } finally { _widgetScope = null; }
+      });
     }
   });
 }
@@ -238,21 +242,32 @@ function populateWidgetPicker(currentWidgets) {
     const isAdded = currentIds.includes(id);
 
     const item = document.createElement('div');
-    item.className = 'widget-picker-item';
-    item.innerHTML = `
-      <label>
-        <input type="checkbox" value="${id}" ${isAdded ? 'checked' : ''}>
-        <span>${meta.label}</span>
-      </label>
-    `;
+    item.className = 'widget-picker-item' + (isAdded ? ' added' : '');
 
-    if (!isAdded) {
-      const btn = document.createElement('button');
-      btn.className = 'btn btn-sm';
-      btn.textContent = 'Add';
-      btn.addEventListener('click', () => addWidget(id));
-      item.appendChild(btn);
-    }
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-sm' + (isAdded ? ' btn-danger' : '');
+    btn.textContent = isAdded ? 'Remove' : 'Add';
+
+    const label = document.createElement('div');
+    label.className = 'widget-picker-label';
+    label.textContent = meta.label;
+
+    item.appendChild(label);
+    item.appendChild(btn);
+
+    btn.addEventListener('click', () => {
+      if (isAdded) {
+        removeWidget(id);
+      } else {
+        addWidget(id);
+      }
+      const current = [];
+      gridstack.getGridItems().forEach(el => {
+        var wid = el.getAttribute('data-widget-id');
+        if (wid) current.push({ id: wid });
+      });
+      populateWidgetPicker(current);
+    });
 
     pickerList.appendChild(item);
   });
@@ -345,10 +360,12 @@ function addWidget(widgetId) {
   // Add to grid
   gridstack.addWidget(item);
 
-  // Initialize section content in this new widget clone
   const initFn = WIDGET_INIT_MAP[widgetId];
   if (initFn) {
-    requestAnimationFrame(function() { initFn(innerDiv); });
+    requestAnimationFrame(function() {
+      _widgetScope = innerDiv;
+      try { initFn(innerDiv); } finally { _widgetScope = null; }
+    });
   }
 }
 
@@ -372,19 +389,19 @@ function removeWidget(widgetId) {
 async function saveDashboardLayout() {
   if (!gridstack) return;
 
-  // Get current layout
   const widgets = [];
-  document.querySelectorAll('[data-widget-id]').forEach(el => {
-    const node = gridstack.getGridItems().find(item => item.gridstackNode === el._gridstackNode);
-    if (node) {
-      widgets.push({
-        id: el.getAttribute('data-widget-id'),
-        x: node.x || 0,
-        y: node.y || 0,
-        w: node.w || 4,
-        h: node.h || 2,
-      });
-    }
+  gridstack.getGridItems().forEach(el => {
+    var n = el.gridstackNode;
+    if (!n) return;
+    var wid = el.getAttribute('data-widget-id');
+    if (!wid) return;
+    widgets.push({
+      id: wid,
+      x: n.x || 0,
+      y: n.y || 0,
+      w: n.w || 4,
+      h: n.h || 2,
+    });
   });
 
   try {

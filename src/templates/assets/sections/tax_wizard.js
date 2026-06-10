@@ -1,4 +1,5 @@
 // --- Tax Wizard ---
+function initTaxWizard() {
 (function() {
   var wizard = scopedFind(null, 'wizardStepper');
   if (!wizard) return;
@@ -329,3 +330,6 @@
     else window.switchPage('tax');
   };
 })();
+
+}
+initTaxWizard();

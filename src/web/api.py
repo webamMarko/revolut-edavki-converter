@@ -878,9 +878,8 @@ WIDGET_REGISTRY = {
 # Default layout for first-time users
 DEFAULT_LAYOUT = {
     "widgets": [
-        {"id": "quick-glance", "x": 0, "y": 0, "w": 4, "h": 2},
-        {"id": "summary", "x": 4, "y": 0, "w": 4, "h": 4},
-        {"id": "charts", "x": 0, "y": 2, "w": 8, "h": 4},
+        {"id": "quick-glance", "x": 0, "y": 0, "w": 6, "h": 2},
+        {"id": "charts", "x": 0, "y": 2, "w": 12, "h": 4},
         {"id": "positions", "x": 0, "y": 6, "w": 12, "h": 4},
     ]
 }

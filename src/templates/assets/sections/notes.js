@@ -1,4 +1,5 @@
 // --- Investment Notes section ---
+function initNotesWidget() {
 (function() {
   var _notes = D.investment_notes ? D.investment_notes.slice() : [];
   var _canEdit = D.user && (D.user.role === 'premium' || D.user.role === 'admin');
@@ -201,3 +202,6 @@
   }
 
 })();
+
+}
+initNotesWidget();
