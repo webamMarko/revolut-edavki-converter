@@ -204,6 +204,14 @@
     ? createPaginator(_taxPaginationEl, { onChange: renderTaxTable })
     : null;
 
+  // ── Tax-loss harvesting table: paginated candidate rows ─────────────────────
+  let currentHarvestCandidates = [];
+
+  const _harvestPaginationEl = scopedFind(null, 'harvestPagination');
+  const harvestPaginator = _harvestPaginationEl
+    ? createPaginator(_harvestPaginationEl, { onChange: renderHarvestTable })
+    : null;
+
   function _groupSalesByTicker(sales) {
     const groups = {};
     const order = [];
@@ -261,8 +269,8 @@
       + '</tbody></table>';
   }
 
-  // Sort summary rows while keeping each ticker's detail row paired beneath it.
-  function _makeTaxSortable(table) {
+  // Sort summary rows while keeping each row's detail row paired beneath it.
+  function _makePairedSortable(table, summaryClass, detailClass) {
     const ths = table.querySelectorAll('th');
     ths.forEach((th, colIdx) => {
       th.innerHTML = th.textContent + ' <span class="arrow"></span>';
@@ -278,10 +286,10 @@
         const pairs = [];
         const allRows = Array.from(tbody.rows);
         for (let i = 0; i < allRows.length; i++) {
-          if (allRows[i].classList.contains('tax-summary-row')) {
+          if (allRows[i].classList.contains(summaryClass)) {
             const detail = allRows[i + 1];
-            pairs.push([allRows[i], detail && detail.classList.contains('tax-detail-row') ? detail : null]);
-            if (detail && detail.classList.contains('tax-detail-row')) i++;
+            pairs.push([allRows[i], detail && detail.classList.contains(detailClass) ? detail : null]);
+            if (detail && detail.classList.contains(detailClass)) i++;
           }
         }
 
@@ -301,6 +309,31 @@
           tbody.appendChild(main);
           if (detail) tbody.appendChild(detail);
         });
+      });
+    });
+  }
+
+  function _makeTaxSortable(table) {
+    _makePairedSortable(table, 'tax-summary-row', 'tax-detail-row');
+  }
+
+  // Wire up expand/collapse chevron toggles for paired summary/detail rows.
+  function _wireDetailToggles(table) {
+    table.querySelectorAll('.dt-toggle').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const row = btn.closest('tr');
+        const detailRow = row.nextElementSibling;
+        const chevron = btn.querySelector('.pos-chevron');
+        const isOpen = btn.getAttribute('aria-expanded') === 'true';
+        if (isOpen) {
+          btn.setAttribute('aria-expanded', 'false');
+          detailRow.style.display = 'none';
+          chevron.classList.remove('pos-chevron-open');
+        } else {
+          btn.setAttribute('aria-expanded', 'true');
+          detailRow.style.display = '';
+          chevron.classList.add('pos-chevron-open');
+        }
       });
     });
   }
@@ -346,24 +379,7 @@
     tt.innerHTML = html;
 
     _makeTaxSortable(tt);
-
-    tt.querySelectorAll('.dt-toggle').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        const row = btn.closest('tr');
-        const detailRow = row.nextElementSibling;
-        const chevron = btn.querySelector('.pos-chevron');
-        const isOpen = btn.getAttribute('aria-expanded') === 'true';
-        if (isOpen) {
-          btn.setAttribute('aria-expanded', 'false');
-          detailRow.style.display = 'none';
-          chevron.classList.remove('pos-chevron-open');
-        } else {
-          btn.setAttribute('aria-expanded', 'true');
-          detailRow.style.display = '';
-          chevron.classList.add('pos-chevron-open');
-        }
-      });
-    });
+    _wireDetailToggles(tt);
   }
 
   function renderTax() {
@@ -475,6 +491,114 @@
     URL.revokeObjectURL(a.href);
   }
 
+  function _harvestWashIcon(c) {
+    if (!c.wash_sale_risk) return '';
+    let tipText = 'Wash-sale risk';
+    if (c.wash_sale_trigger_date && c.wash_sale_clear_date) {
+      const clearDate = new Date(c.wash_sale_clear_date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const daysLeft = Math.max(0, Math.ceil((clearDate - today) / 86400000));
+      tipText = 'Wash-sale applies due to purchase on ' + c.wash_sale_trigger_date + '.' +
+        ' Selling before ' + c.wash_sale_clear_date + ' disallows this loss.' +
+        (daysLeft > 0 ? ' Wait ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' to harvest safely.' : ' Clear date has passed.');
+    }
+    return ' <button type="button" class="wash-tooltip-btn" aria-label="Wash-sale warning: ' +
+      tipText.replace(/"/g, '&quot;') + '" tabindex="0" title="' +
+      tipText.replace(/"/g, '&quot;') + '" style="background:none;border:none;cursor:help;padding:0;font:inherit;color:var(--warn,#e6a817)">&#9888;</button>';
+  }
+
+  function _renderHarvestLotDetail(c) {
+    const lots = c.lots;
+    if (Array.isArray(lots) && lots.length) {
+      return '<table class="data-table harvest-lots-table"><thead><tr>'
+        + '<th>Buy Date</th>'
+        + '<th>'+t('tax.harvest.col.qty')+'</th>'
+        + '<th>Cost/Share</th>'
+        + '<th>Price</th>'
+        + '<th>'+t('tax.harvest.col.loss')+'</th>'
+        + '<th>'+t('tax.harvest.col.held')+'</th>'
+        + '<th>'+t('tax.harvest.col.rate')+'</th>'
+        + '<th>'+t('tax.harvest.col.saving')+'</th>'
+        + '</tr></thead><tbody>'
+        + lots.map(l =>
+          `<tr>` +
+          `<td>${l.buy_date}</td>` +
+          `<td>${fmt(l.quantity, 4)}</td>` +
+          `<td>${fmtCcy(l.cost_per_share_eur)}</td>` +
+          `<td>${fmtCcy(l.current_price_eur)}</td>` +
+          `<td class="neg">${signCcy(l.unrealized_loss_eur)}</td>` +
+          `<td>${fmt(l.holding_years, 1)}y</td>` +
+          `<td>${Math.round(l.tax_rate * 100)}%</td>` +
+          `<td class="pos">${fmtCcy(l.potential_saving_eur)}</td>` +
+          `</tr>`
+        ).join('')
+        + '</tbody></table>';
+    }
+
+    let html = `<p style="margin:0;font-size:0.85rem;color:var(--muted)">
+      Lot-level detail isn't available for this position — the totals above summarize the full ${fmt(c.quantity, 4)}-share position.
+    </p>`;
+    if (c.wash_sale_note) {
+      html += `<p style="margin:0.5rem 0 0;font-size:0.8rem">${c.wash_sale_note}</p>`;
+    }
+    return html;
+  }
+
+  function renderHarvestTable() {
+    const ht = scopedFind(null, 'harvestTable');
+    if (!ht) return;
+
+    const pageItems = harvestPaginator ? harvestPaginator.getPage() : currentHarvestCandidates;
+    const hasNetBenefit = currentHarvestCandidates.some(c => c.net_benefit_eur != null);
+    const colCount = hasNetBenefit ? 10 : 9;
+
+    let html =
+      '<thead><tr>' +
+      '<th>'+t('tax.harvest.col.ticker')+'</th>' +
+      '<th>'+t('tax.harvest.col.class')+'</th>' +
+      '<th>'+t('tax.harvest.col.qty')+'</th>' +
+      '<th>'+t('tax.harvest.col.cost_basis')+'</th>' +
+      '<th>'+t('tax.harvest.col.mkt_value')+'</th>' +
+      '<th>'+t('tax.harvest.col.loss')+'</th>' +
+      '<th>'+t('tax.harvest.col.held')+'</th>' +
+      '<th>'+t('tax.harvest.col.rate')+'</th>' +
+      '<th>'+t('tax.harvest.col.saving')+'</th>' +
+      (hasNetBenefit ? '<th>Net Benefit</th>' : '') +
+      '</tr></thead><tbody>';
+
+    pageItems.forEach((c, idx) => {
+      const detailId = 'harvest-detail-' + idx;
+      html +=
+        `<tr class="harvest-summary-row">` +
+        `<td><div class="pos-ticker-cell">` +
+          `<button type="button" class="dt-toggle" aria-expanded="false" aria-controls="${detailId}">` +
+            `<span class="pos-chevron">&#x25B6;</span>` +
+          `</button>` +
+          `<strong>${c.ticker}</strong>${_harvestWashIcon(c)}` +
+        `</div></td>` +
+        `<td>${c.asset_class}</td>` +
+        `<td>${fmt(c.quantity, 4)}</td>` +
+        `<td>${fmtCcy(c.cost_basis_eur)}</td>` +
+        `<td>${fmtCcy(c.market_value_eur)}</td>` +
+        `<td class="neg">${signCcy(c.unrealized_loss_eur)}</td>` +
+        `<td>${fmt(c.avg_holding_years, 1)}y</td>` +
+        `<td>${Math.round(c.tax_rate * 100)}%</td>` +
+        `<td class="pos">${fmtCcy(c.potential_tax_saving_eur)}</td>` +
+        (hasNetBenefit ? `<td class="pos">${fmtCcy(c.net_benefit_eur || 0)}</td>` : '') +
+        `</tr>` +
+        `<tr class="pos-detail-row harvest-detail-row" id="${detailId}" style="display:none">` +
+          `<td colspan="${colCount}"><div class="pos-detail">${_renderHarvestLotDetail(c)}</div></td>` +
+        `</tr>`;
+    });
+
+    html += '</tbody>';
+    ht.innerHTML = html;
+
+    _makePairedSortable(ht, 'harvest-summary-row', 'harvest-detail-row');
+    _wireDetailToggles(ht);
+  }
+
   function renderHarvest() {
     const ty = tby[currentYear];
     if (!ty) return;
@@ -518,53 +642,13 @@
       `<div class="metric-card"><div class="label">${l}</div><div class="value ${c}">${v}</div></div>`
     ).join('');
 
-    const hasNetBenefit = filtered.some(c => c.net_benefit_eur != null);
-    const ht = scopedFind(null, 'harvestTable');
-    ht.innerHTML =
-      '<thead><tr>' +
-      '<th>'+t('tax.harvest.col.ticker')+'</th>' +
-      '<th>'+t('tax.harvest.col.class')+'</th>' +
-      '<th>'+t('tax.harvest.col.qty')+'</th>' +
-      '<th>'+t('tax.harvest.col.cost_basis')+'</th>' +
-      '<th>'+t('tax.harvest.col.mkt_value')+'</th>' +
-      '<th>'+t('tax.harvest.col.loss')+'</th>' +
-      '<th>'+t('tax.harvest.col.held')+'</th>' +
-      '<th>'+t('tax.harvest.col.rate')+'</th>' +
-      '<th>'+t('tax.harvest.col.saving')+'</th>' +
-      (hasNetBenefit ? '<th>Net Benefit</th>' : '') +
-      '</tr></thead><tbody>' +
-      filtered.map(c => {
-        let washIcon = '';
-        if (c.wash_sale_risk) {
-          let tipText = 'Wash-sale risk';
-          if (c.wash_sale_trigger_date && c.wash_sale_clear_date) {
-            const clearDate = new Date(c.wash_sale_clear_date);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const daysLeft = Math.max(0, Math.ceil((clearDate - today) / 86400000));
-            tipText = 'Wash-sale applies due to purchase on ' + c.wash_sale_trigger_date + '.' +
-              ' Selling before ' + c.wash_sale_clear_date + ' disallows this loss.' +
-              (daysLeft > 0 ? ' Wait ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' to harvest safely.' : ' Clear date has passed.');
-          }
-          washIcon = ' <button type="button" class="wash-tooltip-btn" aria-label="Wash-sale warning: ' +
-            tipText.replace(/"/g, '&quot;') + '" tabindex="0" title="' +
-            tipText.replace(/"/g, '&quot;') + '" style="background:none;border:none;cursor:help;padding:0;font:inherit;color:var(--warn,#e6a817)">&#9888;</button>';
-        }
-        return `<tr>` +
-        `<td><strong>${c.ticker}</strong>${washIcon}</td>` +
-        `<td>${c.asset_class}</td>` +
-        `<td>${fmt(c.quantity, 4)}</td>` +
-        `<td>${fmtCcy(c.cost_basis_eur)}</td>` +
-        `<td>${fmtCcy(c.market_value_eur)}</td>` +
-        `<td class="neg">${signCcy(c.unrealized_loss_eur)}</td>` +
-        `<td>${fmt(c.avg_holding_years, 1)}y</td>` +
-        `<td>${Math.round(c.tax_rate * 100)}%</td>` +
-        `<td class="pos">${fmtCcy(c.potential_tax_saving_eur)}</td>` +
-        (hasNetBenefit ? `<td class="pos">${fmtCcy(c.net_benefit_eur || 0)}</td>` : '') +
-        `</tr>`;
-      }).join('') +
-      '</tbody>';
-    makeSortable(ht);
+    currentHarvestCandidates = filtered;
+    if (harvestPaginator) {
+      harvestPaginator.setData(currentHarvestCandidates);
+      harvestPaginator.reset();
+    }
+    renderHarvestTable();
+    if (harvestPaginator) harvestPaginator.render();
   }
 
   // Expose so updateAll() can call it
