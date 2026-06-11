@@ -1,9 +1,10 @@
-"""TDD tests for SAA-584: Tax Tab — Mobile optimizations.
+"""TDD tests for SAA-584 (Tax Tab mobile optimizations) and SAA-666.
 
-Verifies CSS media queries implement:
+Verifies CSS implements:
 - AC9: Summary metrics stack vertically on mobile (768px)
 - AC10: Accordion sections full-width with WCAG 2.5.5 touch targets on mobile
-- AC11: Sub-tab selector fixed at bottom of screen on mobile
+- SAA-666: All secondary tab bars (.tax-subtabs, .proj-subtabs) are fixed at
+  the top of the page, below the header, on every viewport.
 """
 import re
 import unittest
@@ -129,53 +130,74 @@ class TestMobileAccordionTouchTargets(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# AC11: Mobile sub-tab selector at bottom of screen
+# SAA-666: Secondary (sub-tab) navigation fixed at the top of the page,
+# below the header, on every viewport. Supersedes the SAA-584 AC11 behavior
+# of pinning .tax-subtabs to the bottom of the screen on mobile.
 # ---------------------------------------------------------------------------
 
+SUBTABS_SELECTOR = ".tax-subtabs, .proj-subtabs"
 
-class TestMobileSubtabBottomPlacement(unittest.TestCase):
-    """AC11: Sub-tab selector is fixed at the bottom of the screen on mobile."""
 
-    def test_subtabs_rule_exists_in_768px_block(self):
-        """3a: .tax-subtabs has a rule inside the 768px media block."""
-        rule = _find_selector_rule_in_mobile_css(_css(), ".tax-subtabs")
+def _find_global_rule(css: str, selector: str) -> str:
+    """Return the rule body for `selector` outside of any media block."""
+    pattern = re.compile(re.escape(selector) + r"\s*\{([^}]*)\}", re.DOTALL)
+    match = pattern.search(css)
+    return match.group(1) if match else ""
+
+
+class TestSecondaryTabsFixedAtTop(unittest.TestCase):
+    """All secondary tab bars stick to the top of the page, below the header."""
+
+    def test_subtabs_rule_exists(self):
+        """The shared sub-tab rule covers both Tax and Projections tab bars."""
+        rule = _find_global_rule(_css(), SUBTABS_SELECTOR)
         self.assertNotEqual(
             rule,
             "",
-            ".tax-subtabs must have a rule inside @media (max-width: 768px)",
+            f"{SUBTABS_SELECTOR} must have a base rule",
         )
 
-    def test_subtabs_position_fixed(self):
-        """3b: Sub-tab selector is position: fixed on mobile."""
-        rule = _find_selector_rule_in_mobile_css(_css(), ".tax-subtabs")
+    def test_subtabs_position_sticky(self):
+        """Sub-tab bars stay fixed in place at the top while the page scrolls."""
+        rule = _find_global_rule(_css(), SUBTABS_SELECTOR)
         self.assertIn(
-            "position: fixed",
+            "position: sticky",
             rule,
-            "mobile sub-tab selector must be position: fixed",
+            "secondary tab bars must use position: sticky to stay fixed at the top",
         )
 
-    def test_subtabs_bottom_zero(self):
-        """3c: Sub-tab selector is at bottom: 0 on mobile."""
-        rule = _find_selector_rule_in_mobile_css(_css(), ".tax-subtabs")
-        self.assertIn(
-            "bottom: 0",
+    def test_subtabs_stuck_to_top(self):
+        """Sub-tab bars are anchored to the top edge of the page (below the header)."""
+        rule = _find_global_rule(_css(), SUBTABS_SELECTOR)
+        self.assertRegex(
             rule,
-            "mobile sub-tab selector must have bottom: 0",
+            r"top:\s*-?[\d.]+rem",
+            "secondary tab bars must set a top offset to stick below the header",
         )
 
     def test_subtabs_z_index_set(self):
-        """3d: Sub-tab selector has z-index to avoid conflicts with app navigation."""
-        rule = _find_selector_rule_in_mobile_css(_css(), ".tax-subtabs")
+        """Sub-tab bars have a z-index so scrolled content passes beneath them."""
+        rule = _find_global_rule(_css(), SUBTABS_SELECTOR)
         self.assertRegex(
             rule,
             r"z-index:\s*\d+",
-            "mobile sub-tab selector must have z-index set to handle layering",
+            "secondary tab bars must have z-index set to handle layering",
         )
 
-    def test_subtabs_full_width(self):
-        """3e: Sub-tab selector spans full viewport width on mobile."""
-        rule = _find_selector_rule_in_mobile_css(_css(), ".tax-subtabs")
-        self.assertTrue(
-            "left: 0" in rule and "right: 0" in rule,
-            "mobile sub-tab selector must span full width (left: 0; right: 0)",
+    def test_mobile_subtabs_no_longer_pinned_to_bottom(self):
+        """The old SAA-584 AC11 bottom-fixed mobile placement is removed."""
+        rule = _find_selector_rule_in_mobile_css(_css(), SUBTABS_SELECTOR)
+        self.assertNotIn(
+            "bottom: 0",
+            rule,
+            "secondary tab bars must no longer be pinned to the bottom on mobile",
+        )
+
+    def test_mobile_subtabs_top_offset_matches_page_padding(self):
+        """On mobile the sticky offset matches the .page padding so the bar sits flush at the top."""
+        rule = _find_selector_rule_in_mobile_css(_css(), SUBTABS_SELECTOR)
+        self.assertRegex(
+            rule,
+            r"top:\s*-?[\d.]+rem",
+            "mobile secondary tab bars must define a top offset",
         )
