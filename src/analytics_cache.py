@@ -1,5 +1,7 @@
 """Persistent caching layer for compute_analytics() results."""
 
+from __future__ import annotations
+
 import hashlib
 import io
 import json

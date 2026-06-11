@@ -1,5 +1,7 @@
 """Goal-based investing tracker with Monte Carlo projections."""
 
+from __future__ import annotations
+
 import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime

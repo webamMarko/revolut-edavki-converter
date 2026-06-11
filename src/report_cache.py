@@ -1,5 +1,7 @@
 """In-memory LRU cache for rendered HTML reports with ETag support."""
 
+from __future__ import annotations
+
 import threading
 from collections import OrderedDict
 
