@@ -201,6 +201,7 @@
   "tax.export_edavki": "eDavki XML",
   "tax.crypto_exempt": "Kryptogewinne unter {threshold} {currency} Schwelle — steuerfrei",
   "tax.col.ticker": "Ticker",
+  "tax.col.sales": "Verkäufe",
   "tax.col.date": "Datum",
   "tax.col.qty": "Stk.",
   "tax.col.proceeds": "Erlöse",

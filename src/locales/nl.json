@@ -201,6 +201,7 @@
   "tax.export_edavki": "eDavki XML",
   "tax.crypto_exempt": "Cryptowinsten onder {threshold} {currency} drempel — vrijgesteld van belasting",
   "tax.col.ticker": "Ticker",
+  "tax.col.sales": "Verkopen",
   "tax.col.date": "Datum",
   "tax.col.qty": "Aant.",
   "tax.col.proceeds": "Opbrengsten",

@@ -196,6 +196,176 @@
     _comparePanel.style.display = '';
   }
 
+  // ── Tax summary table: grouped-by-ticker rows with pagination ──────────────
+  let currentTaxGroups = [];
+
+  const _taxPaginationEl = scopedFind(null, 'taxPagination');
+  const taxPaginator = _taxPaginationEl
+    ? createPaginator(_taxPaginationEl, { onChange: renderTaxTable })
+    : null;
+
+  function _groupSalesByTicker(sales) {
+    const groups = {};
+    const order = [];
+    for (const s of sales) {
+      if (!groups[s.ticker]) {
+        groups[s.ticker] = {
+          ticker: s.ticker,
+          count: 0,
+          proceeds_eur: 0,
+          cost_basis_eur: 0,
+          gain_eur: 0,
+          std_costs_eur: 0,
+          tax_eur: 0,
+          sales: [],
+        };
+        order.push(s.ticker);
+      }
+      const g = groups[s.ticker];
+      g.count++;
+      g.proceeds_eur += s.sell_price_eur;
+      g.cost_basis_eur += s.cost_basis_eur;
+      g.gain_eur += s.gain_eur;
+      g.std_costs_eur += s.std_costs_eur;
+      g.tax_eur += s.tax_eur;
+      g.sales.push(s);
+    }
+    return order.map(ticker => groups[ticker]);
+  }
+
+  function _renderTaxSaleDetail(sales) {
+    return '<table class="data-table tax-sales-table"><thead><tr>'
+      + '<th>'+t('tax.col.date')+'</th>'
+      + '<th>'+t('tax.col.qty')+'</th>'
+      + '<th>'+t('tax.col.proceeds')+'</th>'
+      + '<th>'+t('tax.col.cost_basis')+'</th>'
+      + '<th>'+t('tax.col.gain')+'</th>'
+      + '<th>'+t('tax.col.std_costs')+'</th>'
+      + '<th>'+t('tax.col.held')+'</th>'
+      + '<th>'+t('tax.col.rate')+'</th>'
+      + '<th>'+t('tax.col.tax')+'</th>'
+      + '</tr></thead><tbody>'
+      + sales.map(s =>
+        `<tr>` +
+        `<td>${s.sell_date}</td>` +
+        `<td>${fmt(s.quantity, 4)}</td>` +
+        `<td>${fmtCcy(s.sell_price_eur)}</td>` +
+        `<td>${fmtCcy(s.cost_basis_eur)}</td>` +
+        `<td class="${cls(s.gain_eur)}">${signCcy(s.gain_eur)}</td>` +
+        `<td style="color:var(--muted)">${s.std_costs_eur > 0 ? '-' + fmt(s.std_costs_eur * _fx) + ' ' + _currency : '—'}</td>` +
+        `<td>${fmt(s.holding_years, 1)}y</td>` +
+        `<td>${Math.round(s.tax_rate * 100)}%</td>` +
+        `<td>${fmtCcy(s.tax_eur)}</td>` +
+        `</tr>`
+      ).join('')
+      + '</tbody></table>';
+  }
+
+  // Sort summary rows while keeping each ticker's detail row paired beneath it.
+  function _makeTaxSortable(table) {
+    const ths = table.querySelectorAll('th');
+    ths.forEach((th, colIdx) => {
+      th.innerHTML = th.textContent + ' <span class="arrow"></span>';
+      th.style.cursor = 'pointer';
+      th.addEventListener('click', () => {
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        const dir = th.dataset.dir === 'asc' ? 'desc' : 'asc';
+        ths.forEach(h => { h.dataset.dir = ''; h.querySelector('.arrow').textContent = ''; });
+        th.dataset.dir = dir;
+        th.querySelector('.arrow').textContent = dir === 'asc' ? '▲' : '▼';
+
+        const pairs = [];
+        const allRows = Array.from(tbody.rows);
+        for (let i = 0; i < allRows.length; i++) {
+          if (allRows[i].classList.contains('tax-summary-row')) {
+            const detail = allRows[i + 1];
+            pairs.push([allRows[i], detail && detail.classList.contains('tax-detail-row') ? detail : null]);
+            if (detail && detail.classList.contains('tax-detail-row')) i++;
+          }
+        }
+
+        pairs.sort(([a], [b]) => {
+          const ac = a.cells[colIdx], bc = b.cells[colIdx];
+          if (!ac || !bc) return 0;
+          let av = ac.textContent.replace(/[^\d.\-]/g, '');
+          let bv = bc.textContent.replace(/[^\d.\-]/g, '');
+          const an = parseFloat(av), bn = parseFloat(bv);
+          if (!isNaN(an) && !isNaN(bn)) return dir === 'asc' ? an - bn : bn - an;
+          return dir === 'asc'
+            ? ac.textContent.localeCompare(bc.textContent)
+            : bc.textContent.localeCompare(ac.textContent);
+        });
+
+        pairs.forEach(([main, detail]) => {
+          tbody.appendChild(main);
+          if (detail) tbody.appendChild(detail);
+        });
+      });
+    });
+  }
+
+  function renderTaxTable() {
+    const tt = scopedFind(null, 'taxTable');
+    if (!tt) return;
+
+    if (currentTaxGroups.length === 0) {
+      tt.innerHTML = '<tbody><tr><td colspan="7" style="color:var(--muted);text-align:center;padding:2rem">' + t('tax.no_sales') + '</td></tr></tbody>';
+      return;
+    }
+
+    const pageItems = taxPaginator ? taxPaginator.getPage() : currentTaxGroups;
+
+    let html =
+      '<thead><tr><th>'+t('tax.col.ticker')+'</th><th>'+t('tax.col.sales')+'</th><th>'+t('tax.col.proceeds')+'</th>' +
+      '<th>'+t('tax.col.cost_basis')+'</th><th>'+t('tax.col.gain')+'</th><th>'+t('tax.col.std_costs')+'</th><th>'+t('tax.col.tax')+'</th></tr></thead><tbody>';
+
+    pageItems.forEach((g, idx) => {
+      const detailId = 'tax-detail-' + idx;
+      html +=
+        `<tr class="tax-summary-row">` +
+        `<td><div class="pos-ticker-cell">` +
+          `<button type="button" class="dt-toggle" aria-expanded="false" aria-controls="${detailId}">` +
+            `<span class="pos-chevron">&#x25B6;</span>` +
+          `</button>` +
+          `<strong>${g.ticker}</strong>` +
+        `</div></td>` +
+        `<td>${g.count}</td>` +
+        `<td>${fmtCcy(g.proceeds_eur)}</td>` +
+        `<td>${fmtCcy(g.cost_basis_eur)}</td>` +
+        `<td class="${cls(g.gain_eur)}">${signCcy(g.gain_eur)}</td>` +
+        `<td style="color:var(--muted)">${g.std_costs_eur > 0 ? '-' + fmt(g.std_costs_eur * _fx) + ' ' + _currency : '—'}</td>` +
+        `<td>${fmtCcy(g.tax_eur)}</td>` +
+        `</tr>` +
+        `<tr class="pos-detail-row tax-detail-row" id="${detailId}" style="display:none">` +
+          `<td colspan="7"><div class="pos-detail">${_renderTaxSaleDetail(g.sales)}</div></td>` +
+        `</tr>`;
+    });
+
+    html += '</tbody>';
+    tt.innerHTML = html;
+
+    _makeTaxSortable(tt);
+
+    tt.querySelectorAll('.dt-toggle').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const row = btn.closest('tr');
+        const detailRow = row.nextElementSibling;
+        const chevron = btn.querySelector('.pos-chevron');
+        const isOpen = btn.getAttribute('aria-expanded') === 'true';
+        if (isOpen) {
+          btn.setAttribute('aria-expanded', 'false');
+          detailRow.style.display = 'none';
+          chevron.classList.remove('pos-chevron-open');
+        } else {
+          btn.setAttribute('aria-expanded', 'true');
+          detailRow.style.display = '';
+          chevron.classList.add('pos-chevron-open');
+        }
+      });
+    });
+  }
+
   function renderTax() {
     const ty = tby[currentYear];
     if (!ty) return;
@@ -232,30 +402,13 @@
 
     renderCompare(sales);
 
-    const tt = scopedFind(null, 'taxTable');
-    if (sales.length > 0) {
-      tt.innerHTML =
-        '<thead><tr><th>'+t('tax.col.ticker')+'</th><th>'+t('tax.col.date')+'</th><th>'+t('tax.col.qty')+'</th><th>'+t('tax.col.proceeds')+'</th>' +
-        '<th>'+t('tax.col.cost_basis')+'</th><th>'+t('tax.col.gain')+'</th><th>'+t('tax.col.std_costs')+'</th><th>'+t('tax.col.held')+'</th><th>'+t('tax.col.rate')+'</th><th>'+t('tax.col.tax')+'</th></tr></thead><tbody>' +
-        sales.map(s =>
-          `<tr>` +
-          `<td>${s.ticker}</td>` +
-          `<td>${s.sell_date}</td>` +
-          `<td>${fmt(s.quantity, 4)}</td>` +
-          `<td>${fmtCcy(s.sell_price_eur)}</td>` +
-          `<td>${fmtCcy(s.cost_basis_eur)}</td>` +
-          `<td class="${cls(s.gain_eur)}">${signCcy(s.gain_eur)}</td>` +
-          `<td style="color:var(--muted)">${s.std_costs_eur > 0 ? '-' + fmt(s.std_costs_eur * _fx) + ' ' + _currency : '—'}</td>` +
-          `<td>${fmt(s.holding_years, 1)}y</td>` +
-          `<td>${Math.round(s.tax_rate * 100)}%</td>` +
-          `<td>${fmtCcy(s.tax_eur)}</td>` +
-          `</tr>`
-        ).join('') +
-        '</tbody>';
-      makeSortable(tt);
-    } else {
-      tt.innerHTML = '<tbody><tr><td colspan="10" style="color:var(--muted);text-align:center;padding:2rem">' + t('tax.no_sales') + '</td></tr></tbody>';
+    currentTaxGroups = _groupSalesByTicker(sales);
+    if (taxPaginator) {
+      taxPaginator.setData(currentTaxGroups);
+      taxPaginator.reset();
     }
+    renderTaxTable();
+    if (taxPaginator) taxPaginator.render();
   }
 
   // --- Export functionality (client-side, works in standalone HTML too) ---

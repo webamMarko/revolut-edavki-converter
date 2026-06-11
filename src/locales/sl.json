@@ -201,6 +201,7 @@
   "tax.export_edavki": "eDavki XML",
   "tax.crypto_exempt": "Kripto dobički pod {threshold} {currency} pragom — oproščeni davka",
   "tax.col.ticker": "Oznaka",
+  "tax.col.sales": "Prodaje",
   "tax.col.date": "Datum",
   "tax.col.qty": "Kol.",
   "tax.col.proceeds": "Izkupiček",

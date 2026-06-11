@@ -201,6 +201,7 @@
   "tax.export_edavki": "eDavki XML",
   "tax.crypto_exempt": "Guadagni crypto sotto la soglia di {threshold} {currency} — esenti da imposta",
   "tax.col.ticker": "Ticker",
+  "tax.col.sales": "Vendite",
   "tax.col.date": "Data",
   "tax.col.qty": "Qtà",
   "tax.col.proceeds": "Ricavi",
