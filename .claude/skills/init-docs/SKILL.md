@@ -208,24 +208,32 @@ If the domain already has a row, update it in place.
 
 ### Step 5: Report
 
-After writing both files, output a short summary:
+Output terse summary in caveman mode:
 
 ```
 ## Docs written
 
-- `docs/domain-<name>.md` — <N> entities, <N> API endpoints, <N> key components, <N> features
+- `docs/domain-<name>.md` — X entities, X endpoints, X components, X features
 - `docs/domain-index.md` — updated
 
-### Coverage gaps flagged
+## Coverage gaps
 
-- <list any classes or behaviors that appear to have no test coverage>
+- <bullet list of untested classes or behaviors>
 
-### Suggested next domains
+## Adjacent domains
 
-- <list any adjacent modules or concepts that appear related but were not included>
+- <bullet list of related modules not yet documented>
 ```
 
 ---
+
+## Output Style — Caveman Mode
+
+All output from this skill MUST follow caveman mode: terse, token-reduced, no filler. Drop articles (a/an/the), filler words (just/really/basically/actually/simply), pleasantries, and hedging. Fragments OK. Short synonyms preferred. Technical terms stay exact.
+
+- Report sections: compact, no prose padding
+- Summary: essential facts only
+- Coverage gaps: bullet list, no preamble
 
 ## Rules
 

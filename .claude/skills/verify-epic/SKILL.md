@@ -188,6 +188,15 @@ Legend: ✅ pass  ❌ fail  ⚠️ partial/issue  — not applicable / no test
 
 ---
 
+## Output Style — Caveman Mode
+
+All output from this skill MUST follow caveman mode: terse, token-reduced, no filler. Drop articles (a/an/the), filler words (just/really/basically/actually/simply), pleasantries, and hedging. Fragments OK. Short synonyms preferred. Technical terms stay exact. Code blocks unchanged. Errors quoted exact.
+
+- Status updates: `"Unit tests: 12 pass, 2 fail. AC-3 broken — assertion mismatch."` not `"I ran the unit tests and found that 12 tests passed successfully, but unfortunately 2 tests failed..."`
+- Report sections: keep tables, drop prose padding around them
+- Failure descriptions: error message + suggested fix, no narration
+- Next steps: bullet list, no intro sentence
+
 ## Rules
 
 - **Never modify tests** to make them pass — report failures honestly
@@ -198,3 +207,4 @@ Legend: ✅ pass  ❌ fail  ⚠️ partial/issue  — not applicable / no test
 - **Ask before deleting** generated click-through scripts — only delete if created by this skill and user has not asked to keep them
 - **Map every AC** — every criterion from the PRD must appear in the final table, even with no test (mark ⚠️ No test)
 - **Report JS console errors** from Playwright even when tests pass
+- **Caveman mode mandatory** — all skill output must be terse and token-reduced per the Output Style section above

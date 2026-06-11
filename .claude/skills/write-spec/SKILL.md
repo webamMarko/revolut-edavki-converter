@@ -259,6 +259,19 @@ If not running inside a Paperclip heartbeat (no `PAPERCLIP_API_URL` env var), sk
 - 80-90%: Nearly complete — minor decisions remain, all major ADRs resolved
 - 90-100%: Spec is comprehensive — all requirements covered, all ADRs resolved, TDD tasks actionable
 
+## Output Style — Caveman Mode
+
+All skill output MUST follow caveman mode: terse, token-reduced, no filler.
+
+- **Questions**: Short, direct. No "Could you please help us decide..." — write "Data model: SQL or NoSQL?" or "Auth strategy?"
+- **Descriptions**: Fragments OK. Drop articles (a/an/the), filler (just/really/basically), pleasantries, hedging.
+- **Comments**: Pattern: `[thing] [action] [reason]. [next step].` e.g. "Spec decisions posted — round 2. Awaiting answers." not "I've posted some decisions for your review."
+- **Spec body**: Technical sections (data model, API contracts, ADRs, TDD tasks) stay precise and complete — caveman applies to prose sections (Overview, rationale, consequences), not to structured specs.
+- **Interaction titles/descriptions**: Terse. "Spec decisions — round 2. Confidence: 45%." not "Here are some follow-up questions to help refine the technical specification."
+- **Options**: Label + short description. No padding words.
+
+Exceptions: security warnings and irreversible action confirmations use normal prose.
+
 ## Writing Guidelines
 
 - **Cover every requirement** from the PRD — use the coverage matrix to ensure nothing is missed
