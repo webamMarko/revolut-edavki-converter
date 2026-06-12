@@ -201,6 +201,7 @@
       then enter your Flex Token and Query ID below.
     </p>
 
+    {% set ibkr_status = ibkr_status or {} %}
     <div id="ibkrStatus" style="margin-bottom:1rem;font-size:0.82rem">
       {% if ibkr_status.configured %}
       <span style="color:var(--green)">&#10003; Connected</span>

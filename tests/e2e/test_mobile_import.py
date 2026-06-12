@@ -11,7 +11,7 @@ class TestMobileImportWizard:
         premium_mobile_page.goto(f"{server_url}/import")
         premium_mobile_page.wait_for_timeout(500)
 
-        step1 = premium_mobile_page.locator("#step1")
+        step1 = premium_mobile_page.locator("#wb1")
         assert step1.is_visible()
 
         box = step1.bounding_box()
@@ -28,12 +28,12 @@ class TestMobileImportWizard:
             pytest.skip("sample_transactions.csv not found")
 
         # Step 1: Upload
-        premium_mobile_page.locator("#step1 input[type='file']").set_input_files(
+        premium_mobile_page.locator("#wb1 input[type='file']").set_input_files(
             str(csv_path)
         )
         premium_mobile_page.wait_for_timeout(300)
         premium_mobile_page.locator("#previewBtn").click()
-        premium_mobile_page.wait_for_selector("#step2", state="visible", timeout=10000)
+        premium_mobile_page.wait_for_selector("#wb2", state="visible", timeout=10000)
 
         # Step 2: Map columns + go to step 3
         next_btn = premium_mobile_page.locator("#nextBtn2")
@@ -49,7 +49,7 @@ class TestMobileImportWizard:
             pytest.skip("Could not auto-map required columns at mobile size")
 
         next_btn.click()
-        premium_mobile_page.wait_for_selector("#step3", state="visible", timeout=10000)
+        premium_mobile_page.wait_for_selector("#wb3", state="visible", timeout=10000)
 
         # Step 3: Import
         premium_mobile_page.locator("#importBtn").click()

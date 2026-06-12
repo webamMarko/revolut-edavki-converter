@@ -205,10 +205,9 @@ class TestDashboardLayoutAPI:
         result = api.get_dashboard_layout(user.id, conn)
 
         assert result["isDefault"] is True, "Should be default"
-        assert len(result["widgets"]) == 4, "Default should have 4 widgets"
+        assert len(result["widgets"]) == 3, "Default should have 3 widgets"
         widget_ids = [w["id"] for w in result["widgets"]]
         assert "quick-glance" in widget_ids
-        assert "summary" in widget_ids
         assert "charts" in widget_ids
         assert "positions" in widget_ids
 

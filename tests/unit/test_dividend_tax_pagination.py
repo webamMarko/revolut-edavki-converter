@@ -8,7 +8,6 @@ Spec (SAA-577 Task 4):
   D.dividend_tax[year].by_country[code].payments exists, otherwise a
   summary-only fallback message.
 """
-import re
 import unittest
 from pathlib import Path
 

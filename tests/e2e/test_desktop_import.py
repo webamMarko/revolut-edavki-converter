@@ -36,7 +36,7 @@ class TestImportWizard:
     def test_import_wizard_loads(self, premium_desktop_page, server_url):
         premium_desktop_page.goto(f"{server_url}/import")
         premium_desktop_page.wait_for_timeout(300)
-        assert premium_desktop_page.locator("#step1").is_visible()
+        assert premium_desktop_page.locator("#wb1").is_visible()
         assert premium_desktop_page.locator("#previewBtn").is_disabled()
 
     def test_import_file_upload(self, premium_desktop_page, server_url):
@@ -47,7 +47,7 @@ class TestImportWizard:
         if not csv_path.exists():
             pytest.skip("sample_transactions.csv not found")
 
-        premium_desktop_page.locator("#step1 input[type='file']").set_input_files(
+        premium_desktop_page.locator("#wb1 input[type='file']").set_input_files(
             str(csv_path)
         )
         premium_desktop_page.wait_for_timeout(300)
@@ -64,13 +64,13 @@ class TestImportWizard:
         if not csv_path.exists():
             pytest.skip("sample_transactions.csv not found")
 
-        premium_desktop_page.locator("#step1 input[type='file']").set_input_files(
+        premium_desktop_page.locator("#wb1 input[type='file']").set_input_files(
             str(csv_path)
         )
         premium_desktop_page.wait_for_timeout(300)
 
         premium_desktop_page.locator("#previewBtn").click()
-        premium_desktop_page.wait_for_selector("#step2", state="visible", timeout=10000)
+        premium_desktop_page.wait_for_selector("#wb2", state="visible", timeout=10000)
 
         # Preview table should have headers
         table = premium_desktop_page.locator("#previewTable")
@@ -84,12 +84,12 @@ class TestImportWizard:
         if not csv_path.exists():
             pytest.skip("sample_transactions.csv not found")
 
-        premium_desktop_page.locator("#step1 input[type='file']").set_input_files(
+        premium_desktop_page.locator("#wb1 input[type='file']").set_input_files(
             str(csv_path)
         )
         premium_desktop_page.wait_for_timeout(300)
         premium_desktop_page.locator("#previewBtn").click()
-        premium_desktop_page.wait_for_selector("#step2", state="visible", timeout=10000)
+        premium_desktop_page.wait_for_selector("#wb2", state="visible", timeout=10000)
 
         # Map table should have select elements
         selects = premium_desktop_page.locator("#mapTable select")
@@ -104,18 +104,18 @@ class TestImportWizard:
             pytest.skip("sample_transactions.csv not found")
 
         # Go to step 2
-        premium_desktop_page.locator("#step1 input[type='file']").set_input_files(
+        premium_desktop_page.locator("#wb1 input[type='file']").set_input_files(
             str(csv_path)
         )
         premium_desktop_page.wait_for_timeout(300)
         premium_desktop_page.locator("#previewBtn").click()
-        premium_desktop_page.wait_for_selector("#step2", state="visible", timeout=10000)
+        premium_desktop_page.wait_for_selector("#wb2", state="visible", timeout=10000)
 
         # Back to step 1
-        premium_desktop_page.locator("#backBtn1").click()
+        premium_desktop_page.locator("#wh1").click()
         premium_desktop_page.wait_for_timeout(300)
-        assert premium_desktop_page.locator("#step1").is_visible()
-        assert not premium_desktop_page.locator("#step2").is_visible()
+        assert premium_desktop_page.locator("#wb1").is_visible()
+        assert not premium_desktop_page.locator("#wb2").is_visible()
 
     def test_import_full_flow(self, premium_desktop_page, server_url):
         """Complete the 3-step import wizard end-to-end."""
@@ -127,12 +127,12 @@ class TestImportWizard:
             pytest.skip("sample_transactions.csv not found")
 
         # Step 1: Upload
-        premium_desktop_page.locator("#step1 input[type='file']").set_input_files(
+        premium_desktop_page.locator("#wb1 input[type='file']").set_input_files(
             str(csv_path)
         )
         premium_desktop_page.wait_for_timeout(300)
         premium_desktop_page.locator("#previewBtn").click()
-        premium_desktop_page.wait_for_selector("#step2", state="visible", timeout=10000)
+        premium_desktop_page.wait_for_selector("#wb2", state="visible", timeout=10000)
 
         # Step 2: Ensure required fields are mapped, then click Next
         next_btn = premium_desktop_page.locator("#nextBtn2")
@@ -150,7 +150,7 @@ class TestImportWizard:
             pytest.skip("Could not auto-map required columns")
 
         next_btn.click()
-        premium_desktop_page.wait_for_selector("#step3", state="visible", timeout=10000)
+        premium_desktop_page.wait_for_selector("#wb3", state="visible", timeout=10000)
 
         # Step 3: Import
         premium_desktop_page.locator("#importBtn").click()

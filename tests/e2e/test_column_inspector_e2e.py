@@ -18,7 +18,7 @@ def _upload_and_preview(page, server_url, csv_name="sample_transactions.csv"):
         return False
     page.goto(f"{server_url}/import")
     page.wait_for_timeout(300)
-    page.locator("#step1 input[type='file']").set_input_files(str(csv_path))
+    page.locator("#wb1 input[type='file']").set_input_files(str(csv_path))
     page.wait_for_timeout(300)
     page.locator("#previewBtn").click()
     page.wait_for_selector("#previewTable", state="visible", timeout=10000)
@@ -302,7 +302,7 @@ class TestMobileBottomSheet:
 
         premium_mobile_page.goto(f"{server_url}/import")
         premium_mobile_page.wait_for_timeout(300)
-        premium_mobile_page.locator("#step1 input[type='file']").set_input_files(str(csv_path))
+        premium_mobile_page.locator("#wb1 input[type='file']").set_input_files(str(csv_path))
         premium_mobile_page.wait_for_timeout(300)
         premium_mobile_page.locator("#previewBtn").click()
         premium_mobile_page.wait_for_selector("#previewTable", state="visible", timeout=10000)
