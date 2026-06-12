@@ -38,13 +38,7 @@ function makeSortable(table) {
     const days = parseInt(btn.dataset.days);
     const ytd = btn.dataset.ytd === '1';
     if (days === -1) {
-      selStart = 0; selEnd = N - 1; isZoomed = false;
-      if (portfolioChart) {
-        delete portfolioChart.options.scales.x.min;
-        delete portfolioChart.options.scales.x.max;
-        portfolioChart.update();
-      }
-      updateAll();
+      applyAllRange();
       return;
     }
     let targetStart;

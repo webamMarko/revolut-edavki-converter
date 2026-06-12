@@ -142,15 +142,21 @@ function syncChartZoom(sourceChart) {
   // No-op: benchmark chart is updated via updateBenchmarkChart() in updateAll()
 }
 
-// --- Reset zoom ---
-function clearScaleLimits(chart) {
-  delete chart.options.scales.x.min;
-  delete chart.options.scales.x.max;
-  chart.resetZoom();
-  chart.update();
-}
-window.resetZoom = function() {
+// --- Reset to "All" time range (shared by the All range button and the
+// selection banner's Reset button — they must behave identically) ---
+function applyAllRange() {
   selStart = 0; selEnd = N - 1; isZoomed = false;
-  clearScaleLimits(portfolioChart);
+  if (portfolioChart) {
+    delete portfolioChart.options.scales.x.min;
+    delete portfolioChart.options.scales.x.max;
+    portfolioChart.update();
+  }
+  const bar = scopedFind(null, 'rangeBar');
+  if (bar) {
+    bar.querySelectorAll('.range-btn').forEach(function(b) { b.classList.remove('active'); });
+    const allBtn = bar.querySelector('.range-btn[data-days="-1"]');
+    if (allBtn) allBtn.classList.add('active');
+  }
   updateAll();
-};
+}
+window.resetZoom = applyAllRange;
