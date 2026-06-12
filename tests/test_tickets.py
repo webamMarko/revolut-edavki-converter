@@ -3,7 +3,6 @@
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
 import pytest
 
 from src import users
