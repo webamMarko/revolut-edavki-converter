@@ -59,7 +59,9 @@ DETECTION_RULES = {
             (re.compile(r"\bapy\b", re.I), 5.0),
             (re.compile(r"\bmaturity\b", re.I), 4.0),
             (re.compile(r"\bprincipal\b", re.I), 4.0),
-            (re.compile(r"\bdescription\b", re.I), 2.5),
+            # Low weight: "Description" alone is too generic — old-format Revolut
+            # stock CSVs also have a Description column (transaction description).
+            (re.compile(r"\bdescription\b", re.I), 0.5),
             (re.compile(r"\byield\b", re.I), 2.0),
             (re.compile(r"\bfund\b", re.I), 1.5),
             (re.compile(r"\bdeposit\b", re.I), 1.5),

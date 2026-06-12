@@ -212,7 +212,7 @@ class TestDetectOverrideFlow:
 
         # Verify CFD was auto-selected
         cfd_btn = premium_desktop_page.locator('.ac-btn[data-ac="cfd"]')
-        assert cfd_btn.get_attribute("aria-pressed") == "true", "CFD should be auto-selected"
+        assert cfd_btn.get_attribute("aria-checked") == "true", "CFD should be auto-selected"
 
         # Click Stock to override
         stock_btn = premium_desktop_page.locator('.ac-btn[data-ac="stock"]')
