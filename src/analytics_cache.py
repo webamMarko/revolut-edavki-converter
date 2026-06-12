@@ -49,9 +49,29 @@ def compute_data_hash(conn: sqlite3.Connection,
     ).fetchone()
     last_fx_date = fx_row[0] if fx_row else ""
 
+    # Real estate properties are excluded from the transactions query above, so
+    # adding/editing/deleting one wouldn't otherwise change tx_count/last_tx_date,
+    # leaving the cached report (and its ETag) stale.
+    try:
+        if portfolio_id:
+            re_row = conn.execute(
+                "SELECT COUNT(*), MAX(COALESCE(updated_at, created_at, '')) "
+                "FROM real_estate_properties WHERE portfolio_id = ?",
+                (portfolio_id,)
+            ).fetchone()
+        else:
+            re_row = conn.execute(
+                "SELECT COUNT(*), MAX(COALESCE(updated_at, created_at, '')) "
+                "FROM real_estate_properties"
+            ).fetchone()
+    except sqlite3.OperationalError:
+        re_row = (0, "")
+    re_count = re_row[0] or 0
+    last_re_change = re_row[1] or ""
+
     # Include portfolio_id in hash so different portfolios have different cache keys
     portfolio_key = f"|portfolio={portfolio_id}" if portfolio_id else ""
-    payload = f"{tx_count}|{last_tx_date}|{last_sync_date}|{last_fx_date}{portfolio_key}"
+    payload = f"{tx_count}|{last_tx_date}|{last_sync_date}|{last_fx_date}|{re_count}|{last_re_change}{portfolio_key}"
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
