@@ -51,7 +51,12 @@ class TestMobileImportWizard:
         next_btn.click()
         premium_mobile_page.wait_for_selector("#wb3", state="visible", timeout=10000)
 
-        # Step 3: Import
+        # Step 3: Validate, then continue to Step 4
+        premium_mobile_page.wait_for_selector("#nextBtn3", state="visible", timeout=10000)
+        premium_mobile_page.locator("#nextBtn3").click()
+        premium_mobile_page.wait_for_selector("#wb4", state="visible", timeout=10000)
+
+        # Step 4: Import
         premium_mobile_page.locator("#importBtn").click()
         premium_mobile_page.wait_for_selector(
             "#successBox", state="visible", timeout=15000
