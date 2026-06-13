@@ -7,6 +7,8 @@ from collections import defaultdict
 from datetime import datetime
 from statistics import median
 
+from .analytics import _get_fx_rate
+
 
 def compute_dca_analysis(conn: sqlite3.Connection,
                          prices_conn: sqlite3.Connection | None = None) -> dict | None:
@@ -18,6 +20,7 @@ def compute_dca_analysis(conn: sqlite3.Connection,
         return None
 
     _pconn = prices_conn if prices_conn is not None else conn
+    fx_cache: dict = {}
 
     buys = conn.execute("""
         SELECT date, ticker, quantity, price_per_share, total_amount, fx_rate, currency
@@ -46,7 +49,7 @@ def compute_dca_analysis(conn: sqlite3.Connection,
         if len(purchases) < 3:
             continue
 
-        analysis = _analyze_ticker_dca(ticker, purchases, _pconn)
+        analysis = _analyze_ticker_dca(ticker, purchases, conn, _pconn, fx_cache)
         if analysis:
             results.append(analysis)
 
@@ -57,8 +60,27 @@ def compute_dca_analysis(conn: sqlite3.Connection,
     return {"tickers": results}
 
 
-def _analyze_ticker_dca(ticker: str, purchases: list[dict],
-                        prices_conn: sqlite3.Connection) -> dict | None:
+def _fx_divisor(currency: str, fx_rate: float | None, date: str,
+                conn: sqlite3.Connection, prices_conn: sqlite3.Connection,
+                fx_cache: dict) -> float:
+    """Divisor to convert a `currency`-denominated amount/price to EUR.
+
+    Custom-mapped CSV imports store fx_rate=1.0 when no rate column was
+    provided, which is indistinguishable from a genuine 1:1 rate. Mirror
+    analytics.compute_analytics: treat fx_rate==1.0 on a non-EUR row as
+    "unknown" and fall back to the historical currency->EUR rate for the
+    transaction date.
+    """
+    fx = fx_rate or 1.0
+    if currency != "EUR" and fx == 1.0:
+        db_fx = _get_fx_rate(fx_cache, date, conn, prices_conn, currency=currency)
+        if db_fx > 0:
+            fx = 1.0 / db_fx
+    return fx if fx > 0 else 1.0
+
+
+def _analyze_ticker_dca(ticker: str, purchases: list[dict], conn: sqlite3.Connection,
+                        prices_conn: sqlite3.Connection, fx_cache: dict) -> dict | None:
     """Analyze DCA pattern for a single ticker."""
     dates = [datetime.strptime(p["date"], "%Y-%m-%d") for p in purchases]
 
@@ -77,8 +99,7 @@ def _analyze_ticker_dca(ticker: str, purchases: list[dict],
     amounts_eur = []
     for p in purchases:
         amt = abs(p["total_amount"]) if p["total_amount"] else 0
-        if p["currency"] != "EUR" and p["fx_rate"] and p["fx_rate"] > 0:
-            amt = amt / p["fx_rate"]
+        amt = amt / _fx_divisor(p["currency"], p["fx_rate"], p["date"], conn, prices_conn, fx_cache)
         amounts_eur.append(amt)
 
     total_invested_eur = sum(amounts_eur)
@@ -89,28 +110,28 @@ def _analyze_ticker_dca(ticker: str, purchases: list[dict],
     if current_price_eur is None or current_price_eur <= 0:
         last_purchase = purchases[-1]
         price = last_purchase["price_per_share"] or 0
-        fx = last_purchase["fx_rate"] or 1
-        if last_purchase["currency"] != "EUR" and fx > 0:
-            current_price_eur = price / fx
-        else:
-            current_price_eur = price
+        current_price_eur = price / _fx_divisor(
+            last_purchase["currency"], last_purchase["fx_rate"], last_purchase["date"],
+            conn, prices_conn, fx_cache
+        )
 
     dca_value_eur = total_shares * current_price_eur
     dca_return_pct = ((dca_value_eur / total_invested_eur) - 1) * 100 if total_invested_eur > 0 else 0
 
     lump_sum = _compute_lump_sum_comparison(
-        ticker, purchases, total_invested_eur, current_price_eur, prices_conn
+        ticker, purchases, total_invested_eur, current_price_eur, conn, prices_conn, fx_cache
     )
 
-    optimal_day = _compute_optimal_day(purchases)
+    optimal_day = _compute_optimal_day(purchases, conn, prices_conn, fx_cache)
 
     purchase_history = [
         {
             "date": p["date"],
             "amount_eur": round(amounts_eur[i], 2),
             "price_eur": round(
-                (p["price_per_share"] / p["fx_rate"]) if p["currency"] != "EUR" and p["fx_rate"] and p["fx_rate"] > 0
-                else (p["price_per_share"] or 0), 4
+                (p["price_per_share"] or 0)
+                / _fx_divisor(p["currency"], p["fx_rate"], p["date"], conn, prices_conn, fx_cache),
+                4
             ),
             "shares": round(p["quantity"], 4),
         }
@@ -166,7 +187,9 @@ def _compute_consistency(intervals: list[int], med_interval: float) -> float:
 def _compute_lump_sum_comparison(ticker: str, purchases: list[dict],
                                  total_invested_eur: float,
                                  current_price_eur: float,
-                                 prices_conn: sqlite3.Connection) -> dict:
+                                 conn: sqlite3.Connection,
+                                 prices_conn: sqlite3.Connection,
+                                 fx_cache: dict) -> dict:
     """Compare DCA outcome vs hypothetical lump-sum on day one."""
     first_date = purchases[0]["date"]
 
@@ -174,11 +197,7 @@ def _compute_lump_sum_comparison(ticker: str, purchases: list[dict],
     if first_price_eur is None or first_price_eur <= 0:
         p = purchases[0]
         price = p["price_per_share"] or 0
-        fx = p["fx_rate"] or 1
-        if p["currency"] != "EUR" and fx > 0:
-            first_price_eur = price / fx
-        else:
-            first_price_eur = price
+        first_price_eur = price / _fx_divisor(p["currency"], p["fx_rate"], p["date"], conn, prices_conn, fx_cache)
 
     if first_price_eur <= 0:
         return {"value_eur": 0, "return_pct": 0, "dca_advantage_pct": 0}
@@ -197,15 +216,13 @@ def _compute_lump_sum_comparison(ticker: str, purchases: list[dict],
     }
 
 
-def _compute_optimal_day(purchases: list[dict]) -> int | None:
+def _compute_optimal_day(purchases: list[dict], conn: sqlite3.Connection,
+                         prices_conn: sqlite3.Connection, fx_cache: dict) -> int | None:
     """Find the day of month with historically lowest average price."""
     day_prices = defaultdict(list)
     for p in purchases:
         day = int(p["date"].split("-")[2])
-        price = p["price_per_share"] or 0
-        fx = p["fx_rate"] or 1
-        if p["currency"] != "EUR" and fx > 0:
-            price = price / fx
+        price = (p["price_per_share"] or 0) / _fx_divisor(p["currency"], p["fx_rate"], p["date"], conn, prices_conn, fx_cache)
         day_prices[day].append(price)
 
     if not day_prices:
