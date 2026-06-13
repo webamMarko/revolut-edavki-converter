@@ -285,7 +285,7 @@ def _apply_map(row, column_map: dict, asset_class: str) -> dict | None:
     raw_type = get("type")
     if not raw_type:
         return None
-    tx_type = str(raw_type)
+    tx_type = str(raw_type).strip().upper()
 
     raw_ticker = get("ticker")
     ticker = str(raw_ticker) if raw_ticker is not None else None
