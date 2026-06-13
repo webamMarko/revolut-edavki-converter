@@ -21,6 +21,7 @@ TICKER_MAP = {
     "ABJ": "ABBN.SW",   # ABB Ltd — Amsterdam delisted on yfinance, use Swiss listing
     "FLY": "FLY",
     "VWCE": "VWCE.DE",
+    "NOVN": "NOVN.SW",  # Novartis — bare ticker delisted on yfinance, use Swiss listing
 }
 
 # Benchmark indexes
