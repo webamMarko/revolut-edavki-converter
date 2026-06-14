@@ -248,6 +248,15 @@ body {
 }
 .notify-toast-close:hover { color: var(--text); }
 
+/* Mobile: keep toast clear of the fixed bottom tab bar */
+@media (max-width: 768px) {
+  .notify-toast {
+    bottom: calc(3.25rem + 0.75rem);
+    left: 1rem;
+    right: 1rem;
+  }
+}
+
 .nav-divider { height: 1px; background: var(--border); margin: 0.4rem 1.25rem; }
 
 .sidebar-footer {
