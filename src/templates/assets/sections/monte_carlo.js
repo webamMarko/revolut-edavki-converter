@@ -187,7 +187,7 @@
 var _fireChart = null;
 function updateFire() {
   var fireSection = scopedFind(null, 'fireSection');
-  if (!fireSection || D.fire == null) return;
+  if (!fireSection) return;
 
   var s = getActiveSummary();
   if (!s || s.portfolio_value_eur == null) { fireSection.style.display = 'none'; return; }
@@ -330,8 +330,8 @@ function updateFire() {
 
 // Initialize FIRE section
 (function() {
-  if (!scopedFind(null, 'fireSection') || D.fire == null) return;
-  var fire = D.fire;
+  if (!scopedFind(null, 'fireSection')) return;
+  var fire = D.fire || {};
   var ids = ['projFireExpenses', 'projFireIncome', 'projFireWithdrawal', 'projFireInflation', 'projFireContrib'];
   var defaults = [fire.annual_expenses || 0, fire.annual_income || 0, fire.withdrawal_rate || 4, fire.inflation_rate || 2.5, 0];
   ids.forEach(function(id, i) {

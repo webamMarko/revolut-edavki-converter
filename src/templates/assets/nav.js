@@ -178,7 +178,7 @@
   }
 
   // Show projections nav item when Monte Carlo, FIRE, or dividend data exists
-  if ((D.summary && D.summary.cagr_pct != null) || D.fire != null || (D.dividends && D.dividends.by_month && D.dividends.by_month.length > 0)) {
+  if ((D.summary && (D.summary.cagr_pct != null || D.summary.portfolio_value_eur != null)) || D.fire != null || (D.dividends && D.dividends.by_month && D.dividends.by_month.length > 0)) {
     var navProj = document.getElementById('navProjections');
     if (navProj) navProj.style.display = '';
   }
