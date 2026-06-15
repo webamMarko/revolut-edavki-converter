@@ -404,11 +404,13 @@ function updatePositions() {
   _makePositionsSortable(pt, positions);
 
   // Attach expand/collapse handlers
+  // Use DOM relationships (not getElementById) since the positions section
+  // markup is duplicated into the "My Dashboard" widget, which would make
+  // pos-detail-/pos-chart- ids non-unique across the document.
   pt.querySelectorAll('.pos-row-expandable').forEach(row => {
     row.addEventListener('click', () => {
-      const idx = row.dataset.idx;
       const ticker = row.dataset.ticker;
-      const detailRow = document.getElementById('pos-detail-' + idx);
+      const detailRow = row.nextElementSibling;
       const chevron = row.querySelector('.pos-chevron');
       const isOpen = detailRow.style.display !== 'none';
 
@@ -419,7 +421,7 @@ function updatePositions() {
       } else {
         detailRow.style.display = '';
         chevron.classList.add('pos-chevron-open');
-        const canvas = document.getElementById('pos-chart-' + idx);
+        const canvas = detailRow.querySelector('canvas');
         if (canvas) {
           const p = positions.find(x => x.ticker === ticker);
           _buildPosChart(ticker, canvas, p ? p.avg_cost_eur : 0);
