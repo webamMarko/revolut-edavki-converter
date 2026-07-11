@@ -1232,12 +1232,29 @@ def api_create_transaction(handler):
     try:
         data = json.loads(handler._read_body())
         asset_class = str(data.get('asset_class', '')).strip()
-        from ..transactions import validate_transaction, create_manual_transaction
+        from ..transactions import (
+            validate_transaction, create_manual_transaction, get_held_shares,
+        )
         clean, errors = validate_transaction(data, asset_class)
         if errors:
             json_response(handler, {'error': 'validation_error', 'fields': errors}, 422)
             return
         portfolio_id = _get_portfolio_id(session)
+
+        if clean.get('type') == 'STOCK SPLIT':
+            ratio = clean.pop('split_ratio')
+            held = get_held_shares(
+                conn, clean['ticker'], clean['asset_class'],
+                portfolio_id, clean['date'],
+            )
+            if held <= 0:
+                json_response(handler, {'error': 'validation_error', 'fields': {
+                    'split_ratio': f"No holdings found for {clean['ticker']} on or before {clean['date']}"
+                }}, 422)
+                return
+            clean['quantity'] = held * (ratio - 1.0)
+            clean['price_per_share'] = ratio  # stored for edit round-trip
+
         row = create_manual_transaction(conn, clean, portfolio_id=portfolio_id)
         _invalidate_caches(conn, portfolio_id)
         json_response(handler, row, 201)
@@ -1255,7 +1272,35 @@ def api_update_transaction(handler, tx_id: int):
     try:
         data = json.loads(handler._read_body())
         portfolio_id = _get_portfolio_id(session)
-        from ..transactions import update_manual_transaction
+        from ..transactions import (
+            update_manual_transaction, get_transaction,
+            get_held_shares, parse_split_ratio,
+        )
+
+        if 'split_ratio' in data:
+            existing = get_transaction(conn, tx_id, portfolio_id)
+            if existing and existing.get('type') == 'STOCK SPLIT':
+                raw_ratio = data.pop('split_ratio')
+                ratio = parse_split_ratio(raw_ratio)
+                if ratio is None or ratio <= 1.0:
+                    json_response(handler, {'error': 'validation_error', 'fields': {
+                        'split_ratio': 'Must be a valid ratio > 1 (e.g. 4:1)'
+                    }}, 422)
+                    return
+                held = get_held_shares(
+                    conn, existing['ticker'], existing['asset_class'],
+                    portfolio_id, existing['date'], exclude_id=tx_id,
+                )
+                if held <= 0:
+                    json_response(handler, {'error': 'validation_error', 'fields': {
+                        'split_ratio': f"No holdings found for {existing['ticker']}"
+                    }}, 422)
+                    return
+                data['quantity'] = held * (ratio - 1.0)
+                data['price_per_share'] = ratio
+            else:
+                data.pop('split_ratio')
+
         row = update_manual_transaction(conn, tx_id, data, portfolio_id=portfolio_id)
         if row is None:
             json_response(handler, {'error': 'not found'}, 404)

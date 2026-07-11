@@ -17,6 +17,8 @@ from src.transactions import (
     delete_manual_transaction,
     get_transaction,
     list_transactions,
+    get_held_shares,
+    parse_split_ratio,
 )
 
 
@@ -436,3 +438,180 @@ class TestFIFOWithManualTransactions:
 
         # realized: 10*(150-100) + 2*(150-120) = 500 + 60 = 560 EUR
         assert abs(result.total_realized_gain_eur - 560.0) < 1.0
+
+
+# ------------------------------------------------------------------
+# Stock split support
+# ------------------------------------------------------------------
+
+class TestStockSplit:
+    """Tests for manual STOCK SPLIT: validation, quantity computation, FIFO, tax."""
+
+    # --- parse_split_ratio ---
+
+    def test_parse_ratio_colon_format(self):
+        assert abs(parse_split_ratio('4:1') - 4.0) < 1e-9
+
+    def test_parse_ratio_plain_number(self):
+        assert abs(parse_split_ratio('3') - 3.0) < 1e-9
+
+    def test_parse_ratio_decimal(self):
+        assert abs(parse_split_ratio('3.5:1') - 3.5) < 1e-9
+
+    def test_parse_ratio_invalid(self):
+        assert parse_split_ratio('abc') is None
+
+    def test_parse_ratio_zero_denominator(self):
+        assert parse_split_ratio('4:0') is None
+
+    # --- validate_transaction for STOCK SPLIT ---
+
+    def test_valid_stock_split_ratio(self):
+        data = {
+            'date': '2024-01-15',
+            'ticker': 'AAPL',
+            'type': 'STOCK SPLIT',
+            'split_ratio': '4:1',
+            'currency': 'EUR',
+        }
+        clean, errors = validate_transaction(data, 'stock')
+        assert not errors
+        assert abs(clean['split_ratio'] - 4.0) < 1e-9
+        assert 'quantity' not in clean
+        assert 'price_per_share' not in clean
+
+    def test_missing_split_ratio_rejected(self):
+        data = {
+            'date': '2024-01-15',
+            'ticker': 'AAPL',
+            'type': 'STOCK SPLIT',
+            'currency': 'EUR',
+        }
+        _, errors = validate_transaction(data, 'stock')
+        assert 'split_ratio' in errors
+
+    def test_ratio_le_1_rejected(self):
+        for bad in ('1:1', '0.5:1', '1', '0.9'):
+            data = {
+                'date': '2024-01-15', 'ticker': 'AAPL',
+                'type': 'STOCK SPLIT', 'split_ratio': bad, 'currency': 'EUR',
+            }
+            _, errors = validate_transaction(data, 'stock')
+            assert 'split_ratio' in errors, f"Expected error for ratio={bad}"
+
+    def test_non_numeric_ratio_rejected(self):
+        data = {
+            'date': '2024-01-15', 'ticker': 'AAPL',
+            'type': 'STOCK SPLIT', 'split_ratio': 'four:one', 'currency': 'EUR',
+        }
+        _, errors = validate_transaction(data, 'stock')
+        assert 'split_ratio' in errors
+
+    def test_quantity_not_required_for_stock_split(self):
+        data = {
+            'date': '2024-01-15', 'ticker': 'AAPL',
+            'type': 'STOCK SPLIT', 'split_ratio': '2:1', 'currency': 'EUR',
+        }
+        _, errors = validate_transaction(data, 'stock')
+        assert 'quantity' not in errors
+        assert 'price_per_share' not in errors
+
+    # --- get_held_shares ---
+
+    def test_get_held_shares_basic(self, conn):
+        for date_str, ticker, tx_type, qty in [
+            ('2023-01-01', 'AAPL', 'BUY',        100),
+            ('2023-06-01', 'AAPL', 'SELL',         30),
+            ('2023-09-01', 'AAPL', 'STOCK SPLIT',  70),  # 2:1 on 70 held
+        ]:
+            conn.execute("""
+                INSERT INTO transactions (date, ticker, type, quantity, price_per_share,
+                    currency, fx_rate, asset_class, broker_source, portfolio_id)
+                VALUES (?, ?, ?, ?, NULL, 'EUR', 1.0, 'stock', 'manual', 1)
+            """, (date_str, ticker, tx_type, qty))
+        conn.commit()
+        # as of 2023-09-01: BUY 100 - SELL 30 + SPLIT 70 = 140
+        held = get_held_shares(conn, 'AAPL', 'stock', 1, '2023-09-01')
+        assert abs(held - 140.0) < 1e-9
+
+    def test_get_held_shares_exclude_id(self, conn):
+        conn.execute("""
+            INSERT INTO transactions (date, ticker, type, quantity, price_per_share,
+                currency, fx_rate, asset_class, broker_source, portfolio_id)
+            VALUES ('2023-01-01', 'MSFT', 'BUY', 50, NULL, 'EUR', 1.0, 'stock', 'manual', 1)
+        """)
+        conn.commit()
+        cur = conn.execute("""
+            INSERT INTO transactions (date, ticker, type, quantity, price_per_share,
+                currency, fx_rate, asset_class, broker_source, portfolio_id)
+            VALUES ('2023-06-01', 'MSFT', 'STOCK SPLIT', 50, NULL, 'EUR', 1.0, 'stock', 'manual', 1)
+        """)
+        split_id = cur.lastrowid
+        conn.commit()
+        # Exclude the split: should see 50 held
+        held = get_held_shares(conn, 'MSFT', 'stock', 1, '2023-06-01', exclude_id=split_id)
+        assert abs(held - 50.0) < 1e-9
+
+    # --- STOCK SPLIT adjusts FIFO lots via analytics ---
+
+    def test_stock_split_adjusts_fifo_lots(self, conn):
+        """4:1 split on 100 shares → 400 shares; sell 200 at post-split price."""
+        # BUY 100 @ €100 → cost basis €100/share
+        create_manual_transaction(conn, {
+            'date': '2022-01-01', 'ticker': 'TSLA', 'type': 'BUY',
+            'quantity': 100.0, 'price_per_share': 100.0, 'total_amount': 10000.0,
+            'currency': 'EUR', 'fx_rate': 1.0, 'asset_class': 'stock',
+        })
+        # 4:1 split: qty_delta = 100 * (4-1) = 300; price_per_share=4.0 stored as ratio
+        create_manual_transaction(conn, {
+            'date': '2022-06-01', 'ticker': 'TSLA', 'type': 'STOCK SPLIT',
+            'quantity': 300.0, 'price_per_share': 4.0,
+            'currency': 'EUR', 'fx_rate': 1.0, 'asset_class': 'stock',
+        })
+        # SELL 200 @ €30 (post-split price → pre-split equiv €120; gain = 200*(30-25)=1000)
+        # pre-split cost basis: €100/share → post-split: €25/share
+        create_manual_transaction(conn, {
+            'date': '2023-01-01', 'ticker': 'TSLA', 'type': 'SELL',
+            'quantity': 200.0, 'price_per_share': 30.0, 'total_amount': 6000.0,
+            'currency': 'EUR', 'fx_rate': 1.0, 'asset_class': 'stock',
+        })
+
+        from src.analytics import compute_analytics
+        result = compute_analytics(conn, scope='stock', prices_conn=None, portfolio_id=1)
+
+        # Should have 200 shares remaining (400 - 200)
+        open_pos = [p for p in result.positions if p.ticker == 'TSLA']
+        assert len(open_pos) == 1
+        assert abs(open_pos[0].quantity - 200.0) < 0.01
+
+        # Realized gain: 200 * (30 - 25) = 1000 EUR
+        assert abs(result.total_realized_gain_eur - 1000.0) < 1.0
+
+    # --- Tax calculations handle manual splits ---
+
+    def test_tax_handles_manual_stock_split(self, conn):
+        """Tax engine correctly uses adjusted cost basis after split."""
+        create_manual_transaction(conn, {
+            'date': '2020-01-01', 'ticker': 'NVDA', 'type': 'BUY',
+            'quantity': 10.0, 'price_per_share': 200.0, 'total_amount': 2000.0,
+            'currency': 'EUR', 'fx_rate': 1.0, 'asset_class': 'stock',
+        })
+        # 10:1 split: qty_delta = 10 * 9 = 90; cost per share drops from 200 → 20
+        create_manual_transaction(conn, {
+            'date': '2021-06-01', 'ticker': 'NVDA', 'type': 'STOCK SPLIT',
+            'quantity': 90.0, 'price_per_share': 10.0,
+            'currency': 'EUR', 'fx_rate': 1.0, 'asset_class': 'stock',
+        })
+        # SELL 50 @ €25 post-split → gain = 50 * (25 - 20) = 250 EUR
+        create_manual_transaction(conn, {
+            'date': '2022-03-01', 'ticker': 'NVDA', 'type': 'SELL',
+            'quantity': 50.0, 'price_per_share': 25.0, 'total_amount': 1250.0,
+            'currency': 'EUR', 'fx_rate': 1.0, 'asset_class': 'stock',
+        })
+
+        from src.tax import compute_tax_report
+        result = compute_tax_report(conn, year=2022, scope='stock', prices_conn=None, portfolio_id=1)
+
+        # Gain should be ~250 EUR
+        assert result.total_realized_gain_eur is not None
+        assert abs(result.total_realized_gain_eur - 250.0) < 2.0

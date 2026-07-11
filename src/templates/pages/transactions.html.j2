@@ -178,7 +178,7 @@
           <span class="field-error" id="errType"></span>
         </div>
       </div>
-      <div class="form-row">
+      <div class="form-row" id="qtyPriceRow">
         <div class="form-group">
           <label for="fQty">Quantity</label>
           <input type="number" id="fQty" step="any" min="0" placeholder="0">
@@ -188,6 +188,13 @@
           <label for="fPrice">Price per Share</label>
           <input type="number" id="fPrice" step="any" min="0" placeholder="0.00">
           <span class="field-error" id="errPrice_per_share"></span>
+        </div>
+      </div>
+      <div class="form-row full" id="splitRatioRow" style="display:none">
+        <div class="form-group">
+          <label for="fSplitRatio">Split Ratio *</label>
+          <input type="text" id="fSplitRatio" placeholder="e.g. 4:1">
+          <span class="field-error" id="errSplit_ratio"></span>
         </div>
       </div>
       <div class="form-row">
@@ -373,6 +380,16 @@ function renderPagination(page, pages, total) {
 }
 
 // ------ Add/Edit modal ------
+function _isSplitType() {
+  return document.getElementById('fType').value === 'STOCK SPLIT';
+}
+
+function _updateSplitVisibility() {
+  var isSplit = _isSplitType();
+  document.getElementById('qtyPriceRow').style.display = isSplit ? 'none' : '';
+  document.getElementById('splitRatioRow').style.display = isSplit ? '' : 'none';
+}
+
 function updateTypeOptions(preset) {
   var ac = document.getElementById('fAssetClass').value;
   var sel = document.getElementById('fType');
@@ -384,7 +401,10 @@ function updateTypeOptions(preset) {
     if (preset && t === preset) o.selected = true;
     sel.appendChild(o);
   });
+  _updateSplitVisibility();
 }
+
+document.getElementById('fType').addEventListener('change', _updateSplitVisibility);
 
 function onCurrencyChange() {
   var cur = document.getElementById('fCurrency').value.trim().toUpperCase();
@@ -401,6 +421,7 @@ function openAddModal() {
   clearFieldErrors();
   document.getElementById('fCurrency').value = 'EUR';
   document.getElementById('fFx').value = '';
+  document.getElementById('fSplitRatio').value = '';
   updateTypeOptions();
   document.getElementById('txModal').classList.add('active');
   document.getElementById('fDate').focus();
@@ -418,8 +439,11 @@ function openEditModal(row) {
   document.getElementById('fTicker').value = row.ticker || '';
   updateTypeOptions(row.type);
   document.getElementById('fType').value = row.type || '';
-  document.getElementById('fQty').value = row.quantity != null ? row.quantity : '';
-  document.getElementById('fPrice').value = row.price_per_share != null ? row.price_per_share : '';
+  var isSplit = row.type === 'STOCK SPLIT';
+  document.getElementById('fQty').value = (!isSplit && row.quantity != null) ? row.quantity : '';
+  document.getElementById('fPrice').value = (!isSplit && row.price_per_share != null) ? row.price_per_share : '';
+  // For STOCK SPLIT, price_per_share stores the ratio for round-trip editing
+  document.getElementById('fSplitRatio').value = isSplit && row.price_per_share != null ? row.price_per_share : '';
   document.getElementById('fCurrency').value = row.currency || 'EUR';
   document.getElementById('fFx').value = row.fx_rate != null ? row.fx_rate : '';
   document.getElementById('fCommission').value = row.commission != null ? row.commission : '';
@@ -434,7 +458,7 @@ function closeModal() {
 }
 
 function clearFieldErrors() {
-  ['Date','AssetClass','Ticker','Type','Quantity','Price_per_share','Currency','Fx_rate','Commission','Withholding_tax'].forEach(function(f){
+  ['Date','AssetClass','Ticker','Type','Quantity','Price_per_share','Currency','Fx_rate','Commission','Withholding_tax','Split_ratio'].forEach(function(f){
     var el = document.getElementById('err' + f);
     if (el) el.textContent = '';
   });
@@ -446,18 +470,24 @@ document.getElementById('txForm').addEventListener('submit', function(e){
   e.preventDefault();
   clearFieldErrors();
   var id = document.getElementById('txId').value;
+  var txType = document.getElementById('fType').value;
+  var isSplit = txType === 'STOCK SPLIT';
   var payload = {
     date:            document.getElementById('fDate').value,
     asset_class:     document.getElementById('fAssetClass').value,
     ticker:          document.getElementById('fTicker').value.trim().toUpperCase(),
-    type:            document.getElementById('fType').value,
-    quantity:        document.getElementById('fQty').value || null,
-    price_per_share: document.getElementById('fPrice').value || null,
+    type:            txType,
     currency:        document.getElementById('fCurrency').value.trim().toUpperCase() || 'EUR',
     fx_rate:         document.getElementById('fFx').value || null,
     commission:      document.getElementById('fCommission').value || null,
     withholding_tax: document.getElementById('fWht').value || null,
   };
+  if (isSplit) {
+    payload.split_ratio = document.getElementById('fSplitRatio').value || null;
+  } else {
+    payload.quantity        = document.getElementById('fQty').value || null;
+    payload.price_per_share = document.getElementById('fPrice').value || null;
+  }
 
   var url = id ? '/api/transactions/' + id : '/api/transactions';
   var method = id ? 'PUT' : 'POST';

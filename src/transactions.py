@@ -17,6 +17,47 @@ ALLOWED_TYPES: dict[str, set[str]] = {
 ASSET_CLASSES = frozenset(ALLOWED_TYPES)
 
 _TICKER_RE = re.compile(r'^[A-Z0-9][A-Z0-9.]*$')
+_SPLIT_RATIO_RE = re.compile(r'^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$')
+
+
+def parse_split_ratio(raw) -> float | None:
+    """Parse split ratio string ('4:1', '4', '3.5:1') → float or None on error."""
+    s = str(raw).strip()
+    m = _SPLIT_RATIO_RE.match(s)
+    if m:
+        try:
+            num = float(m.group(1))
+            den = float(m.group(2))
+            return num / den if den != 0 else None
+        except (ValueError, ZeroDivisionError):
+            return None
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        return None
+
+
+def get_held_shares(conn: sqlite3.Connection, ticker: str, asset_class: str,
+                    portfolio_id: int, as_of_date: str, *,
+                    exclude_id: int | None = None) -> float:
+    """Return net shares held for ticker as of a date (BUY - SELL + SPLITS)."""
+    exclude_clause = "AND id != ?" if exclude_id is not None else ""
+    params: list = [ticker, asset_class, portfolio_id, as_of_date]
+    if exclude_id is not None:
+        params.append(exclude_id)
+    row = conn.execute(
+        f"""
+        SELECT
+          COALESCE(SUM(CASE WHEN type = 'BUY' THEN quantity ELSE 0 END), 0) -
+          COALESCE(SUM(CASE WHEN type = 'SELL' THEN quantity ELSE 0 END), 0) +
+          COALESCE(SUM(CASE WHEN type = 'STOCK SPLIT' THEN quantity ELSE 0 END), 0)
+        FROM transactions
+        WHERE UPPER(ticker) = UPPER(?) AND asset_class = ? AND portfolio_id = ?
+          AND date <= ? {exclude_clause}
+        """,
+        params,
+    ).fetchone()
+    return float(row[0]) if row and row[0] is not None else 0.0
 
 
 def validate_transaction(data: dict, asset_class: str) -> tuple[dict, dict]:
@@ -68,45 +109,59 @@ def validate_transaction(data: dict, asset_class: str) -> tuple[dict, dict]:
 
     tx_type = clean.get('type', raw_type)
 
-    # quantity: required for BUY/SELL, > 0
-    raw_qty = data.get('quantity')
-    if tx_type in ('BUY', 'SELL'):
-        if raw_qty is None or raw_qty == '':
-            errors['quantity'] = 'Required for BUY/SELL'
+    if tx_type == 'STOCK SPLIT':
+        # split_ratio: required, must parse to > 1
+        raw_ratio = data.get('split_ratio')
+        if raw_ratio is None or str(raw_ratio).strip() == '':
+            errors['split_ratio'] = 'Required for STOCK SPLIT (e.g. 4:1)'
         else:
+            ratio = parse_split_ratio(raw_ratio)
+            if ratio is None:
+                errors['split_ratio'] = 'Must be a valid ratio (e.g. 4:1)'
+            elif ratio <= 1.0:
+                errors['split_ratio'] = 'Must be > 1'
+            else:
+                clean['split_ratio'] = ratio
+    else:
+        # quantity: required for BUY/SELL, > 0
+        raw_qty = data.get('quantity')
+        if tx_type in ('BUY', 'SELL'):
+            if raw_qty is None or raw_qty == '':
+                errors['quantity'] = 'Required for BUY/SELL'
+            else:
+                try:
+                    qty = float(raw_qty)
+                    if qty <= 0:
+                        errors['quantity'] = 'Must be > 0'
+                    else:
+                        clean['quantity'] = qty
+                except (ValueError, TypeError):
+                    errors['quantity'] = 'Must be a number'
+        elif raw_qty is not None and raw_qty != '':
             try:
-                qty = float(raw_qty)
-                if qty <= 0:
-                    errors['quantity'] = 'Must be > 0'
-                else:
-                    clean['quantity'] = qty
+                clean['quantity'] = float(raw_qty)
             except (ValueError, TypeError):
                 errors['quantity'] = 'Must be a number'
-    elif raw_qty is not None and raw_qty != '':
-        try:
-            clean['quantity'] = float(raw_qty)
-        except (ValueError, TypeError):
-            errors['quantity'] = 'Must be a number'
 
-    # price_per_share: required for BUY/SELL, >= 0
-    raw_price = data.get('price_per_share')
-    if tx_type in ('BUY', 'SELL'):
-        if raw_price is None or raw_price == '':
-            errors['price_per_share'] = 'Required for BUY/SELL'
-        else:
+        # price_per_share: required for BUY/SELL, >= 0
+        raw_price = data.get('price_per_share')
+        if tx_type in ('BUY', 'SELL'):
+            if raw_price is None or raw_price == '':
+                errors['price_per_share'] = 'Required for BUY/SELL'
+            else:
+                try:
+                    price = float(raw_price)
+                    if price < 0:
+                        errors['price_per_share'] = 'Must be >= 0'
+                    else:
+                        clean['price_per_share'] = price
+                except (ValueError, TypeError):
+                    errors['price_per_share'] = 'Must be a number'
+        elif raw_price is not None and raw_price != '':
             try:
-                price = float(raw_price)
-                if price < 0:
-                    errors['price_per_share'] = 'Must be >= 0'
-                else:
-                    clean['price_per_share'] = price
+                clean['price_per_share'] = float(raw_price)
             except (ValueError, TypeError):
                 errors['price_per_share'] = 'Must be a number'
-    elif raw_price is not None and raw_price != '':
-        try:
-            clean['price_per_share'] = float(raw_price)
-        except (ValueError, TypeError):
-            errors['price_per_share'] = 'Must be a number'
 
     # currency (default EUR)
     currency = str(data.get('currency') or 'EUR').strip().upper()
