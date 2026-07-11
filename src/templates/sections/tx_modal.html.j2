@@ -1,0 +1,95 @@
+<!-- Manual transaction add/edit modal (report context) -->
+<div class="mtx-overlay" id="mtxModal" role="dialog" aria-modal="true" aria-labelledby="mtxModalTitle" style="display:none">
+  <div class="mtx-box">
+    <div class="mtx-title" id="mtxModalTitle">Add Transaction</div>
+    <form id="mtxForm" novalidate>
+      <input type="hidden" id="mtxId">
+      <input type="hidden" id="mtxReloadTicker">
+      <div class="mtx-row">
+        <div class="mtx-field">
+          <label for="mtxDate">Date *</label>
+          <input type="date" id="mtxDate" required>
+          <span class="mtx-err" id="mtxErrDate"></span>
+        </div>
+        <div class="mtx-field">
+          <label for="mtxAssetClass">Asset Class *</label>
+          <select id="mtxAssetClass" required>
+            <option value="">Select…</option>
+            <option value="stock">Stock</option>
+            <option value="cfd">CFD</option>
+            <option value="crypto">Crypto</option>
+            <option value="savings">Savings</option>
+          </select>
+          <span class="mtx-err" id="mtxErrAssetClass"></span>
+        </div>
+      </div>
+      <div class="mtx-row">
+        <div class="mtx-field">
+          <label for="mtxTicker">Ticker *</label>
+          <input type="text" id="mtxTicker" placeholder="e.g. AAPL" style="text-transform:uppercase" required>
+          <span class="mtx-err" id="mtxErrTicker"></span>
+        </div>
+        <div class="mtx-field">
+          <label for="mtxType">Type *</label>
+          <select id="mtxType" required>
+            <option value="">Select asset class first</option>
+          </select>
+          <span class="mtx-err" id="mtxErrType"></span>
+        </div>
+      </div>
+      <div class="mtx-row">
+        <div class="mtx-field">
+          <label for="mtxQty">Quantity</label>
+          <input type="number" id="mtxQty" step="any" min="0" placeholder="0">
+          <span class="mtx-err" id="mtxErrQuantity"></span>
+        </div>
+        <div class="mtx-field">
+          <label for="mtxPrice">Price per Share</label>
+          <input type="number" id="mtxPrice" step="any" min="0" placeholder="0.00">
+          <span class="mtx-err" id="mtxErrPrice_per_share"></span>
+        </div>
+      </div>
+      <div class="mtx-row">
+        <div class="mtx-field">
+          <label for="mtxCurrency">Currency</label>
+          <input type="text" id="mtxCurrency" value="EUR" maxlength="3" style="text-transform:uppercase">
+          <span class="mtx-err" id="mtxErrCurrency"></span>
+        </div>
+        <div class="mtx-field">
+          <label for="mtxFx">FX Rate <span id="mtxFxLabel" style="font-size:.72rem;color:var(--muted)">(EUR rate)</span></label>
+          <input type="number" id="mtxFx" step="any" min="0" placeholder="1.0">
+          <span class="mtx-err" id="mtxErrFx_rate"></span>
+        </div>
+      </div>
+      <div class="mtx-row">
+        <div class="mtx-field">
+          <label for="mtxCommission">Commission</label>
+          <input type="number" id="mtxCommission" step="any" min="0" placeholder="0.00">
+          <span class="mtx-err" id="mtxErrCommission"></span>
+        </div>
+        <div class="mtx-field">
+          <label for="mtxWht">Withholding Tax</label>
+          <input type="number" id="mtxWht" step="any" min="0" placeholder="0.00">
+          <span class="mtx-err" id="mtxErrWithholding_tax"></span>
+        </div>
+      </div>
+      <div id="mtxFormError" style="color:#dc2626;font-size:.83rem;margin-bottom:.5rem;display:none"></div>
+      <div class="mtx-actions">
+        <button type="button" class="tax-export-btn" onclick="closeMtxModal()">Cancel</button>
+        <button type="submit" class="tax-export-btn mtx-submit" id="mtxSubmitBtn">Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Delete confirmation modal -->
+<div class="mtx-overlay" id="mtxDelModal" role="dialog" aria-modal="true" aria-labelledby="mtxDelTitle" style="display:none">
+  <div class="mtx-box mtx-del-box">
+    <div class="mtx-title" id="mtxDelTitle">Delete transaction?</div>
+    <div class="mtx-del-body" id="mtxDelBody">This cannot be undone.</div>
+    <div class="mtx-actions">
+      <button class="tax-export-btn" onclick="closeMtxDelModal()">Cancel</button>
+      <button class="tax-export-btn mtx-danger" id="mtxDelConfirmBtn" onclick="confirmMtxDelete()">Delete</button>
+    </div>
+  </div>
+</div>

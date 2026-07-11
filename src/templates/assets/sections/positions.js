@@ -48,6 +48,33 @@ function _getAssetClassForTicker(ticker) {
   return 'stock';
 }
 
+// Strip scope prefix from ticker for API queries (CFD:TSLA → TSLA)
+function _rawTickerForApi(ticker) {
+  if (ticker.startsWith('CFD:')) return ticker.slice(4);
+  if (ticker.startsWith('CRYPTO:')) return ticker.slice(7);
+  if (ticker.startsWith('SAVINGS:')) return ticker.slice(8);
+  return ticker;
+}
+
+function _renderTxPanel(ticker) {
+  const isPremium = typeof D !== 'undefined' && D.user && (D.user.role === 'premium' || D.user.role === 'admin');
+  const rawTicker = _rawTickerForApi(ticker);
+  const ac = _getAssetClassForTicker(ticker);
+  const tickerEsc = rawTicker.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const addBtn = isPremium
+    ? `<button class="tax-export-btn" style="font-size:0.72rem;padding:0.25rem 0.6rem" onclick="openMtxModal('${tickerEsc}','${ac}')">+ Add Transaction</button>`
+    : '';
+  return `<div class="pos-tx-panel">
+    <div class="pos-tx-panel-header">
+      <h4>Transaction History</h4>
+      ${addBtn}
+    </div>
+    <div class="pos-tx-content" data-raw-ticker="${rawTicker}">
+      <span style="color:var(--muted);font-size:0.8rem">Loading…</span>
+    </div>
+  </div>`;
+}
+
 function _getBracketsForTicker(ticker) {
   const regime = D.regime || {};
   const ac = _getAssetClassForTicker(ticker);
@@ -298,10 +325,8 @@ function updatePositions() {
 
   const tbody = positions.map((p, idx) => {
     const hasPriceHistory = (D.position_price_history || {})[p.ticker]?.dates?.length > 1;
-    const expandable = hasPriceHistory ? 'pos-row-expandable' : '';
-    const chevron = hasPriceHistory
-      ? `<span class="pos-chevron" data-idx="${idx}">&#x25B6;</span>`
-      : `<span class="pos-chevron-placeholder"></span>`;
+    const expandable = 'pos-row-expandable';
+    const chevron = `<span class="pos-chevron" data-idx="${idx}">&#x25B6;</span>`;
 
     const totalGain = p.unrealized_gain_eur + (p.realized_gain_eur || 0);
     const row = `<tr class="pos-row ${expandable}" data-idx="${idx}" data-ticker="${p.ticker}">
@@ -380,6 +405,7 @@ function updatePositions() {
           </div>
           </div>
           ${_renderLots(p.ticker, currentPrice)}
+          ${_renderTxPanel(p.ticker)}
         </div>
       </td>
     </tr>`;
@@ -425,6 +451,12 @@ function updatePositions() {
         if (canvas) {
           const p = positions.find(x => x.ticker === ticker);
           _buildPosChart(ticker, canvas, p ? p.avg_cost_eur : 0);
+        }
+        // Load per-ticker transaction history
+        const txContent = detailRow.querySelector('.pos-tx-content');
+        if (txContent && window.refreshPosTickerTx) {
+          const rawTicker = _rawTickerForApi(ticker);
+          refreshPosTickerTx(rawTicker, null, txContent);
         }
       }
     });

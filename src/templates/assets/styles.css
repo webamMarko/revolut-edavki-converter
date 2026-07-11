@@ -2496,3 +2496,37 @@ body {
     padding: 0 0.75rem;
   }
 }
+
+/* ---- Manual transaction modal (report context) ---- */
+.mtx-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 1100;
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+}
+.mtx-box {
+  background: var(--card-bg); border-radius: 10px; padding: 1.5rem;
+  max-width: 520px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  max-height: 90vh; overflow-y: auto;
+}
+.mtx-del-box { max-width: 360px; }
+.mtx-title { font-size: 1.05rem; font-weight: 700; margin: 0 0 1.1rem; }
+.mtx-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin-bottom: .75rem; }
+.mtx-field { display: flex; flex-direction: column; gap: .25rem; }
+.mtx-field label { font-size: .8rem; font-weight: 500; color: var(--muted); }
+.mtx-field input, .mtx-field select {
+  padding: .5rem .6rem; border: 1px solid var(--border); border-radius: 6px;
+  font-size: .88rem; background: var(--card-bg); color: var(--text);
+  font-family: inherit; width: 100%; box-sizing: border-box;
+}
+.mtx-field input:focus, .mtx-field select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mtx-err { font-size: .75rem; color: #dc2626; margin-top: 2px; min-height: 1em; }
+.mtx-actions { display: flex; gap: .75rem; justify-content: flex-end; margin-top: 1.25rem; }
+.mtx-del-body { font-size: .88rem; color: var(--muted); margin-bottom: 1.25rem; }
+.mtx-submit { background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; }
+.mtx-submit:hover { opacity: .88; }
+.mtx-danger { color: #dc2626 !important; border-color: #fca5a5 !important; }
+.mtx-danger:hover { background: #fee2e2 !important; }
+/* Per-ticker transaction panel inside positions detail */
+.pos-tx-panel { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+.pos-tx-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.pos-tx-panel-header h4 { margin: 0; font-size: 0.83rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+@media (max-width: 600px) { .mtx-row { grid-template-columns: 1fr; } }
