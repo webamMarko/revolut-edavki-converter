@@ -1151,3 +1151,136 @@ def api_list_countries(handler):
     """GET /api/reference/countries — ISO 3166-1 countries with default currencies."""
     from ..countries import COUNTRIES
     json_response(handler, COUNTRIES)
+
+
+# ------------------------------------------------------------------
+# Transactions API (manual CRUD)
+# ------------------------------------------------------------------
+
+def _require_premium(handler):
+    """Return (session, conn) for premium/admin, else 403 and (None, None)."""
+    session = get_session(handler)
+    if not session or session['role'] not in ('premium', 'admin'):
+        json_response(handler, {'error': 'forbidden'}, 403)
+        return None, None
+    conn = portfolio_conn(session, get_session_token(handler))
+    return session, conn
+
+
+def _invalidate_caches(conn, portfolio_id: int):
+    conn.execute("DELETE FROM cached_analytics WHERE portfolio_id = ?", (portfolio_id,))
+    conn.execute(
+        "DELETE FROM cached_tax_reports WHERE is_immutable = 0 AND portfolio_id = ?",
+        (portfolio_id,)
+    )
+    conn.commit()
+
+
+def api_list_transactions(handler):
+    """GET /api/transactions — list transactions with filters + pagination."""
+    from urllib.parse import parse_qs, urlparse
+    session = get_session(handler)
+    conn = portfolio_conn(session, get_session_token(handler))
+    try:
+        portfolio_id = _get_portfolio_id(session)
+        qs = parse_qs(urlparse(handler.path).query)
+
+        def _qs(key, default=None):
+            vals = qs.get(key)
+            return vals[0] if vals else default
+
+        from ..transactions import list_transactions
+        result = list_transactions(
+            conn,
+            portfolio_id=portfolio_id,
+            ticker=_qs('ticker'),
+            asset_class=_qs('asset_class'),
+            tx_type=_qs('type'),
+            date_from=_qs('date_from'),
+            date_to=_qs('date_to'),
+            page=int(_qs('page', '1')),
+            per_page=int(_qs('per_page', '50')),
+        )
+        json_response(handler, result)
+    except (ValueError, TypeError) as e:
+        json_response(handler, {'error': str(e)}, 400)
+    finally:
+        conn.close()
+
+
+def api_get_transaction(handler, tx_id: int):
+    """GET /api/transactions/{id} — single transaction."""
+    session = get_session(handler)
+    conn = portfolio_conn(session, get_session_token(handler))
+    try:
+        portfolio_id = _get_portfolio_id(session)
+        from ..transactions import get_transaction
+        row = get_transaction(conn, tx_id, portfolio_id)
+        if row is None:
+            json_response(handler, {'error': 'not found'}, 404)
+        else:
+            json_response(handler, row)
+    finally:
+        conn.close()
+
+
+def api_create_transaction(handler):
+    """POST /api/transactions — create manual transaction with audit log."""
+    session, conn = _require_premium(handler)
+    if conn is None:
+        return
+    try:
+        data = json.loads(handler._read_body())
+        asset_class = str(data.get('asset_class', '')).strip()
+        from ..transactions import validate_transaction, create_manual_transaction
+        clean, errors = validate_transaction(data, asset_class)
+        if errors:
+            json_response(handler, {'error': 'validation_error', 'fields': errors}, 422)
+            return
+        portfolio_id = _get_portfolio_id(session)
+        row = create_manual_transaction(conn, clean, portfolio_id=portfolio_id)
+        _invalidate_caches(conn, portfolio_id)
+        json_response(handler, row, 201)
+    except (json.JSONDecodeError, TypeError) as e:
+        json_response(handler, {'error': str(e)}, 400)
+    finally:
+        conn.close()
+
+
+def api_update_transaction(handler, tx_id: int):
+    """PUT /api/transactions/{id} — partial update with per-field audit."""
+    session, conn = _require_premium(handler)
+    if conn is None:
+        return
+    try:
+        data = json.loads(handler._read_body())
+        portfolio_id = _get_portfolio_id(session)
+        from ..transactions import update_manual_transaction
+        row = update_manual_transaction(conn, tx_id, data, portfolio_id=portfolio_id)
+        if row is None:
+            json_response(handler, {'error': 'not found'}, 404)
+            return
+        _invalidate_caches(conn, portfolio_id)
+        json_response(handler, row)
+    except (json.JSONDecodeError, TypeError) as e:
+        json_response(handler, {'error': str(e)}, 400)
+    finally:
+        conn.close()
+
+
+def api_delete_transaction(handler, tx_id: int):
+    """DELETE /api/transactions/{id} — audit snapshot then delete."""
+    session, conn = _require_premium(handler)
+    if conn is None:
+        return
+    try:
+        portfolio_id = _get_portfolio_id(session)
+        from ..transactions import delete_manual_transaction
+        ok = delete_manual_transaction(conn, tx_id, portfolio_id=portfolio_id)
+        if not ok:
+            json_response(handler, {'error': 'not found'}, 404)
+            return
+        _invalidate_caches(conn, portfolio_id)
+        json_response(handler, {'deleted': tx_id})
+    finally:
+        conn.close()

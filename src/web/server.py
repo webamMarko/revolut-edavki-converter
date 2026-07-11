@@ -183,6 +183,16 @@ class UploadHandler(BaseHTTPRequestHandler):
             else:
                 self.send_error(404)
 
+        # Transactions API
+        elif path == "/api/transactions":
+            api.api_list_transactions(self)
+        elif path.startswith("/api/transactions/"):
+            tx_id_str = path[len("/api/transactions/"):]
+            if tx_id_str.isdigit():
+                api.api_get_transaction(self, int(tx_id_str))
+            else:
+                self.send_error(404)
+
         # Shared portfolio
         elif path.startswith("/s/"):
             token = path[3:]
@@ -307,6 +317,10 @@ class UploadHandler(BaseHTTPRequestHandler):
             else:
                 self.send_error(404)
 
+        # Transactions API
+        elif path == "/api/transactions":
+            api.api_create_transaction(self)
+
         # IBKR integration routes
         elif path == "/api/ibkr/credentials":
             ibkr.api_ibkr_save_credentials(self)
@@ -338,6 +352,9 @@ class UploadHandler(BaseHTTPRequestHandler):
         # /api/properties/<id>
         elif len(parts) == 4 and parts[1] == "api" and parts[2] == "properties" and parts[3].isdigit():
             api.api_update_property(self, int(parts[3]))
+        # /api/transactions/<id>
+        elif len(parts) == 4 and parts[1] == "api" and parts[2] == "transactions" and parts[3].isdigit():
+            api.api_update_transaction(self, int(parts[3]))
         else:
             self.send_error(404)
 
@@ -358,6 +375,9 @@ class UploadHandler(BaseHTTPRequestHandler):
         # /api/properties/<id>
         elif len(parts) == 4 and parts[1] == "api" and parts[2] == "properties" and parts[3].isdigit():
             api.api_delete_property(self, int(parts[3]))
+        # /api/transactions/<id>
+        elif len(parts) == 4 and parts[1] == "api" and parts[2] == "transactions" and parts[3].isdigit():
+            api.api_delete_transaction(self, int(parts[3]))
         else:
             self.send_error(404)
 

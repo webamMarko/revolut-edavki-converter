@@ -10,7 +10,7 @@ from pathlib import Path
 DB_DIR = Path.home() / ".revolut-edavki"
 DB_PATH = DB_DIR / "portfolio.db"
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS transactions (
@@ -157,6 +157,17 @@ CREATE TABLE IF NOT EXISTS goals (
     created_at          TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS transaction_audit (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id  INTEGER NOT NULL,
+    action          TEXT NOT NULL,
+    field_name      TEXT,
+    old_value       TEXT,
+    new_value       TEXT,
+    changed_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_audit_txn ON transaction_audit(transaction_id);
 """
 
 
@@ -442,6 +453,20 @@ def _init_schema(conn: sqlite3.Connection):
             WHERE purchase_price_eur IS NOT NULL AND acquisition_price IS NULL
         """)
         conn.commit()
+
+    if current_version < 13:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS transaction_audit (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                transaction_id  INTEGER NOT NULL,
+                action          TEXT NOT NULL,
+                field_name      TEXT,
+                old_value       TEXT,
+                new_value       TEXT,
+                changed_at      TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_audit_txn ON transaction_audit(transaction_id);
+        """)
 
     if current_version < SCHEMA_VERSION:
         conn.execute(
