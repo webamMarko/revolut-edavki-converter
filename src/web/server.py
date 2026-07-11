@@ -150,6 +150,8 @@ class UploadHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
         elif path == "/api/reference/countries":
             api.api_list_countries(self)
+        elif path == "/transactions":
+            portfolio.serve_transactions_page(self)
         elif path == "/properties":
             portfolio.serve_properties_list(self)
         elif path == "/properties/new":

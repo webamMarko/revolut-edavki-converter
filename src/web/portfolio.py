@@ -473,6 +473,31 @@ def serve_pricing_page(handler):
 
 
 # ------------------------------------------------------------------
+# Transactions management page
+# ------------------------------------------------------------------
+
+def serve_transactions_page(handler):
+    """GET /transactions — transaction management page."""
+    session = get_session(handler)
+    if not session:
+        redirect(handler, "/login")
+        return
+
+    template = page_env.get_template("pages/transactions.html.j2")
+    html = template.render(
+        fouc_script=FOUC_SCRIPT,
+        common_js=COMMON_JS,
+        show_header=True,
+        show_drop_import=False,
+        username=session.get("username"),
+        role=session.get("role"),
+        active_page="transactions",
+        active_portfolio_name=session.get("active_portfolio_name"),
+    )
+    html_response(handler, html)
+
+
+# ------------------------------------------------------------------
 # Real estate property pages
 # ------------------------------------------------------------------
 
