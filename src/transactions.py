@@ -200,6 +200,10 @@ def validate_transaction(data: dict, asset_class: str) -> tuple[dict, dict]:
             except (ValueError, TypeError):
                 errors[field] = 'Must be a number'
 
+    # Auto-compute total_amount from quantity * price_per_share if not provided
+    if 'total_amount' not in clean and clean.get('quantity') and clean.get('price_per_share'):
+        clean['total_amount'] = clean['quantity'] * clean['price_per_share']
+
     return clean, errors
 
 
