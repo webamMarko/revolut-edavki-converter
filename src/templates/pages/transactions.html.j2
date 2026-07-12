@@ -12,6 +12,7 @@
 .tx-filters input,.tx-filters select{padding:.4rem .6rem;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--card-bg);color:var(--text);font-family:inherit}
 .tx-filters input[type=text]{width:140px}
 .tx-filters input[type=date]{width:140px}
+.tx-filters .filter-label{font-size:.75rem;color:var(--text-muted);font-weight:500;align-self:center}
 .tx-filters select{width:130px}
 .btn-sm{padding:.35rem .75rem;font-size:.8rem;border-radius:6px;border:none;cursor:pointer;font-weight:500}
 .btn-primary{background:var(--accent,#4f46e5);color:#fff}
@@ -108,7 +109,9 @@
       <option value="Staking reward">Staking reward</option>
       <option value="Interest PAID">Interest PAID</option>
     </select>
+    <label class="filter-label" for="filterFrom">From</label>
     <input type="date" id="filterFrom" onchange="loadPage(1)" title="Date from">
+    <label class="filter-label" for="filterTo">To</label>
     <input type="date" id="filterTo" onchange="loadPage(1)" title="Date to">
     <button class="btn-sm btn-secondary" onclick="clearFilters()">Clear</button>
   </div>
