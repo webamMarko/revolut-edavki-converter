@@ -302,6 +302,15 @@ def update_manual_transaction(conn: sqlite3.Connection, tx_id: int,
     if not updates:
         return old
 
+    # Auto-recompute total_amount when qty or price changes and total_amount isn't explicit
+    if 'total_amount' not in updates and ('quantity' in updates or 'price_per_share' in updates):
+        qty = updates.get('quantity', old.get('quantity')) or 0
+        pps = updates.get('price_per_share', old.get('price_per_share')) or 0
+        if qty and pps:
+            new_total = float(qty) * float(pps)
+            if old.get('total_amount') != new_total:
+                updates['total_amount'] = new_total
+
     set_clause = ', '.join(f"{k} = ?" for k in updates)
     conn.execute(
         f"UPDATE transactions SET {set_clause} WHERE id = ?",
