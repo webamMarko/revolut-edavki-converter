@@ -22,6 +22,7 @@ TICKER_MAP = {
     "FLY": "FLY",
     "VWCE": "VWCE.DE",
     "NOVN": "NOVN.SW",  # Novartis — bare ticker delisted on yfinance, use Swiss listing
+    "KRKG": "KRKG.VI",  # Krka d.d. — Ljubljana listed, use Vienna exchange on yfinance
 }
 
 # Benchmark indexes
