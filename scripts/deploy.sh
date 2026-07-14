@@ -58,6 +58,27 @@ $SSH "${REMOTE_USER}@${REMOTE_HOST}" "
 "
 
 if [[ "$SKIP_DB" == false ]]; then
+  BACKUP_DIR="${LOCAL_DIR}/data/backups/$(date +%Y%m%d_%H%M%S)"
+  echo "==> Downloading production databases to backup: ${BACKUP_DIR}"
+  mkdir -p "${BACKUP_DIR}/marko" "${BACKUP_DIR}/_demo" "${BACKUP_DIR}/_system"
+  for db_path in \
+    "data/marko/portfolio.db" \
+    "data/_demo/portfolio.db" \
+    "data/_system/users.db" \
+    "data/_system/prices.db"; do
+    remote_file="${REMOTE_DIR}/${db_path}"
+    local_backup="${BACKUP_DIR}/${db_path#data/}"
+    # Ensure backup subdirectory exists
+    mkdir -p "$(dirname "$local_backup")"
+    if $SSH "${REMOTE_USER}@${REMOTE_HOST}" "test -f ${remote_file}" 2>/dev/null; then
+      echo "   Backing up ${db_path}..."
+      $SCP "${REMOTE_USER}@${REMOTE_HOST}:${remote_file}" "$local_backup"
+    else
+      echo "   Skipping backup of ${db_path} (not on server)"
+    fi
+  done
+  echo "   Backup complete: ${BACKUP_DIR}"
+
   echo "==> Copying databases..."
   $SSH "${REMOTE_USER}@${REMOTE_HOST}" "
     mkdir -p ${REMOTE_DIR}/data/marko \
