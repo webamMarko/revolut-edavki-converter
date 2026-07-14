@@ -223,7 +223,7 @@ def sync_stock_prices(conn: sqlite3.Connection, start_date: datetime | None = No
 
         if df is not None and not df.empty:
             # Determine currency by exchange suffix
-            if yf_ticker.endswith((".DE", ".F", ".AS", ".PA", ".L")):
+            if yf_ticker.endswith((".DE", ".F", ".AS", ".PA", ".L", ".VI", ".MI", ".MC", ".BR", ".LS", ".AT", ".HE")):
                 currency = "EUR"
             elif yf_ticker.endswith(".SW"):
                 # Swiss franc — convert to EUR at storage time using EURCHF rate
