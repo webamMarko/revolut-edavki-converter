@@ -1,4 +1,28 @@
 // --- Sortable tables ---
+function _parseSortNum(text) {
+  let n = text.trim().replace(/[€$£¥%\s]/g, '');
+  if (!n || n === '—') return NaN;
+  const dots = (n.match(/\./g) || []).length;
+  const commas = (n.match(/,/g) || []).length;
+  if (dots > 1) {
+    // e.g. 1.234.567 or 1.234.567,89 — dot is thousands separator
+    n = n.replace(/\./g, '');
+    if (commas === 1) n = n.replace(',', '.');
+  } else if (commas > 1) {
+    // e.g. 1,234,567 or 1,234,567.89 — comma is thousands separator
+    n = n.replace(/,/g, '');
+  } else if (dots === 1 && commas === 1) {
+    // both present — last one is the decimal separator
+    const di = n.lastIndexOf('.'), ci = n.lastIndexOf(',');
+    if (ci > di) { n = n.replace('.', '').replace(',', '.'); } // European 1.234,56
+    else         { n = n.replace(',', ''); }                   // US 1,234.56
+  } else if (commas === 1 && dots === 0) {
+    // single comma only — treat as decimal (European)
+    n = n.replace(',', '.');
+  }
+  return parseFloat(n);
+}
+
 function makeSortable(table) {
   const ths = table.querySelectorAll('th');
   ths.forEach((th, idx) => {
@@ -14,11 +38,10 @@ function makeSortable(table) {
       th.dataset.dir = dir;
       th.querySelector('.arrow').textContent = dir === 'asc' ? '▲' : '▼';
       rows.sort((a, b) => {
-        let av = a.cells[idx].textContent.replace(/[^\d.\-]/g, '');
-        let bv = b.cells[idx].textContent.replace(/[^\d.\-]/g, '');
-        const an = parseFloat(av), bn = parseFloat(bv);
+        const an = _parseSortNum(a.cells[idx].textContent);
+        const bn = _parseSortNum(b.cells[idx].textContent);
         if (!isNaN(an) && !isNaN(bn)) return dir === 'asc' ? an - bn : bn - an;
-        av = a.cells[idx].textContent; bv = b.cells[idx].textContent;
+        const av = a.cells[idx].textContent, bv = b.cells[idx].textContent;
         return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
       });
       rows.forEach(r => tbody.appendChild(r));
