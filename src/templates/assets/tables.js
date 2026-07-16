@@ -1,6 +1,6 @@
 // --- Sortable tables ---
 function _parseSortNum(text) {
-  let n = text.trim().replace(/[€$£¥%\s]/g, '');
+  let n = text.trim().replace(/[€$£¥%\s]/g, '').replace(/−/g, '-');
   if (!n || n === '—') return NaN;
   const dots = (n.match(/\./g) || []).length;
   const commas = (n.match(/,/g) || []).length;
