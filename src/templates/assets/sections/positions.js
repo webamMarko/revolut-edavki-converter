@@ -250,9 +250,7 @@ function _makePositionsSortable(table, positions) {
       pairs.sort(([a], [b]) => {
         const ac = a.cells[colIdx], bc = b.cells[colIdx];
         if (!ac || !bc) return 0;
-        let av = ac.textContent.replace(/[^\d.\-]/g, '');
-        let bv = bc.textContent.replace(/[^\d.\-]/g, '');
-        const an = parseFloat(av), bn = parseFloat(bv);
+        const an = _parseSortNum(ac.textContent), bn = _parseSortNum(bc.textContent);
         if (!isNaN(an) && !isNaN(bn)) return dir === 'asc' ? an - bn : bn - an;
         return dir === 'asc'
           ? ac.textContent.localeCompare(bc.textContent)
