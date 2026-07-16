@@ -20,14 +20,38 @@ const zoomOpts = {
 // --- Charts ---
 let portfolioChart, benchmarkChart;
 
+function _buildCumulativeTaxSeries() {
+  var tby = D.tax_by_year || {};
+  var events = [];
+  Object.keys(tby).forEach(function(yr) {
+    var sales = (tby[yr].realized_sales || []);
+    sales.forEach(function(s) {
+      if (s.sell_date && s.tax_eur) events.push({date: s.sell_date.substring(0, 10), tax: s.tax_eur});
+    });
+  });
+  events.sort(function(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  var dateMap = {};
+  events.forEach(function(e) { dateMap[e.date] = (dateMap[e.date] || 0) + e.tax; });
+  var cumulative = new Array(allDates.length);
+  var running = 0;
+  for (var i = 0; i < allDates.length; i++) {
+    var d = allDates[i];
+    if (dateMap[d]) running += dateMap[d];
+    cumulative[i] = Math.round(running * 100) / 100;
+  }
+  return cumulative;
+}
+
 function buildPortfolioChart() {
   const ctx1 = scopedFind(null, 'portfolioChart').getContext('2d');
   let chartLabels = allDates.slice();
   let portfolioData = ds.value_eur.slice();
   let investedData  = ds.invested_eur.slice();
+  let taxData = _buildCumulativeTaxSeries();
   const chartDatasets = [
     {label:'Portfolio Value', data:portfolioData, borderColor:'#4285f4', backgroundColor:'rgba(66,133,244,0.08)', fill:true,  tension:0.15, pointRadius:0, borderWidth:2},
     {label:'Cash Invested',   data:investedData,  borderColor:'#9e9e9e', borderDash:[5,5],   fill:false, tension:0.15, pointRadius:0, borderWidth:1.5},
+    {label:'Total Tax (Est.)', data:taxData, borderColor:'#e53935', borderDash:[3,3], fill:false, tension:0.15, pointRadius:0, borderWidth:1.5, hidden:true},
   ];
 
   return new Chart(ctx1, {
