@@ -35,7 +35,7 @@ function _buildCumulativeTaxSeries() {
   var cumulative = new Array(allDates.length);
   var running = 0;
   for (var i = 0; i < allDates.length; i++) {
-    var d = allDates[i];
+    var d = allDates[i].substring(0, 10);
     if (dateMap[d]) running += dateMap[d];
     cumulative[i] = Math.round(running * 100) / 100;
   }
