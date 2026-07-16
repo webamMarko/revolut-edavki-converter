@@ -51,7 +51,7 @@ function buildPortfolioChart() {
   const chartDatasets = [
     {label:'Portfolio Value', data:portfolioData, borderColor:'#4285f4', backgroundColor:'rgba(66,133,244,0.08)', fill:true,  tension:0.15, pointRadius:0, borderWidth:2},
     {label:'Cash Invested',   data:investedData,  borderColor:'#9e9e9e', borderDash:[5,5],   fill:false, tension:0.15, pointRadius:0, borderWidth:1.5},
-    {label:'Total Tax (Est.)', data:taxData, borderColor:'#e53935', borderDash:[3,3], fill:false, tension:0.15, pointRadius:0, borderWidth:1.5, hidden:true},
+    {label:'Total Tax (Est.)', data:taxData, borderColor:'#e53935', borderDash:[3,3], fill:false, tension:0.15, pointRadius:0, borderWidth:1.5},
   ];
 
   return new Chart(ctx1, {
