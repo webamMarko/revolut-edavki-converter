@@ -142,6 +142,7 @@ class IlirikaAdapter(CsvAdapter):
         ticker, currency = _ilirika_ticker_to_standard(str(instrument))
 
         tx_type_raw = str(row.get("TransactionTypeName", ""))
+        tx_type_lower = tx_type_raw.lower()
         type_map = {
             "Nakup": "BUY",
             "Prodaja": "SELL",
@@ -154,6 +155,12 @@ class IlirikaAdapter(CsvAdapter):
             tx_type = "MERGER"
         elif "Split" in tx_type_raw:
             tx_type = "STOCK SPLIT"
+        elif "dividenda" in tx_type_lower or "dividend" in tx_type_lower:
+            # "Davek" (tax) rows related to dividends → withholding tax correction
+            if "davek" in tx_type_lower:
+                tx_type = "DIVIDEND TAX"
+            else:
+                tx_type = "DIVIDEND"
         else:
             tx_type = type_map.get(tx_type_raw, tx_type_raw.upper())
 
@@ -166,6 +173,16 @@ class IlirikaAdapter(CsvAdapter):
         if tx_type == "MERGER CASH":
             total_amount = price
             price = (price / quantity) if quantity else price
+        elif tx_type in ("DIVIDEND", "DIVIDEND TAX"):
+            # For dividends: Volume = shares held, Price = per-share dividend rate
+            # total = Volume * Price; fallback to Price alone if Volume is 0/missing
+            if quantity and price:
+                total_amount = abs(quantity * price)
+            elif price:
+                total_amount = abs(price)
+            else:
+                total_amount = None
+            quantity = quantity or None
         else:
             total_amount = quantity * price if quantity and price else None
 

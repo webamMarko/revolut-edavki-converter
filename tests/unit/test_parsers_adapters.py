@@ -224,6 +224,59 @@ class TestIlirikaAdapter:
                           "PriceValue": None, "Price": None})
         assert adapter._parse_row(row, {}) is None
 
+    def test_dividend_parsed(self):
+        from src.parsers.ilirika import IlirikaAdapter
+        trades = _trades(IlirikaAdapter, "ilirika")
+        divs = [t for t in trades if t.type == "DIVIDEND"]
+        assert len(divs) == 1
+        div = divs[0]
+        assert div.ticker == "AAPL"
+        assert div.broker_source == "ilirika"
+        assert div.asset_class == "stock"
+        assert div.total_amount == pytest.approx(2.3, abs=0.01)  # 10 shares * 0.23
+
+    def test_dividend_tax_parsed(self):
+        from src.parsers.ilirika import IlirikaAdapter
+        trades = _trades(IlirikaAdapter, "ilirika")
+        tax_rows = [t for t in trades if t.type == "DIVIDEND TAX"]
+        assert len(tax_rows) == 1
+        assert tax_rows[0].ticker == "AAPL"
+        assert tax_rows[0].total_amount == pytest.approx(0.3, abs=0.01)  # 10 * 0.03
+
+    def test_dividend_type_detection(self):
+        """Various Ilirika dividend type name spellings are recognised."""
+        from src.parsers.ilirika import IlirikaAdapter
+        import pandas as pd
+        adapter = IlirikaAdapter()
+        base = {
+            "FinancialInstrument": "AAPL US",
+            "SettlementDate": "15. 03. 2024 00:00:00",
+            "DateValue": "15. 03. 2024 00:00:00",
+            "VolumeValue": 10, "Volume": 10,
+            "PriceValue": "0,23", "Price": "0,23",
+        }
+        for name in ("Dividenda", "Izplačilo dividende", "KA Dividenda"):
+            row = pd.Series({**base, "TransactionTypeName": name})
+            t = adapter._parse_row(row)
+            assert t is not None and t.type == "DIVIDEND", f"Expected DIVIDEND for '{name}'"
+
+    def test_withholding_tax_type_detection(self):
+        """Withholding-tax row types are mapped to DIVIDEND TAX."""
+        from src.parsers.ilirika import IlirikaAdapter
+        import pandas as pd
+        adapter = IlirikaAdapter()
+        base = {
+            "FinancialInstrument": "AAPL US",
+            "SettlementDate": "15. 03. 2024 00:00:00",
+            "DateValue": "15. 03. 2024 00:00:00",
+            "VolumeValue": 10, "Volume": 10,
+            "PriceValue": "0,03", "Price": "0,03",
+        }
+        for name in ("Davek od dividende", "Davek na dividendo"):
+            row = pd.Series({**base, "TransactionTypeName": name})
+            t = adapter._parse_row(row)
+            assert t is not None and t.type == "DIVIDEND TAX", f"Expected DIVIDEND TAX for '{name}'"
+
 
 # ---------------------------------------------------------------------------
 # Task 9: ibkr
