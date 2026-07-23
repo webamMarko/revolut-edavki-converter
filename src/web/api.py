@@ -1167,13 +1167,16 @@ def _require_premium(handler):
     return session, conn
 
 
-def _invalidate_caches(conn, portfolio_id: int):
+def _invalidate_caches(conn, portfolio_id: int, username: str | None = None):
     conn.execute("DELETE FROM cached_analytics WHERE portfolio_id = ?", (portfolio_id,))
     conn.execute(
         "DELETE FROM cached_tax_reports WHERE is_immutable = 0 AND portfolio_id = ?",
         (portfolio_id,)
     )
     conn.commit()
+    if username:
+        from ..report_cache import invalidate_user_html
+        invalidate_user_html(username)
 
 
 def api_list_transactions(handler):
@@ -1256,7 +1259,7 @@ def api_create_transaction(handler):
             clean['price_per_share'] = ratio  # stored for edit round-trip
 
         row = create_manual_transaction(conn, clean, portfolio_id=portfolio_id)
-        _invalidate_caches(conn, portfolio_id)
+        _invalidate_caches(conn, portfolio_id, username=session.get('username'))
         json_response(handler, row, 201)
     except (json.JSONDecodeError, TypeError) as e:
         json_response(handler, {'error': str(e)}, 400)
@@ -1305,7 +1308,7 @@ def api_update_transaction(handler, tx_id: int):
         if row is None:
             json_response(handler, {'error': 'not found'}, 404)
             return
-        _invalidate_caches(conn, portfolio_id)
+        _invalidate_caches(conn, portfolio_id, username=session.get('username'))
         json_response(handler, row)
     except (json.JSONDecodeError, TypeError) as e:
         json_response(handler, {'error': str(e)}, 400)
@@ -1325,7 +1328,7 @@ def api_delete_transaction(handler, tx_id: int):
         if not ok:
             json_response(handler, {'error': 'not found'}, 404)
             return
-        _invalidate_caches(conn, portfolio_id)
+        _invalidate_caches(conn, portfolio_id, username=session.get('username'))
         json_response(handler, {'deleted': tx_id})
     finally:
         conn.close()
