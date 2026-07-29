@@ -118,10 +118,13 @@ Requires `sshpass` locally. Uses password auth (`homeassistant@192.168.4.213`).
 ### Cron job (on server)
 
 ```
-15 22 * * 1-5 docker exec portfolio python -m src.cli sync >> /home/homeassistant/portfolio-sync.log 2>&1
+0 * * * * docker compose -f /home/homeassistant/revolut-edavki-converter/docker-compose.yml exec -T portfolio python -m src.cli sync --all-users >> /home/homeassistant/portfolio-sync.log 2>&1
+15 22 * * 1-5 docker compose -f /home/homeassistant/revolut-edavki-converter/docker-compose.yml exec -T portfolio python -m src.cli sync --all-users >> /home/homeassistant/portfolio-sync.log 2>&1
 ```
 
-Runs 15 minutes after NYSE close (22:15 Ljubljana/CEST). Adjust to 21:15 in winter (CET).
+Uses `docker compose exec` with absolute compose file path so it survives container recreations. Never use `docker exec <container-name>` — the name changes on rebuild.
+
+**Production directory**: `/home/homeassistant/revolut-edavki-converter/` — always rebuild/redeploy from here, not from `~/ai-development/`. The dev copy has stale data.
 
 ### Multi-user auth
 
