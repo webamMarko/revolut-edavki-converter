@@ -135,6 +135,8 @@ def _store_prices(conn: sqlite3.Connection, revolut_ticker: str, df: pd.DataFram
 
     rows = []
     for idx, row in df.iterrows():
+        if pd.isna(row["close"]):
+            continue
         close = float(row["close"])
         if prev_close and prev_close > 0 and close > 0:
             ratio = close / prev_close
@@ -160,6 +162,7 @@ def _store_fx_rates(conn: sqlite3.Connection, df: pd.DataFrame,
     rows = [
         (idx.strftime("%Y-%m-%d"), from_currency, to_currency, float(row["close"]))
         for idx, row in df.iterrows()
+        if not pd.isna(row["close"])
     ]
     conn.executemany(
         "INSERT OR REPLACE INTO fx_rates (date, from_currency, to_currency, rate) VALUES (?, ?, ?, ?)",
