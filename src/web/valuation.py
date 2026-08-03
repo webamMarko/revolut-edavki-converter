@@ -97,6 +97,14 @@ def api_fmp_proxy(handler):
         json_response(handler, {"error": str(exc)}, status=502)
         return
 
+    # Ensure we always return valid JSON to the client
+    try:
+        json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        raw = json.dumps({"error": raw.decode("utf-8", errors="replace").strip()}).encode()
+        if status == 200:
+            status = 502
+
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
     handler.send_header("Content-Length", str(len(raw)))

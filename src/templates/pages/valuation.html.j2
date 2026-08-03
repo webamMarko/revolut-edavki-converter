@@ -527,7 +527,7 @@ function dateBack(years) {
 function normalize(raw) {
   const p  = (Array.isArray(raw.profile) ? raw.profile[0] : raw.profile) || {};
   const q  = (Array.isArray(raw.quote) ? raw.quote[0] : raw.quote) || {};
-  const hist = (raw.history && raw.history.historical) || [];
+  const hist = Array.isArray(raw.history) ? raw.history : (raw.history && raw.history.historical) || [];
 
   const mapRev   = (arr, k)  => (arr || []).map(r => ({ date: r.date, value: (r[k] || 0) / 1e6 })).reverse();
   const mapAbsRev = (arr, k) => (arr || []).map(r => ({ date: r.date, value: Math.abs(r[k] || 0) / 1e6 })).reverse();
@@ -1009,7 +1009,7 @@ async function loadTicker(ticker, force) {
   document.getElementById('vwWarnings').innerHTML = '';
   try {
     const [profile, quote, history, isA, bsA, cfA, ae] = await Promise.all([
-      FMP.profile(ticker), FMP.quote(ticker), FMP.history(ticker),
+      FMP.profile(ticker), FMP.quote(ticker), FMP.history(ticker).catch(() => []),
       FMP.isA(ticker), FMP.bsA(ticker), FMP.cfA(ticker), FMP.ae(ticker).catch(() => []),
     ]);
     const [isQ, bsQ, cfQ] = await Promise.all([
