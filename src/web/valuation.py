@@ -65,25 +65,32 @@ def api_fmp_proxy(handler):
         json_response(handler, {"error": "Missing path parameter."}, status=400)
         return
 
-    # Parse v3-style "endpoint/TICKER" into endpoint + symbol
-    parts = fmp_path.split("/", 1)
-    if len(parts) != 2 or parts[0] not in _V3_TO_STABLE:
-        json_response(handler, {"error": "Endpoint not permitted."}, status=403)
-        return
+    # Search endpoint: "search-symbol/QUERY" → stable/search-symbol?query=QUERY
+    if fmp_path.startswith("search-symbol/"):
+        query = fmp_path.split("/", 1)[1]
+        extra = {"query": query, "limit": params.get("limit", ["8"])[0], "apikey": FMP_API_KEY}
+        qs = urllib.parse.urlencode(extra)
+        url = f"{FMP_BASE}/search-symbol?{qs}"
+    else:
+        # Parse v3-style "endpoint/TICKER" into endpoint + symbol
+        parts = fmp_path.split("/", 1)
+        if len(parts) != 2 or parts[0] not in _V3_TO_STABLE:
+            json_response(handler, {"error": "Endpoint not permitted."}, status=403)
+            return
 
-    v3_endpoint, symbol = parts
-    stable_endpoint = _V3_TO_STABLE[v3_endpoint]
+        v3_endpoint, symbol = parts
+        stable_endpoint = _V3_TO_STABLE[v3_endpoint]
 
-    # Forward any extra query params (period, limit, from, to, serietype)
-    forward_keys = ("period", "limit", "from", "to", "serietype", "datatype")
-    extra = {"symbol": symbol}
-    for k in forward_keys:
-        if k in params:
-            extra[k] = params[k][0]
+        # Forward any extra query params (period, limit, from, to, serietype)
+        forward_keys = ("period", "limit", "from", "to", "serietype", "datatype")
+        extra = {"symbol": symbol}
+        for k in forward_keys:
+            if k in params:
+                extra[k] = params[k][0]
 
-    extra["apikey"] = FMP_API_KEY
-    qs = urllib.parse.urlencode(extra)
-    url = f"{FMP_BASE}/{stable_endpoint}?{qs}"
+        extra["apikey"] = FMP_API_KEY
+        qs = urllib.parse.urlencode(extra)
+        url = f"{FMP_BASE}/{stable_endpoint}?{qs}"
 
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "WealthEagle/1.0"})

@@ -19,6 +19,21 @@
   background: var(--bg, #fff); color: var(--text, #111); text-transform: uppercase;
 }
 .vw-ticker-input:focus { outline: none; border-color: #4f46e5; }
+.vw-ticker-wrap { position: relative; }
+.vw-suggest {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+  background: var(--card-bg, #fff); border: 1px solid var(--border, #e5e7eb);
+  border-radius: 0 0 8px 8px; box-shadow: 0 4px 12px rgba(0,0,0,.15);
+  max-height: 240px; overflow-y: auto; display: none;
+}
+.vw-suggest-item {
+  padding: .45rem .75rem; cursor: pointer; display: flex; justify-content: space-between;
+  font-size: .85rem; border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.vw-suggest-item:last-child { border-bottom: none; }
+.vw-suggest-item:hover, .vw-suggest-item.active { background: var(--bg2, #f3f4f6); }
+.vw-suggest-sym { font-weight: 700; color: var(--text, #111); }
+.vw-suggest-name { color: var(--muted, #6b7280); margin-left: .5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vw-btn {
   padding: .4rem .9rem; border: none; border-radius: 6px; cursor: pointer;
   font-size: .85rem; font-weight: 600; transition: opacity .15s;
@@ -186,7 +201,10 @@ hr.vw-sep { border: none; border-top: 1px solid var(--border, #e5e7eb); margin: 
 
   {# ── Toolbar ── #}
   <div class="vw-toolbar">
-    <input id="vwTicker" class="vw-ticker-input" type="text" placeholder="AAPL" maxlength="10" autocomplete="off" spellcheck="false">
+    <div class="vw-ticker-wrap">
+      <input id="vwTicker" class="vw-ticker-input" type="text" placeholder="AAPL" maxlength="10" autocomplete="off" spellcheck="false">
+      <div id="vwSuggest" class="vw-suggest"></div>
+    </div>
     <button id="vwLoadBtn" class="vw-btn vw-btn-primary">Load</button>
 
     <div class="model-selector">
@@ -516,6 +534,70 @@ const FMP = {
   cfQ:     t => fmpFetch('cash-flow-statement/' + t, { period: 'quarter', limit: 5 }, 'cq:' + t, TTL.statements),
   ae:      t => fmpFetch('analyst-estimates/' + t, { limit: 5 }, 'ae:' + t, TTL.estimates),
 };
+
+// ── Ticker autocomplete ──────────────────────────────────────────────────
+const _suggest = { timer: null, active: -1, items: [] };
+async function fetchSuggestions(query) {
+  const p = new URLSearchParams({ path: 'search-symbol/' + query, limit: '8' });
+  const r = await fetch('/api/fmp?' + p);
+  if (!r.ok) return [];
+  const data = await r.json();
+  return Array.isArray(data) ? data.filter(d => d.exchange !== 'CRYPTO').slice(0, 8) : [];
+}
+
+function renderSuggestions(results) {
+  const box = document.getElementById('vwSuggest');
+  if (!results.length) { box.style.display = 'none'; _suggest.items = []; _suggest.active = -1; return; }
+  _suggest.items = results;
+  _suggest.active = -1;
+  box.innerHTML = results.map((r, i) =>
+    '<div class="vw-suggest-item" data-idx="' + i + '">' +
+    '<span class="vw-suggest-sym">' + r.symbol + '</span>' +
+    '<span class="vw-suggest-name">' + (r.name || '') + '</span></div>'
+  ).join('');
+  box.style.display = 'block';
+  box.querySelectorAll('.vw-suggest-item').forEach(el => {
+    el.addEventListener('mousedown', e => { e.preventDefault(); pickSuggestion(+el.dataset.idx); });
+  });
+}
+
+function pickSuggestion(idx) {
+  const item = _suggest.items[idx];
+  if (!item) return;
+  const el = document.getElementById('vwTicker');
+  el.value = item.symbol;
+  document.getElementById('vwSuggest').style.display = 'none';
+  _suggest.items = []; _suggest.active = -1;
+  loadTicker(item.symbol, false);
+}
+
+function wireSuggest() {
+  const el = document.getElementById('vwTicker');
+  const box = document.getElementById('vwSuggest');
+  el.addEventListener('input', () => {
+    clearTimeout(_suggest.timer);
+    const v = el.value.trim();
+    if (v.length < 2) { box.style.display = 'none'; return; }
+    _suggest.timer = setTimeout(async () => {
+      try { renderSuggestions(await fetchSuggestions(v)); } catch {}
+    }, 250);
+  });
+  el.addEventListener('keydown', e => {
+    if (!_suggest.items.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); _suggest.active = Math.min(_suggest.active + 1, _suggest.items.length - 1); highlightSuggestion(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); _suggest.active = Math.max(_suggest.active - 1, 0); highlightSuggestion(); }
+    else if (e.key === 'Enter' && _suggest.active >= 0) { e.preventDefault(); e.stopPropagation(); pickSuggestion(_suggest.active); }
+    else if (e.key === 'Escape') { box.style.display = 'none'; _suggest.items = []; }
+  });
+  el.addEventListener('blur', () => { setTimeout(() => { box.style.display = 'none'; }, 150); });
+}
+
+function highlightSuggestion() {
+  const box = document.getElementById('vwSuggest');
+  box.querySelectorAll('.vw-suggest-item').forEach((el, i) => {
+    el.classList.toggle('active', i === _suggest.active);
+  });
+}
 
 function dateBack(years) {
   const d = new Date();
@@ -1153,9 +1235,9 @@ function wireToolbar() {
   const loadBtn  = document.getElementById('vwLoadBtn');
   const refBtn   = document.getElementById('vwRefreshBtn');
   const rstBtn   = document.getElementById('vwResetBtn');
-  const doLoad   = () => { const t = tickerEl.value.trim(); if (t) loadTicker(t, false); };
+  const doLoad   = () => { const t = tickerEl.value.trim(); document.getElementById('vwSuggest').style.display = 'none'; if (t) loadTicker(t, false); };
   loadBtn.addEventListener('click', doLoad);
-  tickerEl.addEventListener('keydown', e => { if (e.key === 'Enter') doLoad(); });
+  tickerEl.addEventListener('keydown', e => { if (e.key === 'Enter' && _suggest.active < 0) doLoad(); });
   if (refBtn) refBtn.addEventListener('click', () => { const t = VW.query.ticker || tickerEl.value.trim(); if (t) loadTicker(t, true); });
   if (rstBtn) rstBtn.addEventListener('click', () => {
     const keep = { modelType: VW.assumptions.modelType, effectiveModel: VW.assumptions.effectiveModel };
@@ -1168,6 +1250,7 @@ function wireToolbar() {
 // ── Boot ──────────────────────────────────────────────────────────────────
 (function boot() {
   wireToolbar();
+  wireSuggest();
   wireInputs();
   wireModel();
   wireTabs();
