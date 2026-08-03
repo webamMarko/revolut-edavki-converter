@@ -10,20 +10,22 @@ from .auth import get_session
 from .templates import page_env, FOUC_SCRIPT, COMMON_JS, html_response, json_response
 
 FMP_API_KEY = os.environ.get("FMP_API_KEY", "")
-FMP_BASE = "https://financialmodelingprep.com/api/v3"
+FMP_BASE = "https://financialmodelingprep.com/stable"
 
-# Allowed FMP endpoint prefixes (whitelist — only free-tier endpoints needed)
-_ALLOWED_PATHS = (
-    "profile/",
-    "quote/",
-    "historical-price-full/",
-    "income-statement/",
-    "balance-sheet-statement/",
-    "cash-flow-statement/",
-    "key-metrics/",
-    "analyst-estimates/",
-    "income-statement-as-reported/",
-)
+# v3 path → stable endpoint + whether the ticker becomes a ?symbol= param
+_V3_TO_STABLE = {
+    "profile": "profile",
+    "quote": "quote",
+    "historical-price-full": "historical-price-eod/full",
+    "income-statement": "income-statement",
+    "balance-sheet-statement": "balance-sheet-statement",
+    "cash-flow-statement": "cash-flow-statement",
+    "key-metrics": "key-metrics",
+    "analyst-estimates": "analyst-estimates",
+    "income-statement-as-reported": "income-statement-as-reported",
+}
+
+_ALLOWED_PREFIXES = tuple(k + "/" for k in _V3_TO_STABLE)
 
 
 def serve_valuation_page(handler):
@@ -63,21 +65,25 @@ def api_fmp_proxy(handler):
         json_response(handler, {"error": "Missing path parameter."}, status=400)
         return
 
-    # Whitelist check
-    if not any(fmp_path.startswith(p) for p in _ALLOWED_PATHS):
+    # Parse v3-style "endpoint/TICKER" into endpoint + symbol
+    parts = fmp_path.split("/", 1)
+    if len(parts) != 2 or parts[0] not in _V3_TO_STABLE:
         json_response(handler, {"error": "Endpoint not permitted."}, status=403)
         return
 
+    v3_endpoint, symbol = parts
+    stable_endpoint = _V3_TO_STABLE[v3_endpoint]
+
     # Forward any extra query params (period, limit, from, to, serietype)
     forward_keys = ("period", "limit", "from", "to", "serietype", "datatype")
-    extra = {}
+    extra = {"symbol": symbol}
     for k in forward_keys:
         if k in params:
             extra[k] = params[k][0]
 
     extra["apikey"] = FMP_API_KEY
     qs = urllib.parse.urlencode(extra)
-    url = f"{FMP_BASE}/{fmp_path}?{qs}"
+    url = f"{FMP_BASE}/{stable_endpoint}?{qs}"
 
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "WealthEagle/1.0"})
