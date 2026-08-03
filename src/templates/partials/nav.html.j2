@@ -12,6 +12,7 @@
     {% if role in ("premium", "admin") %}
       <a class="nav-link{% if active_page == 'import' %} active{% endif %}" href="/import">Import Wizard</a>
       <a class="nav-link{% if active_page == 'transactions' %} active{% endif %}" href="/transactions">Transactions</a>
+      <a class="nav-link{% if active_page == 'valuation' %} active{% endif %}" href="/valuation">Valuation</a>
       <a class="nav-link{% if active_page == 'settings' %} active{% endif %}" href="/settings">Settings</a>
       <a class="nav-link{% if active_page == 'account' %} active{% endif %}" href="/account">Account</a>
     {% endif %}

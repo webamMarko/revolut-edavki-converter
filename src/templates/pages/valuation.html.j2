@@ -1,0 +1,1179 @@
+{% extends "base.html.j2" %}
+{% block title %}Valuation Workbench — WealthEagle{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6"></script>
+<style>
+/* ── Valuation Workbench Styles ────────────────────────────────────────── */
+.vw-page { max-width: 1400px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+
+.vw-toolbar {
+  display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+  margin-bottom: 1.25rem; padding: .75rem 1rem;
+  background: var(--card-bg, #fff); border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+}
+.vw-ticker-input {
+  font-size: 1rem; font-weight: 600; padding: .4rem .75rem; width: 9rem;
+  border: 1.5px solid var(--border, #e5e7eb); border-radius: 6px;
+  background: var(--bg, #fff); color: var(--text, #111); text-transform: uppercase;
+}
+.vw-ticker-input:focus { outline: none; border-color: #4f46e5; }
+.vw-btn {
+  padding: .4rem .9rem; border: none; border-radius: 6px; cursor: pointer;
+  font-size: .85rem; font-weight: 600; transition: opacity .15s;
+}
+.vw-btn:hover { opacity: .85; }
+.vw-btn-primary { background: #4f46e5; color: #fff; }
+.vw-btn-secondary {
+  background: var(--bg2, #f3f4f6); color: var(--text, #111);
+  border: 1px solid var(--border, #e5e7eb);
+}
+.vw-btn-sm { padding: .25rem .6rem; font-size: .78rem; }
+.provider-badge {
+  display: inline-flex; align-items: center; gap: .3rem; font-size: .75rem;
+  padding: .25rem .55rem; border-radius: 20px; font-weight: 600;
+  background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;
+}
+.provider-badge.no-key { background: #fef9c3; color: #713f12; border-color: #fde68a; }
+.model-selector { display: flex; gap: .25rem; }
+.model-btn {
+  padding: .3rem .7rem; border: 1.5px solid var(--border, #e5e7eb);
+  border-radius: 6px; background: var(--bg2, #f3f4f6); color: var(--text, #111);
+  cursor: pointer; font-size: .8rem; font-weight: 500; transition: all .15s;
+}
+.model-btn.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+.vw-spacer { flex: 1; min-width: .5rem; }
+.budget-note { font-size: .73rem; color: var(--muted, #6b7280); }
+
+/* ── Main layout ── */
+.vw-main { display: grid; grid-template-columns: 320px 1fr; gap: 1rem; align-items: start; }
+@media (max-width: 900px) { .vw-main { grid-template-columns: 1fr; } }
+
+/* ── Assumptions panel ── */
+.vw-assumptions {
+  background: var(--card-bg, #fff); border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px; padding: 1rem; display: flex; flex-direction: column; gap: .6rem;
+  max-height: 85vh; overflow-y: auto;
+}
+.vw-assumptions h3 {
+  margin: 0 0 .15rem; font-size: .78rem; font-weight: 700;
+  color: var(--muted, #6b7280); text-transform: uppercase; letter-spacing: .05em;
+}
+.assumption-row { display: flex; flex-direction: column; gap: .15rem; }
+.assumption-label {
+  font-size: .78rem; color: var(--muted, #6b7280);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.assumption-label strong { font-weight: 600; color: var(--text, #111); }
+.slider-row { display: flex; align-items: center; gap: .4rem; }
+.slider-row input[type=range] { flex: 1; accent-color: #4f46e5; cursor: pointer; }
+.slider-row input[type=number] {
+  width: 5.5rem; padding: .18rem .35rem; font-size: .78rem; text-align: right;
+  border: 1px solid var(--border, #e5e7eb); border-radius: 5px;
+  background: var(--bg, #fff); color: var(--text, #111);
+}
+.scenario-weights { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .35rem; }
+.scenario-weights label { display: block; font-size: .72rem; color: var(--muted, #6b7280); margin-bottom: .1rem; }
+.scenario-weights input {
+  width: 100%; padding: .18rem .3rem; font-size: .78rem;
+  border: 1px solid var(--border, #e5e7eb); border-radius: 5px;
+  background: var(--bg, #fff); color: var(--text, #111);
+}
+.advanced-toggle {
+  font-size: .78rem; cursor: pointer; color: #4f46e5;
+  background: none; border: none; padding: 0; text-decoration: underline; text-align: left;
+}
+.advanced-panel { display: none; flex-direction: column; gap: .4rem; padding-top: .4rem; border-top: 1px solid var(--border, #e5e7eb); }
+.advanced-panel.open { display: flex; }
+.adv-row { display: flex; align-items: center; gap: .5rem; font-size: .78rem; color: var(--text, #111); }
+.adv-row input[type=checkbox] { accent-color: #4f46e5; }
+.adv-row select {
+  padding: .18rem .3rem; border: 1px solid var(--border, #e5e7eb);
+  border-radius: 4px; background: var(--bg, #fff); color: var(--text, #111); font-size: .78rem;
+}
+hr.vw-sep { border: none; border-top: 1px solid var(--border, #e5e7eb); margin: .1rem 0; }
+
+/* ── Results panel ── */
+.vw-results { display: flex; flex-direction: column; gap: 1rem; }
+.summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: .7rem; }
+.summary-card {
+  background: var(--card-bg, #fff); border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px; padding: .7rem 1rem;
+}
+.sc-label { font-size: .73rem; color: var(--muted, #6b7280); margin-bottom: .2rem; }
+.sc-value { font-size: 1.2rem; font-weight: 700; color: var(--text, #111); }
+.sc-sub { font-size: .72rem; color: var(--muted, #6b7280); margin-top: .1rem; }
+.sc-value.positive { color: #059669; }
+.sc-value.negative { color: #dc2626; }
+
+/* ── Warnings ── */
+.vw-warnings { display: flex; flex-direction: column; gap: .35rem; margin-bottom: .6rem; }
+.warning-item {
+  display: flex; align-items: flex-start; gap: .5rem; padding: .45rem .7rem;
+  background: #fff7ed; border: 1px solid #fed7aa; border-radius: 7px;
+  font-size: .79rem; color: #9a3412;
+}
+.warning-item.info { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+.warning-item.error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+
+/* ── Lower area ── */
+.vw-lower { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+@media (max-width: 900px) { .vw-lower { grid-template-columns: 1fr; } }
+.chart-card {
+  background: var(--card-bg, #fff); border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px; padding: 1rem;
+}
+.chart-card h4 { margin: 0 0 .7rem; font-size: .88rem; font-weight: 600; color: var(--text, #111); }
+
+/* ── Sensitivity matrix ── */
+.sensitivity-table { border-collapse: collapse; width: 100%; font-size: .73rem; }
+.sensitivity-table th, .sensitivity-table td {
+  padding: .22rem .38rem; text-align: center; border: 1px solid var(--border, #e5e7eb);
+}
+.sensitivity-table th { background: var(--bg2, #f3f4f6); font-weight: 600; }
+.base-cell { outline: 2px solid #4f46e5; outline-offset: -2px; font-weight: 700; }
+.cell-up { background: rgba(5,150,105,.15); color: #065f46; }
+.cell-down { background: rgba(220,38,38,.1); color: #991b1b; }
+
+/* ── Scenario table ── */
+.scenario-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.scenario-table th, .scenario-table td {
+  padding: .35rem .55rem; text-align: right; border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.scenario-table th { text-align: left; font-weight: 600; color: var(--muted, #6b7280); font-size: .73rem; }
+
+/* ── Explainability ── */
+.explain-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: .35rem; }
+.explain-item {
+  padding: .38rem .65rem; border-radius: 6px; font-size: .8rem;
+  background: var(--bg2, #f3f4f6); color: var(--muted, #555);
+  border-left: 3px solid #4f46e5;
+}
+
+/* ── Data inspector ── */
+.data-inspector { font-size: .77rem; }
+.data-inspector table { width: 100%; border-collapse: collapse; }
+.data-inspector td { padding: .18rem .35rem; border-bottom: 1px solid var(--border, #e5e7eb); }
+.data-inspector td:first-child { color: var(--muted, #6b7280); width: 52%; }
+.data-inspector td:last-child { font-weight: 500; text-align: right; }
+
+/* ── Empty / loading ── */
+.vw-empty { text-align: center; padding: 3rem 1rem; color: var(--muted, #6b7280); font-size: .95rem; }
+.vw-loading { display: flex; align-items: center; justify-content: center; gap: .5rem; padding: 2rem; color: var(--muted, #6b7280); }
+.spinner {
+  width: 20px; height: 20px; border: 2.5px solid var(--border, #e5e7eb);
+  border-top-color: #4f46e5; border-radius: 50%; animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Chart tabs ── */
+.tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border, #e5e7eb); margin-bottom: .7rem; flex-wrap: wrap; }
+.tab-btn {
+  padding: .32rem .7rem; font-size: .78rem; border: none; background: none;
+  cursor: pointer; color: var(--muted, #6b7280);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s;
+}
+.tab-btn.active { color: #4f46e5; border-bottom-color: #4f46e5; font-weight: 600; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.tab-panel canvas { max-height: 240px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="vw-page">
+
+  {# ── Toolbar ── #}
+  <div class="vw-toolbar">
+    <input id="vwTicker" class="vw-ticker-input" type="text" placeholder="AAPL" maxlength="10" autocomplete="off" spellcheck="false">
+    <button id="vwLoadBtn" class="vw-btn vw-btn-primary">Load</button>
+
+    <div class="model-selector">
+      <button class="model-btn active" data-model="auto">Auto</button>
+      <button class="model-btn" data-model="mature">Mature DCF</button>
+      <button class="model-btn" data-model="speculative">Speculative DCF</button>
+    </div>
+
+    <div class="vw-spacer"></div>
+
+    {% if has_fmp_key %}
+      <span class="provider-badge" title="Financial Modeling Prep free tier — 250 req/day">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="#059669" stroke-width="1.5"/><path d="M4 6l1.5 1.5L8 4" stroke="#059669" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        FMP Free
+      </span>
+    {% else %}
+      <span class="provider-badge no-key" title="FMP_API_KEY not set">&#9888; No API Key</span>
+    {% endif %}
+
+    <span class="budget-note">5&#8211;7 req/ticker &middot; <span id="vwLastFetched">not fetched</span></span>
+    <button id="vwRefreshBtn" class="vw-btn vw-btn-secondary vw-btn-sm" style="display:none">&#8635; Refresh</button>
+    <button id="vwResetBtn" class="vw-btn vw-btn-secondary vw-btn-sm">Reset</button>
+  </div>
+
+  {# ── Warnings ── #}
+  <div id="vwWarnings" class="vw-warnings"></div>
+
+  {# ── Loading ── #}
+  <div id="vwLoadingState" class="vw-loading" style="display:none">
+    <div class="spinner"></div><span>Fetching from FMP&#8230;</span>
+  </div>
+
+  {# ── Main grid ── #}
+  <div class="vw-main" id="vwMainGrid" style="display:none">
+
+    {# Left: Assumptions #}
+    <aside class="vw-assumptions">
+      <h3>Core</h3>
+
+      <div class="assumption-row">
+        <div class="assumption-label">Discount Rate <strong id="discountRateVal">10%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="discountRateSlider" min="5" max="25" step="0.5" value="10" data-asmp="discountRate" data-unit="%">
+          <input type="number" id="discountRateInput" min="5" max="25" step="0.5" value="10" data-asmp="discountRate" data-unit="%">
+        </div>
+      </div>
+      <div class="assumption-row">
+        <div class="assumption-label">Terminal Growth <strong id="terminalGrowthVal">2.5%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="terminalGrowthSlider" min="0" max="8" step="0.5" value="2.5" data-asmp="terminalGrowth" data-unit="%">
+          <input type="number" id="terminalGrowthInput" min="0" max="8" step="0.5" value="2.5" data-asmp="terminalGrowth" data-unit="%">
+        </div>
+      </div>
+      <div class="assumption-row">
+        <div class="assumption-label">Forecast Years <strong id="forecastYearsVal">10yr</strong></div>
+        <div class="slider-row">
+          <input type="range" id="forecastYearsSlider" min="3" max="15" step="1" value="10" data-asmp="forecastYears" data-unit="yr">
+          <input type="number" id="forecastYearsInput" min="3" max="15" step="1" value="10" data-asmp="forecastYears" data-unit="yr">
+        </div>
+      </div>
+      <div class="assumption-row">
+        <div class="assumption-label">Tax Rate <strong id="taxRateVal">21%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="taxRateSlider" min="10" max="40" step="1" value="21" data-asmp="taxRate" data-unit="%">
+          <input type="number" id="taxRateInput" min="10" max="40" step="1" value="21" data-asmp="taxRate" data-unit="%">
+        </div>
+      </div>
+
+      <hr class="vw-sep">
+      <h3>Revenue &amp; Margins</h3>
+
+      <div class="assumption-row">
+        <div class="assumption-label">Rev Growth Y1&#8211;3 <strong id="revenueGrowthY1Val">8%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="revenueGrowthY1Slider" min="-20" max="80" step="0.5" value="8" data-asmp="revenueGrowthY1" data-unit="%">
+          <input type="number" id="revenueGrowthY1Input" min="-20" max="80" step="0.5" value="8" data-asmp="revenueGrowthY1" data-unit="%">
+        </div>
+      </div>
+      <div class="assumption-row">
+        <div class="assumption-label">Rev Growth Y4&#8211;7 <strong id="revenueGrowthY2Val">5%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="revenueGrowthY2Slider" min="-20" max="60" step="0.5" value="5" data-asmp="revenueGrowthY2" data-unit="%">
+          <input type="number" id="revenueGrowthY2Input" min="-20" max="60" step="0.5" value="5" data-asmp="revenueGrowthY2" data-unit="%">
+        </div>
+      </div>
+      <div class="assumption-row">
+        <div class="assumption-label">Rev Growth Y8+ <strong id="revenueGrowthY3Val">3%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="revenueGrowthY3Slider" min="-10" max="30" step="0.5" value="3" data-asmp="revenueGrowthY3" data-unit="%">
+          <input type="number" id="revenueGrowthY3Input" min="-10" max="30" step="0.5" value="3" data-asmp="revenueGrowthY3" data-unit="%">
+        </div>
+      </div>
+      <div class="assumption-row">
+        <div class="assumption-label">Current Op Margin <strong id="currentMarginVal">10%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="currentMarginSlider" min="-50" max="60" step="0.5" value="10" data-asmp="currentMargin" data-unit="%">
+          <input type="number" id="currentMarginInput" min="-50" max="60" step="0.5" value="10" data-asmp="currentMargin" data-unit="%">
+        </div>
+      </div>
+      <div class="assumption-row">
+        <div class="assumption-label">Target Op Margin <strong id="targetMarginVal">15%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="targetMarginSlider" min="-20" max="60" step="0.5" value="15" data-asmp="targetMargin" data-unit="%">
+          <input type="number" id="targetMarginInput" min="-20" max="60" step="0.5" value="15" data-asmp="targetMargin" data-unit="%">
+        </div>
+      </div>
+      <div class="assumption-row">
+        <div class="assumption-label">Capex % Rev <strong id="capexPctVal">5%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="capexPctSlider" min="0" max="40" step="0.5" value="5" data-asmp="capexPct" data-unit="%">
+          <input type="number" id="capexPctInput" min="0" max="40" step="0.5" value="5" data-asmp="capexPct" data-unit="%">
+        </div>
+      </div>
+      <div class="assumption-row">
+        <div class="assumption-label">NWC % Rev Change <strong id="nwcPctVal">3%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="nwcPctSlider" min="0" max="30" step="0.5" value="3" data-asmp="nwcPct" data-unit="%">
+          <input type="number" id="nwcPctInput" min="0" max="30" step="0.5" value="3" data-asmp="nwcPct" data-unit="%">
+        </div>
+      </div>
+      <div class="assumption-row">
+        <div class="assumption-label">D&amp;A % Rev <strong id="dandaPctVal">5%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="dandaPctSlider" min="1" max="20" step="0.5" value="5" data-asmp="dandaPct" data-unit="%">
+          <input type="number" id="dandaPctInput" min="1" max="20" step="0.5" value="5" data-asmp="dandaPct" data-unit="%">
+        </div>
+      </div>
+      <div class="assumption-row">
+        <div class="assumption-label">Annual Dilution <strong id="dilutionRateVal">1%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="dilutionRateSlider" min="0" max="10" step="0.5" value="1" data-asmp="dilutionRate" data-unit="%">
+          <input type="number" id="dilutionRateInput" min="0" max="10" step="0.5" value="1" data-asmp="dilutionRate" data-unit="%">
+        </div>
+      </div>
+
+      <hr class="vw-sep">
+      <h3>Speculative DCF</h3>
+
+      <div class="assumption-row">
+        <div class="assumption-label">FCF Margin Start <strong id="fcfMarginStartVal">-10%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="fcfMarginStartSlider" min="-50" max="40" step="1" value="-10" data-asmp="fcfMarginStart" data-unit="%">
+          <input type="number" id="fcfMarginStartInput" min="-50" max="40" step="1" value="-10" data-asmp="fcfMarginStart" data-unit="%">
+        </div>
+      </div>
+      <div class="assumption-row">
+        <div class="assumption-label">FCF Margin End <strong id="fcfMarginEndVal">10%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="fcfMarginEndSlider" min="-10" max="40" step="1" value="10" data-asmp="fcfMarginEnd" data-unit="%">
+          <input type="number" id="fcfMarginEndInput" min="-10" max="40" step="1" value="10" data-asmp="fcfMarginEnd" data-unit="%">
+        </div>
+      </div>
+      <div class="assumption-row">
+        <div class="assumption-label">Prob Factor Y1 <strong id="probFactorStartVal">60%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="probFactorStartSlider" min="10" max="100" step="1" value="60" data-asmp="probFactorStart" data-unit="%">
+          <input type="number" id="probFactorStartInput" min="10" max="100" step="1" value="60" data-asmp="probFactorStart" data-unit="%">
+        </div>
+      </div>
+      <div class="assumption-row">
+        <div class="assumption-label">Prob Factor Final <strong id="probFactorEndVal">80%</strong></div>
+        <div class="slider-row">
+          <input type="range" id="probFactorEndSlider" min="10" max="100" step="1" value="80" data-asmp="probFactorEnd" data-unit="%">
+          <input type="number" id="probFactorEndInput" min="10" max="100" step="1" value="80" data-asmp="probFactorEnd" data-unit="%">
+        </div>
+      </div>
+
+      <hr class="vw-sep">
+      <h3>Net Debt</h3>
+      <label style="font-size:.76rem;color:var(--muted,#6b7280);display:flex;align-items:center;gap:.4rem;cursor:pointer">
+        <input type="checkbox" id="netDebtAutoChk" checked> Use fetched net debt automatically
+      </label>
+      <div class="assumption-row">
+        <div class="assumption-label">Net Debt Override ($M) <strong id="netDebtOverrideVal">0M</strong></div>
+        <div class="slider-row">
+          <input type="range" id="netDebtOverrideSlider" min="-50000" max="500000" step="500" value="0" data-asmp="netDebtOverride" data-unit="M">
+          <input type="number" id="netDebtOverrideInput" min="-50000" max="500000" step="500" value="0" data-asmp="netDebtOverride" data-unit="M">
+        </div>
+      </div>
+
+      <hr class="vw-sep">
+      <h3>Scenario Weights</h3>
+      <div class="scenario-weights">
+        <div><label>Bear</label><input type="number" id="wBear" min="0" max="1" step="0.05" value="0.25" data-asmp="wBear" data-unit=""></div>
+        <div><label>Base</label><input type="number" id="wBase" min="0" max="1" step="0.05" value="0.50" data-asmp="wBase" data-unit=""></div>
+        <div><label>Bull</label><input type="number" id="wBull" min="0" max="1" step="0.05" value="0.25" data-asmp="wBull" data-unit=""></div>
+      </div>
+
+      <button class="advanced-toggle" id="advToggle">&#9660; Advanced Options</button>
+      <div class="advanced-panel" id="advPanel">
+        <div class="adv-row"><input type="checkbox" id="useAnalystEstimates" checked><label for="useAnalystEstimates">Use analyst estimates when available</label></div>
+        <div class="adv-row"><input type="checkbox" id="useTTM" checked><label for="useTTM">Use TTM basis (vs last annual)</label></div>
+        <div class="adv-row"><input type="checkbox" id="smoothMargins"><label for="smoothMargins">Smooth margin interpolation</label></div>
+        <div class="adv-row">
+          <label for="interpMethod">Interpolation:</label>
+          <select id="interpMethod"><option value="linear">Linear</option><option value="stepped">Stepped</option></select>
+        </div>
+      </div>
+    </aside>
+
+    {# Right: Summary + charts #}
+    <div class="vw-results">
+      <div class="summary-cards">
+        <div class="summary-card"><div class="sc-label">Current Price</div><div class="sc-value" id="scCurrentPrice">&#8212;</div></div>
+        <div class="summary-card"><div class="sc-label">Intrinsic Value</div><div class="sc-value" id="scIntrinsicValue">&#8212;</div></div>
+        <div class="summary-card"><div class="sc-label">Premium / Discount</div><div class="sc-value" id="scPremiumDiscount">&#8212;</div></div>
+        <div class="summary-card"><div class="sc-label">Implied Upside</div><div class="sc-value" id="scUpside">&#8212;</div></div>
+        <div class="summary-card"><div class="sc-label">Enterprise Value</div><div class="sc-value" id="scEV">&#8212;</div></div>
+        <div class="summary-card"><div class="sc-label">Equity Value</div><div class="sc-value" id="scEquityValue">&#8212;</div></div>
+        <div class="summary-card"><div class="sc-label">Terminal Value %</div><div class="sc-value" id="scTVShare">&#8212;</div></div>
+        <div class="summary-card">
+          <div class="sc-label">Model</div>
+          <div class="sc-value" id="scModel">&#8212;</div>
+          <div class="sc-sub" id="scModelSub"></div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="price">Price</button>
+          <button class="tab-btn" data-tab="revenue">Revenue</button>
+          <button class="tab-btn" data-tab="fcf">FCF</button>
+          <button class="tab-btn" data-tab="scenario">Scenarios</button>
+          <button class="tab-btn" data-tab="iv">vs. Intrinsic</button>
+        </div>
+        <div class="tab-panel active" data-tab="price"><canvas id="chartPrice"></canvas></div>
+        <div class="tab-panel" data-tab="revenue"><canvas id="chartRevenue"></canvas></div>
+        <div class="tab-panel" data-tab="fcf"><canvas id="chartFcf"></canvas></div>
+        <div class="tab-panel" data-tab="scenario"><canvas id="chartScenario"></canvas></div>
+        <div class="tab-panel" data-tab="iv"><canvas id="chartIV"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  {# Lower area (full width) #}
+  <div id="vwLowerArea" style="display:none">
+    <div class="vw-lower">
+      <div class="chart-card">
+        <h4>Sensitivity: Discount Rate &times; Terminal Growth</h4>
+        <div id="sensitivityWrap" style="overflow-x:auto"></div>
+      </div>
+      <div class="chart-card">
+        <h4>Bear / Base / Bull</h4>
+        <table class="scenario-table" id="scenarioTable"></table>
+        <div style="margin-top:.6rem;font-size:.73rem;color:var(--muted,#6b7280)" id="weightedValNote"></div>
+      </div>
+      <div class="chart-card">
+        <h4>Explainability</h4>
+        <ul class="explain-list" id="explainList"></ul>
+      </div>
+      <div class="chart-card">
+        <h4>Normalized Data</h4>
+        <div class="data-inspector" id="dataInspector"></div>
+      </div>
+    </div>
+  </div>
+
+  {# Empty state #}
+  <div id="vwEmptyState" class="vw-empty">
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style="margin:0 auto 1rem;display:block;opacity:.3"><rect x="4" y="8" width="40" height="32" rx="4" stroke="currentColor" stroke-width="2.5"/><path d="M12 28l8-8 6 6 8-10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Enter a ticker and click <strong>Load</strong> to run a DCF valuation.
+    {% if not has_fmp_key %}
+    <br><br><span style="color:#b45309">&#9888; Set <code>FMP_API_KEY</code> as an environment variable to enable live data fetching.</span>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// VALUATION WORKBENCH — all-client-side DCF engine
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── State ─────────────────────────────────────────────────────────────────
+const VW = {
+  query: { ticker: '', loading: false },
+  market: null,
+  assumptions: {},
+  _charts: {},
+  _lastFetched: null,
+};
+
+// ── In-memory cache with TTL ──────────────────────────────────────────────
+const _cache = new Map();
+const TTL = { quote: 300e3, history: 1800e3, statements: 14400e3, estimates: 1800e3 };
+function cacheSet(k, v, ttl) { _cache.set(k, { v, exp: Date.now() + ttl }); }
+function cacheGet(k) { const e = _cache.get(k); return (!e || Date.now() > e.exp) ? null : e.v; }
+
+// ── Default assumptions ───────────────────────────────────────────────────
+const DEFAULTS = {
+  discountRate: 10, terminalGrowth: 2.5, forecastYears: 10, taxRate: 21,
+  revenueGrowthY1: 8, revenueGrowthY2: 5, revenueGrowthY3: 3,
+  currentMargin: 10, targetMargin: 15,
+  capexPct: 5, nwcPct: 3, dandaPct: 5, dilutionRate: 1,
+  fcfMarginStart: -10, fcfMarginEnd: 10, probFactorStart: 60, probFactorEnd: 80,
+  netDebtOverride: 0, netDebtAuto: true,
+  wBear: 0.25, wBase: 0.50, wBull: 0.25,
+  useAnalystEstimates: true, useTTM: true, smoothMargins: false,
+  interpMethod: 'linear',
+  modelType: 'auto', effectiveModel: 'mature',
+};
+Object.assign(VW.assumptions, DEFAULTS);
+
+// ── FMP proxy fetch ───────────────────────────────────────────────────────
+async function fmpFetch(path, extra, ck, ttl) {
+  const hit = cacheGet(ck);
+  if (hit !== null) return hit;
+  const p = new URLSearchParams({ path, ...extra });
+  const r = await fetch('/api/fmp?' + p);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'FMP error ' + r.status);
+  if (data && data['Error Message']) throw new Error(data['Error Message']);
+  cacheSet(ck, data, ttl);
+  return data;
+}
+
+// ── FMP Adapter ───────────────────────────────────────────────────────────
+const FMP = {
+  profile: t => fmpFetch('profile/' + t, {}, 'p:' + t, TTL.statements),
+  quote:   t => fmpFetch('quote/' + t, {}, 'q:' + t, TTL.quote),
+  history: t => fmpFetch('historical-price-full/' + t, { serietype: 'line', from: dateBack(5) }, 'h:' + t, TTL.history),
+  isA:     t => fmpFetch('income-statement/' + t, { period: 'annual', limit: 5 }, 'ia:' + t, TTL.statements),
+  bsA:     t => fmpFetch('balance-sheet-statement/' + t, { period: 'annual', limit: 5 }, 'ba:' + t, TTL.statements),
+  cfA:     t => fmpFetch('cash-flow-statement/' + t, { period: 'annual', limit: 5 }, 'ca:' + t, TTL.statements),
+  isQ:     t => fmpFetch('income-statement/' + t, { period: 'quarter', limit: 5 }, 'iq:' + t, TTL.statements),
+  bsQ:     t => fmpFetch('balance-sheet-statement/' + t, { period: 'quarter', limit: 5 }, 'bq:' + t, TTL.statements),
+  cfQ:     t => fmpFetch('cash-flow-statement/' + t, { period: 'quarter', limit: 5 }, 'cq:' + t, TTL.statements),
+  ae:      t => fmpFetch('analyst-estimates/' + t, { limit: 5 }, 'ae:' + t, TTL.estimates),
+};
+
+function dateBack(years) {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - years);
+  return d.toISOString().slice(0, 10);
+}
+
+// ── Normalize raw FMP payloads ────────────────────────────────────────────
+function normalize(raw) {
+  const p  = (Array.isArray(raw.profile) ? raw.profile[0] : raw.profile) || {};
+  const q  = (Array.isArray(raw.quote) ? raw.quote[0] : raw.quote) || {};
+  const hist = (raw.history && raw.history.historical) || [];
+
+  const mapRev   = (arr, k)  => (arr || []).map(r => ({ date: r.date, value: (r[k] || 0) / 1e6 })).reverse();
+  const mapAbsRev = (arr, k) => (arr || []).map(r => ({ date: r.date, value: Math.abs(r[k] || 0) / 1e6 })).reverse();
+
+  const aRev  = mapRev(raw.isA,  'revenue');
+  const aEBIT = mapRev(raw.isA,  'operatingIncome');
+  const aNetI = mapRev(raw.isA,  'netIncome');
+  const aFCF  = mapRev(raw.cfA,  'freeCashFlow');
+  const aCapx = mapAbsRev(raw.cfA, 'capitalExpenditure');
+  const aDA   = mapRev(raw.cfA,  'depreciationAndAmortization');
+  const aCash = mapRev(raw.bsA,  'cashAndCashEquivalents');
+  const aDebt = (raw.bsA || []).map(r => ({ date: r.date, value: ((r.totalDebt || r.longTermDebt || 0)) / 1e6 })).reverse();
+
+  const qRev  = mapRev(raw.isQ, 'revenue');
+  const qEBIT = mapRev(raw.isQ, 'operatingIncome');
+  const qFCF  = mapRev(raw.cfQ, 'freeCashFlow');
+
+  const latestCash = aCash.length ? aCash[aCash.length - 1].value : 0;
+  const latestDebt = aDebt.length ? aDebt[aDebt.length - 1].value : 0;
+  const netDebt = latestDebt - latestCash;
+  const price = q.price || p.price || 0;
+  const mktCap = (q.marketCap || p.mktCap || 0);
+  const dilutedShares = price > 0 ? mktCap / price / 1e6 : 1;
+
+  // TTM = trailing 4 quarters
+  const q4 = qRev.slice(-4);
+  let ttmRevenue = 0, ttmEBIT = 0, ttmFCF = 0;
+  if (q4.length >= 4) {
+    ttmRevenue = q4.reduce((s, r) => s + r.value, 0);
+    ttmEBIT    = qEBIT.slice(-4).reduce((s, r) => s + r.value, 0);
+    ttmFCF     = qFCF.slice(-4).reduce((s, r) => s + r.value, 0);
+  } else if (aRev.length) {
+    ttmRevenue = aRev[aRev.length - 1].value;
+    ttmEBIT    = aEBIT.length ? aEBIT[aEBIT.length - 1].value : 0;
+    ttmFCF     = aFCF.length ? aFCF[aFCF.length - 1].value : 0;
+  }
+  const ttmOpMargin = ttmRevenue > 0 ? ttmEBIT / ttmRevenue * 100 : 0;
+  const fcfMarginTTM = ttmRevenue > 0 ? ttmFCF / ttmRevenue * 100 : 0;
+
+  let revenueCagr3y = null;
+  if (aRev.length >= 4) {
+    const old = aRev[aRev.length - 4].value;
+    const cur = aRev[aRev.length - 1].value;
+    if (old > 0) revenueCagr3y = (Math.pow(cur / old, 1 / 3) - 1) * 100;
+  }
+
+  const estimates = raw.ae || [];
+  const aRE = estimates.map(e => ({ date: e.date, value: (e.estimatedRevenueAvg || 0) / 1e6 }));
+
+  return {
+    snapshot: {
+      ticker: p.symbol || VW.query.ticker,
+      companyName: p.companyName || p.name || VW.query.ticker,
+      currency: p.currency || 'USD',
+      sector: p.sector || '', industry: p.industry || '',
+      latestPrice: price,
+      marketCap: mktCap / 1e9, dilutedShares, netDebt,
+      fetchedAt: new Date().toISOString(), provider: 'FMP Free',
+    },
+    history: { dailyPrices: hist.map(h => ({ date: h.date, close: h.close })).reverse() },
+    financials: { aRev, aEBIT, aNetI, aFCF, aCapx, aDA, aCash, aDebt, qRev, qEBIT, qFCF },
+    estimates: { aRE, available: estimates.length > 0 },
+    derived: { ttmRevenue, ttmEBIT, ttmOpMargin, ttmFCF, netDebt, dilutedShares, revenueCagr3y, fcfMarginTTM },
+  };
+}
+
+// ── Model auto-detect ─────────────────────────────────────────────────────
+function detectModel(d) {
+  if (!d || d.ttmRevenue <= 0) return 'speculative';
+  if (d.ttmFCF < 0 && d.ttmOpMargin < -5) return 'speculative';
+  if (d.ttmFCF < 0 && d.ttmOpMargin < 0) return 'speculative';
+  return 'mature';
+}
+
+// ── Seed assumptions from market data ────────────────────────────────────
+function seedFromMarket(market) {
+  const d = market.derived;
+  const cagr = d.revenueCagr3y !== null ? d.revenueCagr3y : 5;
+  const a = VW.assumptions;
+  a.currentMargin    = +d.ttmOpMargin.toFixed(1);
+  a.targetMargin     = +Math.max(d.ttmOpMargin * 1.3, d.ttmOpMargin + 3).toFixed(1);
+  a.fcfMarginStart   = +d.fcfMarginTTM.toFixed(1);
+  a.fcfMarginEnd     = +Math.max(d.fcfMarginTTM * 1.3, d.fcfMarginTTM + 5).toFixed(1);
+  a.revenueGrowthY1  = +Math.min(Math.max(cagr, -10), 60).toFixed(1);
+  a.revenueGrowthY2  = +Math.min(Math.max(cagr * 0.7, -5), 40).toFixed(1);
+  a.revenueGrowthY3  = +Math.min(Math.max(cagr * 0.4, 0), 20).toFixed(1);
+  a.netDebtOverride  = +d.netDebt.toFixed(0);
+  if (a.modelType === 'auto') a.effectiveModel = detectModel(d);
+  applyToUI();
+}
+
+// ── Revenue forecast ──────────────────────────────────────────────────────
+function buildRevs(a, market) {
+  const N = Math.round(a.forecastYears);
+  let base = a.useTTM && market.derived.ttmRevenue > 0
+    ? market.derived.ttmRevenue
+    : (market.financials.aRev.slice(-1)[0] || { value: 1 }).value;
+  if (base <= 0) base = 100;
+
+  const analystRevs = a.useAnalystEstimates && market.estimates.available
+    ? market.estimates.aRE : [];
+
+  const revs = [base];
+  for (let t = 1; t <= N; t++) {
+    const g = t <= 3 ? a.revenueGrowthY1 / 100 : t <= 7 ? a.revenueGrowthY2 / 100 : a.revenueGrowthY3 / 100;
+    const ae = analystRevs[t - 1];
+    revs.push(ae && ae.value > 0 ? ae.value : revs[t - 1] * (1 + g));
+  }
+  return revs.slice(1);
+}
+
+function lerp(start, end, t, N, smooth) {
+  const x = t / N;
+  return smooth
+    ? start + (end - start) * (3 * x * x - 2 * x * x * x)
+    : start + (end - start) * x;
+}
+
+// ── Mature DCF ────────────────────────────────────────────────────────────
+function buildMatureForecast(a, market) {
+  const N = Math.round(a.forecastYears);
+  const revs = buildRevs(a, market);
+  return revs.map((rev, i) => {
+    const t = i + 1;
+    const margin = lerp(a.currentMargin / 100, a.targetMargin / 100, t, N, a.smoothMargins);
+    const ebit   = rev * margin;
+    const nopat  = ebit * (1 - a.taxRate / 100);
+    const da     = rev * a.dandaPct / 100;
+    const capex  = rev * a.capexPct / 100;
+    const drev   = i === 0 ? rev * 0.05 : rev - revs[i - 1];
+    const dnwc   = drev * a.nwcPct / 100;
+    const fcff   = nopat + da - capex - dnwc;
+    return { t, rev, ebit, nopat, da, capex, fcff, cf: fcff };
+  });
+}
+
+// ── Speculative DCF ───────────────────────────────────────────────────────
+function buildSpeculativeForecast(a, market) {
+  const N = Math.round(a.forecastYears);
+  const revs = buildRevs(a, market);
+  return revs.map((rev, i) => {
+    const t    = i + 1;
+    const fcfM = lerp(a.fcfMarginStart / 100, a.fcfMarginEnd / 100, t, N, a.smoothMargins);
+    const prob = lerp(a.probFactorStart / 100, a.probFactorEnd / 100, t, N, false);
+    const cf   = rev * fcfM * prob;
+    return { t, rev, fcfM, prob, riskFcf: cf, cf };
+  });
+}
+
+// ── DCF core math ─────────────────────────────────────────────────────────
+function dcf(flows, r, g) {
+  const N = flows.length;
+  let pvSum = 0;
+  const pv = flows.map((f, i) => { const d = f.cf / Math.pow(1 + r, i + 1); pvSum += d; return d; });
+  const lastCF = flows[N - 1].cf;
+  let tv = 0;
+  if (r > g && lastCF > 0) {
+    tv = (lastCF * (1 + g)) / (r - g) / Math.pow(1 + r, N);
+  } else if (lastCF > 0) {
+    tv = lastCF * 12 / Math.pow(1 + r, N); // fallback exit multiple
+  }
+  return { pv, pvSum, tv, totalEV: pvSum + tv };
+}
+
+function runValuation(a, market) {
+  const r = a.discountRate / 100, g = a.terminalGrowth / 100;
+  const isMature = a.effectiveModel === 'mature';
+  const flows = isMature ? buildMatureForecast(a, market) : buildSpeculativeForecast(a, market);
+  const { pv, pvSum, tv, totalEV } = dcf(flows, r, g);
+  const netDebt = a.netDebtAuto ? market.derived.netDebt : a.netDebtOverride;
+  const shares  = market.derived.dilutedShares || 1;
+  const equity  = totalEV - netDebt;
+  const perShare = equity / shares;
+  const tvShare  = totalEV > 0 ? tv / totalEV : 0;
+  return { flows, pv, pvSum, tv, totalEV, netDebt, equity, perShare, tvShare };
+}
+
+// ── Scenario engine ───────────────────────────────────────────────────────
+function buildScenarios(a, market) {
+  const bear = { ...a, revenueGrowthY1: a.revenueGrowthY1 * 0.45, revenueGrowthY2: a.revenueGrowthY2 * 0.45, targetMargin: a.targetMargin * 0.65, discountRate: a.discountRate + 2, fcfMarginEnd: a.fcfMarginEnd * 0.55 };
+  const bull = { ...a, revenueGrowthY1: a.revenueGrowthY1 * 1.55, revenueGrowthY2: a.revenueGrowthY2 * 1.4, targetMargin: a.targetMargin * 1.3, discountRate: a.discountRate - 1.5, fcfMarginEnd: a.fcfMarginEnd * 1.45 };
+  const run = sa => { try { return runValuation(sa, market); } catch { return null; } };
+  const results = { bear: run(bear), base: run(a), bull: run(bull) };
+  const w = { bear: a.wBear, base: a.wBase, bull: a.wBull };
+  const wSum = w.bear + w.base + w.bull;
+  const weightedPrice = Object.entries(results).reduce((s, [k, v]) => s + (v ? v.perShare * w[k] : 0), 0) / (wSum || 1);
+  return { ...results, weightedPrice, weights: w, wSum };
+}
+
+// ── Sensitivity grid ──────────────────────────────────────────────────────
+function buildSensGrid(a, market) {
+  const drs = [-2, -1, 0, 1, 2].map(d => a.discountRate + d);
+  const tgs = [-1, -0.5, 0, 0.5, 1].map(d => a.terminalGrowth + d);
+  const grid = drs.map(dr =>
+    tgs.map(tg => {
+      if (dr <= tg) return null;
+      try { return runValuation({ ...a, discountRate: dr, terminalGrowth: tg }, market).perShare; }
+      catch { return null; }
+    })
+  );
+  return { drs, tgs, grid };
+}
+
+// ── Warnings ──────────────────────────────────────────────────────────────
+function buildWarnings(a, market, result, scenarios) {
+  const w = [];
+  if (a.terminalGrowth >= a.discountRate)
+    w.push({ type: 'error', msg: 'Terminal growth (' + a.terminalGrowth + '%) ≥ discount rate (' + a.discountRate + '%) — denominator zero or negative. Reduce terminal growth.' });
+  if (result && result.tvShare > 0.85)
+    w.push({ type: 'warning', msg: 'Terminal value is ' + fmt.pct(result.tvShare * 100) + ' of total EV — highly sensitive to long-term growth assumptions.' });
+  if (a.dilutionRate > 5)
+    w.push({ type: 'warning', msg: 'High dilution rate (' + a.dilutionRate + '%) materially reduces per-share value.' });
+  if (market && !market.estimates.available)
+    w.push({ type: 'info', msg: 'Analyst estimates unavailable. Using historical trend and manual assumptions.' });
+  if (scenarios && Math.abs(scenarios.wSum - 1) > 0.01)
+    w.push({ type: 'warning', msg: 'Scenario weights sum to ' + fmt.pct(scenarios.wSum * 100) + ' (should be 100%).' });
+  if (a.probFactorStart < 0 || a.probFactorStart > 100 || a.probFactorEnd < 0 || a.probFactorEnd > 100)
+    w.push({ type: 'warning', msg: 'Probability factors should be between 0% and 100%.' });
+  return w;
+}
+
+function buildExplain(a, market, result) {
+  const msgs = [];
+  if (!result) return msgs;
+  if (a.modelType === 'auto') msgs.push('Auto-classified as ' + (a.effectiveModel === 'mature' ? 'Mature DCF' : 'Speculative DCF') + ' based on TTM financials.');
+  if (result.tvShare > 0.7) msgs.push('This valuation is heavily driven by terminal value (' + fmt.pct(result.tvShare * 100) + ').');
+  if (a.dilutionRate > 3) msgs.push('Projected dilution (' + a.dilutionRate + '%/yr) materially reduces per-share value over the forecast period.');
+  if (market && !market.estimates.available) msgs.push('Analyst estimates unavailable — model uses heuristic growth based on historical trend.');
+  if (a.effectiveModel === 'mature' && market && market.derived.ttmFCF < 0)
+    msgs.push('Mature DCF selected but trailing FCF is negative. Consider switching to Speculative model.');
+  return msgs;
+}
+
+// ── Formatting helpers ────────────────────────────────────────────────────
+const fmt = {
+  price: v => v == null || isNaN(v) ? '—' : '$' + v.toFixed(2),
+  pct:   v => v == null || isNaN(v) ? '—' : v.toFixed(1) + '%',
+  mM:    v => {
+    if (v == null || isNaN(v)) return '—';
+    if (Math.abs(v) >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'T';
+    if (Math.abs(v) >= 1e3) return '$' + (v / 1e3).toFixed(1) + 'B';
+    return '$' + v.toFixed(0) + 'M';
+  },
+  large: v => {
+    if (v == null || isNaN(v)) return '—';
+    if (Math.abs(v) >= 1e12) return '$' + (v / 1e12).toFixed(2) + 'T';
+    if (Math.abs(v) >= 1e9)  return '$' + (v / 1e9).toFixed(2) + 'B';
+    if (Math.abs(v) >= 1e6)  return '$' + (v / 1e6).toFixed(2) + 'M';
+    return '$' + v.toFixed(0);
+  },
+};
+
+// ── Update DOM ────────────────────────────────────────────────────────────
+function setText(id, v) { const e = document.getElementById(id); if (e) e.textContent = v; }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function updateCards(result, market) {
+  if (!result || !market) return;
+  const price = market.snapshot.latestPrice;
+  const iv    = result.perShare;
+  const pct   = price > 0 ? (price - iv) / iv * 100 : 0;
+  setText('scCurrentPrice', fmt.price(price));
+  setText('scIntrinsicValue', fmt.price(iv));
+  const pdE = document.getElementById('scPremiumDiscount');
+  if (pdE) { pdE.textContent = fmt.pct(pct); pdE.className = 'sc-value ' + (pct > 0 ? 'negative' : 'positive'); }
+  const upE = document.getElementById('scUpside');
+  if (upE) { upE.textContent = fmt.pct(-pct); upE.className = 'sc-value ' + (-pct >= 0 ? 'positive' : 'negative'); }
+  setText('scEV',         fmt.large(result.totalEV * 1e6));
+  setText('scEquityValue', fmt.large(result.equity * 1e6));
+  setText('scTVShare',    fmt.pct(result.tvShare * 100));
+  setText('scModel',      VW.assumptions.effectiveModel === 'mature' ? 'Mature DCF' : 'Speculative DCF');
+  setText('scModelSub',   market.snapshot.provider + (market.snapshot.sector ? ' · ' + market.snapshot.sector : ''));
+}
+
+function updateWarningsDOM(warnings) {
+  const el = document.getElementById('vwWarnings');
+  if (!el) return;
+  el.innerHTML = warnings.map(w =>
+    '<div class="warning-item ' + (w.type || '') + '">' + esc(w.msg) + '</div>'
+  ).join('');
+}
+
+function updateExplainDOM(msgs) {
+  const el = document.getElementById('explainList');
+  if (!el) return;
+  el.innerHTML = msgs.map(m => '<li class="explain-item">' + esc(m) + '</li>').join('')
+    || '<li class="explain-item" style="opacity:.5">No notable issues.</li>';
+}
+
+function updateScenarioTable(sc, market) {
+  const el = document.getElementById('scenarioTable');
+  if (!el || !sc) return;
+  const price = market ? market.snapshot.latestPrice : 0;
+  const ivRow = s => fmt.price(s ? s.perShare : null);
+  const evRow = s => s ? fmt.large(s.totalEV * 1e6) : '—';
+  const tvRow = s => s ? fmt.pct(s.tvShare * 100) : '—';
+  const prRow = s => {
+    if (!s || !price) return '—';
+    const p = (price - s.perShare) / s.perShare * 100;
+    return '<span style="color:' + (p > 0 ? '#dc2626' : '#059669') + '">' + fmt.pct(p) + ' premium</span>';
+  };
+  el.innerHTML = '<tr><th>Metric</th><th>Bear</th><th>Base</th><th>Bull</th></tr>' + [
+    ['Intrinsic Value', ivRow], ['Enterprise Value', evRow], ['Terminal Value %', tvRow], ['vs Current Price', prRow]
+  ].map(([label, fn]) =>
+    '<tr><td style="text-align:left">' + label + '</td><td>' + fn(sc.bear) + '</td><td>' + fn(sc.base) + '</td><td>' + fn(sc.bull) + '</td></tr>'
+  ).join('');
+  setText('weightedValNote',
+    'Weighted value: ' + fmt.price(sc.weightedPrice) +
+    ' (bear ' + fmt.pct(sc.weights.bear * 100) + ' / base ' + fmt.pct(sc.weights.base * 100) + ' / bull ' + fmt.pct(sc.weights.bull * 100) + ')');
+}
+
+function updateSensitivityDOM(g, market) {
+  const el = document.getElementById('sensitivityWrap');
+  if (!el || !g) return;
+  const price = market ? market.snapshot.latestPrice : 0;
+  let html = '<table class="sensitivity-table"><thead><tr><th>DR\\TG</th>';
+  g.tgs.forEach(tg => { html += '<th>' + tg.toFixed(1) + '%</th>'; });
+  html += '</tr></thead><tbody>';
+  g.grid.forEach((row, ri) => {
+    html += '<tr><th>' + g.drs[ri].toFixed(1) + '%</th>';
+    row.forEach((v, ci) => {
+      if (v === null) { html += '<td>—</td>'; return; }
+      const isBase = ri === 2 && ci === 2;
+      const cls = isBase ? 'base-cell' : (price > 0 ? (v >= price ? 'cell-up' : 'cell-down') : '');
+      html += '<td class="' + cls + '">' + fmt.price(v) + '</td>';
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function updateDataInspector(market) {
+  const el = document.getElementById('dataInspector');
+  if (!el || !market) return;
+  const d = market.derived, s = market.snapshot;
+  const rows = [
+    ['TTM Revenue', fmt.mM(d.ttmRevenue)],
+    ['TTM EBIT', fmt.mM(d.ttmEBIT)],
+    ['TTM Op Margin', fmt.pct(d.ttmOpMargin)],
+    ['TTM FCF', fmt.mM(d.ttmFCF)],
+    ['Net Debt ($M)', d.netDebt.toFixed(0)],
+    ['Diluted Shares', d.dilutedShares.toFixed(1) + 'M'],
+    ['3Y Rev CAGR', d.revenueCagr3y !== null ? fmt.pct(d.revenueCagr3y) : '—'],
+    ['FCF Margin', fmt.pct(d.fcfMarginTTM)],
+    ['Market Cap', '$' + s.marketCap.toFixed(1) + 'B'],
+    ['Sector', s.sector || '—'],
+    ['Currency', s.currency],
+  ];
+  el.innerHTML = '<table>' + rows.map(r => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('') + '</table>';
+}
+
+// ── Chart helpers ─────────────────────────────────────────────────────────
+function destroyChart(id) { if (VW._charts[id]) { VW._charts[id].destroy(); delete VW._charts[id]; } }
+function mkChart(id, cfg) {
+  destroyChart(id);
+  const cvs = document.getElementById(id);
+  if (!cvs || !window.Chart) return null;
+  VW._charts[id] = new Chart(cvs, cfg);
+  return VW._charts[id];
+}
+
+const C = { indigo: 'rgba(79,70,229,.9)', green: 'rgba(5,150,105,.9)', red: 'rgba(220,38,38,.9)', amber: 'rgba(217,119,6,.9)', gray: 'rgba(107,114,128,.7)' };
+const CA = (k, a) => C[k].replace('.9', '.' + a).replace('.7', '.' + a);
+
+const BASE_OPTS = {
+  responsive: true, maintainAspectRatio: true,
+  plugins: { legend: { labels: { font: { size: 10 }, boxWidth: 10 } } },
+  scales: { x: { ticks: { font: { size: 9 }, maxTicksLimit: 7 } }, y: { ticks: { font: { size: 9 } } } },
+};
+
+function chartPrice(market) {
+  if (!market || !market.history.dailyPrices.length) return;
+  const prices = market.history.dailyPrices.slice(-252 * 5);
+  mkChart('chartPrice', {
+    type: 'line',
+    data: {
+      labels: prices.map(p => p.date.slice(0, 7)),
+      datasets: [{ label: market.snapshot.ticker, data: prices.map(p => p.close), borderColor: C.indigo, borderWidth: 1.5, fill: true, backgroundColor: 'rgba(79,70,229,.07)', pointRadius: 0, tension: 0.3 }],
+    },
+    options: BASE_OPTS,
+  });
+}
+
+function chartRevenue(flows, market) {
+  if (!flows || !market) return;
+  const hist = market.financials.aRev.slice(-5);
+  mkChart('chartRevenue', {
+    type: 'bar',
+    data: {
+      labels: [...hist.map(r => r.date.slice(0, 4)), ...flows.map((_, i) => 'Y' + (i + 1))],
+      datasets: [
+        { label: 'Historical ($M)', data: [...hist.map(r => r.value), ...new Array(flows.length).fill(null)], backgroundColor: C.gray },
+        { label: 'Forecast ($M)', data: [...new Array(hist.length).fill(null), ...flows.map(f => f.rev)], backgroundColor: C.indigo },
+      ],
+    },
+    options: { ...BASE_OPTS, scales: { ...BASE_OPTS.scales, y: { ticks: { font: { size: 9 }, callback: v => v >= 1000 ? '$' + (v / 1000).toFixed(0) + 'B' : '$' + v.toFixed(0) + 'M' } } } },
+  });
+}
+
+function chartFcf(flows) {
+  if (!flows) return;
+  const vals = flows.map(f => f.cf);
+  mkChart('chartFcf', {
+    type: 'bar',
+    data: {
+      labels: flows.map(f => 'Y' + f.t),
+      datasets: [{ label: 'FCF ($M)', data: vals, backgroundColor: vals.map(v => v >= 0 ? C.green : C.red) }],
+    },
+    options: BASE_OPTS,
+  });
+}
+
+function chartScenario(sc, market) {
+  if (!sc) return;
+  const price = market ? market.snapshot.latestPrice : 0;
+  mkChart('chartScenario', {
+    type: 'bar',
+    data: {
+      labels: ['Bear', 'Base', 'Bull', 'Current Price', 'Weighted'],
+      datasets: [{ data: [sc.bear ? sc.bear.perShare : 0, sc.base ? sc.base.perShare : 0, sc.bull ? sc.bull.perShare : 0, price, sc.weightedPrice], backgroundColor: [C.red, C.indigo, C.green, C.amber, C.gray] }],
+    },
+    options: { ...BASE_OPTS, plugins: { legend: { display: false } }, scales: { y: { ticks: { font: { size: 9 }, callback: v => '$' + v.toFixed(0) } } } },
+  });
+}
+
+function chartIV(result, market) {
+  if (!result || !market) return;
+  mkChart('chartIV', {
+    type: 'bar',
+    data: {
+      labels: ['Current Price', 'Intrinsic Value'],
+      datasets: [{ data: [market.snapshot.latestPrice, result.perShare], backgroundColor: [C.amber, C.indigo] }],
+    },
+    options: { ...BASE_OPTS, plugins: { legend: { display: false } }, scales: { y: { ticks: { font: { size: 9 }, callback: v => '$' + v.toFixed(0) } } } },
+  });
+}
+
+// ── Debounce ──────────────────────────────────────────────────────────────
+let _sensTimer = null;
+
+// ── Full recompute ────────────────────────────────────────────────────────
+function recompute() {
+  const market = VW.market;
+  if (!market) return;
+  const a = VW.assumptions;
+  if (a.modelType === 'auto') a.effectiveModel = detectModel(market.derived);
+  else a.effectiveModel = a.modelType;
+
+  let result = null, scenarios = null;
+  try { result = runValuation(a, market); } catch {}
+  try { scenarios = buildScenarios(a, market); } catch {}
+
+  updateCards(result, market);
+  updateWarningsDOM(buildWarnings(a, market, result, scenarios));
+  updateExplainDOM(buildExplain(a, market, result));
+  updateScenarioTable(scenarios, market);
+  updateDataInspector(market);
+
+  if (result) {
+    const flows = a.effectiveModel === 'mature' ? buildMatureForecast(a, market) : buildSpeculativeForecast(a, market);
+    chartRevenue(flows, market);
+    chartFcf(flows);
+    chartScenario(scenarios, market);
+    chartIV(result, market);
+  }
+  clearTimeout(_sensTimer);
+  _sensTimer = setTimeout(() => {
+    try { updateSensitivityDOM(buildSensGrid(a, market), market); } catch {}
+  }, 300);
+}
+
+// ── Load ticker ───────────────────────────────────────────────────────────
+async function loadTicker(ticker, force) {
+  ticker = ticker.trim().toUpperCase();
+  if (!ticker) return;
+  if (force) _cache.forEach((_, k) => { if (k.includes(':' + ticker + ':') || k.endsWith(':' + ticker)) _cache.delete(k); });
+  setLoading(true);
+  document.getElementById('vwWarnings').innerHTML = '';
+  try {
+    const [profile, quote, history, isA, bsA, cfA, ae] = await Promise.all([
+      FMP.profile(ticker), FMP.quote(ticker), FMP.history(ticker),
+      FMP.isA(ticker), FMP.bsA(ticker), FMP.cfA(ticker), FMP.ae(ticker).catch(() => []),
+    ]);
+    const [isQ, bsQ, cfQ] = await Promise.all([
+      FMP.isQ(ticker).catch(() => []), FMP.bsQ(ticker).catch(() => []), FMP.cfQ(ticker).catch(() => []),
+    ]);
+    const market = normalize({ profile, quote, history, isA, bsA, cfA, isQ, bsQ, cfQ, ae });
+    if (!market.snapshot.latestPrice && !market.derived.ttmRevenue)
+      throw new Error('No data found for "' + ticker + '". Check the ticker symbol.');
+    VW.market = market;
+    VW.query.ticker = ticker;
+    VW._lastFetched = new Date();
+    seedFromMarket(market);
+    chartPrice(market);
+    showMain();
+    recompute();
+    setText('vwLastFetched', 'fetched ' + VW._lastFetched.toLocaleTimeString());
+  } catch (err) {
+    showErr(err.message || String(err));
+  }
+  setLoading(false);
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────
+function setLoading(on) {
+  VW.query.loading = on;
+  document.getElementById('vwLoadingState').style.display = on ? 'flex' : 'none';
+  document.getElementById('vwLoadBtn').disabled = on;
+  if (on) {
+    document.getElementById('vwMainGrid').style.display = 'none';
+    document.getElementById('vwLowerArea').style.display = 'none';
+    document.getElementById('vwEmptyState').style.display = 'none';
+  }
+}
+function showMain() {
+  document.getElementById('vwEmptyState').style.display = 'none';
+  document.getElementById('vwMainGrid').style.display = 'grid';
+  document.getElementById('vwLowerArea').style.display = 'block';
+  document.getElementById('vwRefreshBtn').style.display = '';
+}
+function showErr(msg) {
+  document.getElementById('vwEmptyState').style.display = 'block';
+  document.getElementById('vwWarnings').innerHTML = '<div class="warning-item error">&#9888; ' + esc(msg) + '</div>';
+}
+
+// ── Apply assumptions to UI ───────────────────────────────────────────────
+function applyToUI() {
+  const a = VW.assumptions;
+  document.querySelectorAll('[data-asmp]').forEach(el => {
+    const k = el.dataset.asmp;
+    if (!(k in a)) return;
+    if (el.type === 'checkbox') { el.checked = !!a[k]; return; }
+    if (el.tagName === 'SELECT') { el.value = a[k]; return; }
+    el.value = a[k];
+    const unit = el.dataset.unit || '';
+    const lbl = document.getElementById(k + 'Val');
+    if (lbl) lbl.textContent = a[k] + unit;
+  });
+  // net debt auto
+  const chk = document.getElementById('netDebtAutoChk');
+  if (chk) chk.checked = !!a.netDebtAuto;
+  // advanced opts
+  const ue = document.getElementById('useAnalystEstimates');
+  if (ue) ue.checked = !!a.useAnalystEstimates;
+  const ut = document.getElementById('useTTM'); if (ut) ut.checked = !!a.useTTM;
+  const sm = document.getElementById('smoothMargins'); if (sm) sm.checked = !!a.smoothMargins;
+  const im = document.getElementById('interpMethod'); if (im) im.value = a.interpMethod;
+}
+
+// ── Wire all inputs ───────────────────────────────────────────────────────
+function wireInputs() {
+  document.querySelectorAll('[data-asmp]').forEach(el => {
+    const k = el.dataset.asmp;
+    const unit = el.dataset.unit || '';
+    el.addEventListener('input', () => {
+      const v = el.type === 'checkbox' ? el.checked : el.tagName === 'SELECT' ? el.value : parseFloat(el.value);
+      if (el.type !== 'checkbox' && el.tagName !== 'SELECT' && isNaN(v)) return;
+      VW.assumptions[k] = v;
+      if (el.type !== 'checkbox' && el.tagName !== 'SELECT') {
+        const lbl = document.getElementById(k + 'Val');
+        if (lbl) lbl.textContent = v + unit;
+        if (el.type === 'range') { const inp = document.getElementById(k + 'Input'); if (inp) inp.value = v; }
+        else { const sld = document.getElementById(k + 'Slider'); if (sld) sld.value = v; }
+      }
+      if (VW.market) recompute();
+    });
+  });
+
+  // Net debt auto checkbox
+  const nd = document.getElementById('netDebtAutoChk');
+  if (nd) nd.addEventListener('change', () => { VW.assumptions.netDebtAuto = nd.checked; if (VW.market) recompute(); });
+
+  // Advanced opts
+  ['useAnalystEstimates', 'useTTM', 'smoothMargins'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', () => { VW.assumptions[id] = el.checked; if (VW.market) recompute(); });
+  });
+  const im = document.getElementById('interpMethod');
+  if (im) im.addEventListener('change', () => { VW.assumptions.interpMethod = im.value; if (VW.market) recompute(); });
+
+  // Advanced toggle
+  const advT = document.getElementById('advToggle');
+  const advP = document.getElementById('advPanel');
+  if (advT && advP) {
+    advT.addEventListener('click', () => {
+      advP.classList.toggle('open');
+      advT.textContent = (advP.classList.contains('open') ? '▲' : '▼') + ' Advanced Options';
+    });
+  }
+}
+
+// ── Wire model selector ───────────────────────────────────────────────────
+function wireModel() {
+  document.querySelectorAll('.model-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      VW.assumptions.modelType = btn.dataset.model;
+      if (VW.market) { VW.assumptions.effectiveModel = VW.assumptions.modelType === 'auto' ? detectModel(VW.market.derived) : VW.assumptions.modelType; recompute(); }
+    });
+  });
+}
+
+// ── Wire chart tabs ───────────────────────────────────────────────────────
+function wireTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      const panel = document.querySelector('.tab-panel[data-tab="' + tab + '"]');
+      if (panel) panel.classList.add('active');
+      Object.values(VW._charts).forEach(c => { try { c.resize(); } catch {} });
+    });
+  });
+}
+
+// ── Wire toolbar ──────────────────────────────────────────────────────────
+function wireToolbar() {
+  const tickerEl = document.getElementById('vwTicker');
+  const loadBtn  = document.getElementById('vwLoadBtn');
+  const refBtn   = document.getElementById('vwRefreshBtn');
+  const rstBtn   = document.getElementById('vwResetBtn');
+  const doLoad   = () => { const t = tickerEl.value.trim(); if (t) loadTicker(t, false); };
+  loadBtn.addEventListener('click', doLoad);
+  tickerEl.addEventListener('keydown', e => { if (e.key === 'Enter') doLoad(); });
+  if (refBtn) refBtn.addEventListener('click', () => { const t = VW.query.ticker || tickerEl.value.trim(); if (t) loadTicker(t, true); });
+  if (rstBtn) rstBtn.addEventListener('click', () => {
+    const keep = { modelType: VW.assumptions.modelType, effectiveModel: VW.assumptions.effectiveModel };
+    Object.assign(VW.assumptions, DEFAULTS, keep);
+    if (VW.market) seedFromMarket(VW.market); else applyToUI();
+    if (VW.market) recompute();
+  });
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+(function boot() {
+  wireToolbar();
+  wireInputs();
+  wireModel();
+  wireTabs();
+  applyToUI();
+  const t = document.getElementById('vwTicker');
+  if (t) setTimeout(() => t.focus(), 80);
+})();
+</script>
+{% endblock %}

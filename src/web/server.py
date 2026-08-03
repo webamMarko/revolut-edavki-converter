@@ -11,7 +11,7 @@ from typing import Optional
 from urllib.parse import urlparse
 
 from .templates import TEMPLATES_DIR
-from . import auth, admin, portfolio, api, exports, import_wizard, tickets, ibkr
+from . import auth, admin, portfolio, api, exports, import_wizard, tickets, ibkr, valuation
 
 FORCE_HTTPS = os.environ.get("FORCE_HTTPS", "").lower() in ("true", "1", "yes")
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8081")
@@ -125,8 +125,12 @@ class UploadHandler(BaseHTTPRequestHandler):
             portfolio.serve_pricing_page(self)
         elif path == "/cofounder":
             tickets.serve_cofounder_page(self)
+        elif path == "/valuation":
+            valuation.serve_valuation_page(self)
 
         # API routes
+        elif path == "/api/fmp":
+            valuation.api_fmp_proxy(self)
         elif path == "/api/portfolios":
             api.api_get_portfolios(self)
         elif path == "/api/dividend-summary":
