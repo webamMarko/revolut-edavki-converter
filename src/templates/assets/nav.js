@@ -86,7 +86,7 @@
 
   // Wire nav items
   navItems.forEach(function(item) {
-    item.addEventListener('click', function() { switchPage(item.dataset.page); });
+    item.addEventListener('click', function() { if (item.dataset.href) { window.location.href = item.dataset.href; return; } switchPage(item.dataset.page); });
     item.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); item.click(); }
     });
