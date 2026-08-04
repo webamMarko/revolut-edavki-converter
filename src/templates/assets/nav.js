@@ -226,6 +226,7 @@
       if (item.dataset.page === currentPage) div.classList.add('sheet-active');
       div.innerHTML = item.querySelector('svg').outerHTML + '<span>' + item.querySelector('span').textContent + '</span>';
       div.addEventListener('click', function() {
+        if (item.dataset.href) { window.location.href = item.dataset.href; return; }
         switchPage(item.dataset.page);
         closeMoreSheet();
       });
