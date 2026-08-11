@@ -3,7 +3,7 @@ const perClass = D.per_class || {};
 const classKeys = D.available_classes || Object.keys(perClass);
 const hasFilter = classKeys.length > 1;
 // These classes start inactive by default (different time horizon / skews the main chart)
-const defaultInactive = new Set(['realestate', 'savings']);
+const defaultInactive = new Set(['realestate']);
 let activeClasses = new Set(classKeys.filter(k => !defaultInactive.has(k)));
 const classLabels = {stock:t('class.stock'), cfd:t('class.cfd'), crypto:t('class.crypto'), savings:t('class.savings'), realestate:t('class.realestate')};
 
