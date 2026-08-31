@@ -53,12 +53,12 @@ def compute_residual(cur, ticker):
                     lots[0][0] -= remaining
                     remaining = 0
 
-    total_qty = sum(l[0] for l in lots)
+    total_qty = sum(lot[0] for lot in lots)
     if total_qty < 1e-12:
         return None
 
-    avg_cost_eur = sum(l[0] * l[1] for l in lots) / total_qty
-    total_cost_eur = sum(l[0] * l[1] for l in lots)
+    avg_cost_eur = sum(lot[0] * lot[1] for lot in lots) / total_qty
+    total_cost_eur = sum(lot[0] * lot[1] for lot in lots)
 
     return {
         "ticker": ticker,
