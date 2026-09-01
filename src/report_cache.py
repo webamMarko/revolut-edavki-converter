@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import threading
+import gzip
 from collections import OrderedDict
 
 _MAX_ENTRIES = 32
 
 _lock = threading.Lock()
 _cache: OrderedDict[str, str] = OrderedDict()
+_gzip_cache: OrderedDict[str, bytes] = OrderedDict()
 
 
 def _key(username: str, data_hash: str) -> str:
@@ -25,14 +27,40 @@ def get_cached_html(username: str, data_hash: str) -> str | None:
     return None
 
 
+def get_cached_gzip(username: str, data_hash: str) -> bytes | None:
+    """Return cached gzip bytes, creating them once from cached HTML."""
+    k = _key(username, data_hash)
+    with _lock:
+        compressed = _gzip_cache.get(k)
+        if compressed is not None:
+            _gzip_cache.move_to_end(k)
+            return compressed
+        html = _cache.get(k)
+    if html is None:
+        return None
+
+    compressed = gzip.compress(html.encode("utf-8"), compresslevel=6)
+    with _lock:
+        # Avoid resurrecting compressed data after an invalidation raced us.
+        if _cache.get(k) != html:
+            return compressed
+        _gzip_cache[k] = compressed
+        _gzip_cache.move_to_end(k)
+        while len(_gzip_cache) > _MAX_ENTRIES:
+            _gzip_cache.popitem(last=False)
+    return compressed
+
+
 def put_cached_html(username: str, data_hash: str, html: str):
     """Store rendered HTML in cache, evicting oldest if over limit."""
     k = _key(username, data_hash)
     with _lock:
         _cache[k] = html
         _cache.move_to_end(k)
+        _gzip_cache.pop(k, None)
         while len(_cache) > _MAX_ENTRIES:
-            _cache.popitem(last=False)
+            evicted, _ = _cache.popitem(last=False)
+            _gzip_cache.pop(evicted, None)
 
 
 def invalidate_user_html(username: str):
@@ -42,3 +70,4 @@ def invalidate_user_html(username: str):
         keys_to_remove = [k for k in _cache if k.startswith(prefix)]
         for k in keys_to_remove:
             del _cache[k]
+            _gzip_cache.pop(k, None)

@@ -31,23 +31,23 @@
     </div>
   </div>
 
-  <!-- Hidden containers for widget content -->
+  <!-- Inert widget templates: no duplicate IDs or hidden live DOM at startup. -->
   <div id="widgetTemplates" style="display:none">
-    <div id="widget-quick-glance" class="widget-template">{% include "sections/quick_glance.html.j2" %}</div>
-    <div id="widget-health-score" class="widget-template">{% include "sections/health_score.html.j2" %}</div>
-    <div id="widget-summary" class="widget-template">{% include "sections/summary.html.j2" %}</div>
-    <div id="widget-charts" class="widget-template">{% include "sections/charts.html.j2" %}</div>
-    <div id="widget-positions" class="widget-template">{% include "sections/positions.html.j2" %}</div>
-    <div id="widget-dividends" class="widget-template">{% include "sections/dividends.html.j2" %}</div>
-    <div id="widget-projections" class="widget-template">{% include "sections/projections.html.j2" %}</div>
-    <div id="widget-notes" class="widget-template">{% include "sections/notes.html.j2" %}</div>
-    <div id="widget-real-estate" class="widget-template">{% include "sections/real_estate.html.j2" %}</div>
-    <div id="widget-risk" class="widget-template">{% include "sections/risk.html.j2" %}</div>
-    <div id="widget-dca-strategy" class="widget-template">{% include "sections/dca_strategy.html.j2" %}</div>
-    <div id="widget-tax-summary" class="widget-template">{% include "sections/tax.html.j2" %}</div>
-    <div id="widget-tax-calendar" class="widget-template">{% include "sections/year_end_calendar.html.j2" %}</div>
-    <div id="widget-smart-sell" class="widget-template">{% include "sections/smart_sell.html.j2" %}</div>
-    <div id="widget-tax-wizard" class="widget-template">{% include "sections/tax_wizard.html.j2" %}</div>
-    <div id="widget-transactions" class="widget-template">{% include "sections/transactions.html.j2" %}</div>
+    <template id="widget-quick-glance"><div class="widget-template">{% include "sections/quick_glance.html.j2" %}</div></template>
+    <template id="widget-health-score"><div class="widget-template">{% include "sections/health_score.html.j2" %}</div></template>
+    <template id="widget-summary"><div class="widget-template">{% include "sections/summary.html.j2" %}</div></template>
+    <template id="widget-charts"><div class="widget-template">{% include "sections/charts.html.j2" %}</div></template>
+    <template id="widget-positions"><div class="widget-template">{% include "sections/positions.html.j2" %}</div></template>
+    <template id="widget-dividends"><div class="widget-template">{% include "sections/dividends.html.j2" %}</div></template>
+    <template id="widget-projections"><div class="widget-template">{% include "sections/projections.html.j2" %}</div></template>
+    <template id="widget-notes"><div class="widget-template">{% include "sections/notes.html.j2" %}</div></template>
+    <template id="widget-real-estate"><div class="widget-template">{% include "sections/real_estate.html.j2" %}</div></template>
+    <template id="widget-risk"><div class="widget-template">{% include "sections/risk.html.j2" %}</div></template>
+    <template id="widget-dca-strategy"><div class="widget-template">{% include "sections/dca_strategy.html.j2" %}</div></template>
+    <template id="widget-tax-summary"><div class="widget-template">{% include "sections/tax.html.j2" %}</div></template>
+    <template id="widget-tax-calendar"><div class="widget-template">{% include "sections/year_end_calendar.html.j2" %}</div></template>
+    <template id="widget-smart-sell"><div class="widget-template">{% include "sections/smart_sell.html.j2" %}</div></template>
+    <template id="widget-tax-wizard"><div class="widget-template">{% include "sections/tax_wizard.html.j2" %}</div></template>
+    <template id="widget-transactions"><div class="widget-template">{% include "sections/transactions.html.j2" %}</div></template>
   </div>
 </section>

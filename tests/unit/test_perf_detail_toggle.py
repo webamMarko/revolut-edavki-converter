@@ -1,13 +1,8 @@
 """Tests for SAA-573b (SAA-641): heatmap toggle uses event delegation.
 
-Root cause: sections/charts.html.j2 is rendered twice in the final report
-page — once as the visible #page-charts Performance page, and once inside
-the hidden dashboard #widgetTemplates pool (#widget-charts). That leaves two
-elements with id="perfDetailToggle" and two with id="perfDetailPanel" in the
-DOM. document.getElementById() always resolves to the first (hidden) copy in
-document order, so a listener bound at parse time to that element never fires
-for clicks on the visible Performance page button, and a panel lookup via
-getElementById would toggle the hidden copy instead of the visible one.
+sections/charts.html.j2 is rendered for both Performance and dashboard widgets.
+Dashboard copies live inside inert template elements, preventing duplicate IDs
+in live DOM and avoiding startup style/layout work.
 
 The fix uses a document-level delegated click listener: the button is
 resolved via e.target.closest() (correct regardless of duplicate ids, since
@@ -36,21 +31,23 @@ def _toggle_block() -> str:
     return match.group(1)
 
 
-class TestDuplicateIdRootCause(unittest.TestCase):
-    """Confirm the duplicate-id situation that makes getElementById unsafe."""
+class TestDashboardTemplateIsolation(unittest.TestCase):
+    """Dashboard widget markup stays outside live DOM until first use."""
 
     def test_charts_section_defines_perf_detail_ids(self):
         html = CHARTS_HTML_PATH.read_text(encoding="utf-8")
         self.assertIn('id="perfDetailToggle"', html)
         self.assertIn('id="perfDetailPanel"', html)
 
-    def test_charts_section_is_included_in_hidden_widget_pool(self):
+    def test_charts_section_is_included_in_inert_widget_template(self):
         dashboard_html = DASHBOARD_HTML_PATH.read_text(encoding="utf-8")
         pool_start = dashboard_html.index('id="widgetTemplates"')
+        template_pos = dashboard_html.index('<template id="widget-charts">')
         include_pos = dashboard_html.index('{% include "sections/charts.html.j2" %}')
+        self.assertGreater(template_pos, pool_start)
         self.assertGreater(
-            include_pos, pool_start,
-            "charts.html.j2 must be included inside the hidden #widgetTemplates pool",
+            include_pos, template_pos,
+            "charts.html.j2 must be included inside inert widget template",
         )
 
     def test_charts_section_is_also_included_for_visible_performance_page(self):

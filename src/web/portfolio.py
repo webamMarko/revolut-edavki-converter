@@ -263,7 +263,7 @@ def serve_report(handler):
     session = get_session(handler)
     from ..analytics import compute_analytics
     from ..analytics_cache import compute_data_hash, get_cached, put_cache
-    from ..report_cache import get_cached_html, put_cached_html
+    from ..report_cache import get_cached_html, get_cached_gzip, put_cached_html
     from ..tax import compute_tax_report
     from ..tax_cache import get_cached_tax, put_tax_cache
     from ..html_report import (generate_html_report, query_transactions,
@@ -291,22 +291,24 @@ def serve_report(handler):
     prices_conn = get_prices_conn_or_none()
     try:
         data_hash = compute_data_hash(conn, prices_conn, portfolio_id=portfolio_id)
-        etag = f'"{data_hash}"'
+        # Country changes report tax data despite same portfolio hash. Keep both
+        # server cache and validators variant-aware.
+        report_hash = f"{data_hash}:{country}"
+        accepts_gzip = _accepts_gzip(handler.headers.get("Accept-Encoding", ""))
+        etag = f'"{data_hash}-{country}{"-gzip" if accepts_gzip else ""}"'
 
         if_none_match = handler.headers.get("If-None-Match", "")
         if if_none_match == etag:
             handler.send_response(304)
             handler.send_header("ETag", etag)
+            handler.send_header("Vary", "Accept-Encoding")
             handler.end_headers()
             return
 
-        cached_html = get_cached_html(username, data_hash)
+        cached_html = get_cached_html(username, report_hash)
         if cached_html is not None:
-            handler.send_response(200)
-            handler.send_header("Content-Type", "text/html; charset=utf-8")
-            handler.send_header("ETag", etag)
-            handler.end_headers()
-            handler.wfile.write(cached_html.encode("utf-8"))
+            compressed = get_cached_gzip(username, report_hash) if accepts_gzip else None
+            _send_report_html(handler, cached_html, etag, compressed)
             return
 
         def _cached_analytics(scope):
@@ -370,13 +372,9 @@ def serve_report(handler):
         if d_script_end != -1:
             html = html[:d_script_end] + f";D.user={user_payload}" + html[d_script_end:]
 
-        put_cached_html(username, data_hash, html)
-
-        handler.send_response(200)
-        handler.send_header("Content-Type", "text/html; charset=utf-8")
-        handler.send_header("ETag", etag)
-        handler.end_headers()
-        handler.wfile.write(html.encode("utf-8"))
+        put_cached_html(username, report_hash, html)
+        compressed = get_cached_gzip(username, report_hash) if accepts_gzip else None
+        _send_report_html(handler, html, etag, compressed)
     except ValueError as e:
         error_response(handler, str(e), status=400)
     except Exception as e:
@@ -388,6 +386,38 @@ def serve_report(handler):
         if prices_conn:
             prices_conn.close()
         conn.close()
+
+
+def _accepts_gzip(header: str) -> bool:
+    """Return whether Accept-Encoding allows gzip."""
+    for value in header.lower().split(","):
+        encoding, *params = (part.strip() for part in value.split(";"))
+        if encoding != "gzip":
+            continue
+        for param in params:
+            if not param.startswith("q="):
+                continue
+            try:
+                return float(param[2:].strip()) > 0
+            except ValueError:
+                return False
+        return True
+    return False
+
+
+def _send_report_html(handler, html: str, etag: str,
+                      compressed: bytes | None = None):
+    """Send report with explicit length and optional cached compression."""
+    body = compressed if compressed is not None else html.encode("utf-8")
+    handler.send_response(200)
+    handler.send_header("Content-Type", "text/html; charset=utf-8")
+    handler.send_header("ETag", etag)
+    handler.send_header("Vary", "Accept-Encoding")
+    handler.send_header("Content-Length", str(len(body)))
+    if compressed is not None:
+        handler.send_header("Content-Encoding", "gzip")
+    handler.end_headers()
+    handler.wfile.write(body)
 
 
 # ------------------------------------------------------------------

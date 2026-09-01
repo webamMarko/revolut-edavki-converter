@@ -63,6 +63,7 @@ const WIDGET_REGISTRY = {
 
 let gridstack = null;
 let dashboardEditMode = false;
+let dashboardLoadPromise = null;
 
 /**
  * Initialize dashboard on page load
@@ -88,8 +89,11 @@ function initDashboard() {
     editBtn.addEventListener('click', toggleEditMode);
   }
 
-  // Load and render dashboard when requested
-  loadDashboardLayout();
+  // Preserve a saved dashboard route on reload while keeping other routes lazy.
+  const dashboardPage = document.getElementById('page-dashboard');
+  if (dashboardPage && dashboardPage.classList.contains('active')) {
+    showDashboard();
+  }
 }
 
 /**
@@ -110,6 +114,12 @@ function showDashboard() {
   // Initialize Gridstack if needed
   if (!gridstack) {
     initGridstack();
+  }
+
+  // Dashboard is off-screen for most report visits. Defer API, Gridstack
+  // widget creation, and section initialization until first use.
+  if (!dashboardLoadPromise) {
+    dashboardLoadPromise = loadDashboardLayout();
   }
 
   // Update nav item active state
@@ -197,7 +207,7 @@ function renderWidgets(widgets) {
     }
 
     // Clone template content
-    const content = template.cloneNode(true);
+    const content = template.content.firstElementChild.cloneNode(true);
     content.style.display = '';
 
     // Create grid item

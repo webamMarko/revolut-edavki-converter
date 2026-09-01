@@ -146,6 +146,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
     _pconn = prices_conn if prices_conn is not None else conn
 
     regime = get_regime(country)
+    year_prefix = f"{year:04d}-"
     # Real estate (asset_class='realestate') is taxed under a separate Slovenian form
     # (Doh-Nepremičnine) and must not be included in this Doh-KDVP calculation.
     if scope == "all":
@@ -229,7 +230,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
 
         if "BUY" in tx_type and ticker and (is_cfd_tx or is_cfd_scope):
             # CFD BUY: can close shorts and/or open longs
-            buy_date = datetime.strptime(date_str, "%Y-%m-%d")
+            buy_date = datetime.fromisoformat(date_str)
             remaining = qty
 
             # Close short positions first (FIFO)
@@ -239,7 +240,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     if remaining <= 0:
                         new_shorts.append((s_qty, s_pps, s_date_str))
                         continue
-                    entry_date = datetime.strptime(s_date_str, "%Y-%m-%d")
+                    entry_date = datetime.fromisoformat(s_date_str)
                     matched = min(s_qty, remaining)
                     # P&L on closing short: (entry_price - exit_price) * qty
                     gain = (s_pps - pps_eur) * matched
@@ -293,7 +294,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
         elif ("SELL" in tx_type or tx_type == "PAYMENT") and ticker and is_crypto_tx:
             # Crypto SELL/PAYMENT: closes a long (FIFO), same as stock
             holdings[ticker] -= qty
-            sell_date = datetime.strptime(date_str, "%Y-%m-%d")
+            sell_date = datetime.fromisoformat(date_str)
 
             remaining = qty
             total_cost = 0.0
@@ -304,7 +305,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                 if remaining <= 0:
                     new_lots.append((lot_qty, lot_cost, lot_date_str))
                     continue
-                buy_date = datetime.strptime(lot_date_str, "%Y-%m-%d")
+                buy_date = datetime.fromisoformat(lot_date_str)
                 if lot_qty <= remaining:
                     total_cost += lot_qty * lot_cost
                     weighted_buy_date_sum += lot_qty * (sell_date - buy_date).days
@@ -337,7 +338,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
         elif tx_type == "SELL" and ticker and is_savings_tx:
             # Savings SELL: withdrawal from money market fund (FIFO)
             holdings[ticker] -= qty
-            sell_date = datetime.strptime(date_str, "%Y-%m-%d")
+            sell_date = datetime.fromisoformat(date_str)
 
             remaining = qty
             total_cost = 0.0
@@ -348,7 +349,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                 if remaining <= 0:
                     new_lots.append((lot_qty, lot_cost, lot_date_str))
                     continue
-                buy_date = datetime.strptime(lot_date_str, "%Y-%m-%d")
+                buy_date = datetime.fromisoformat(lot_date_str)
                 if lot_qty <= remaining:
                     total_cost += lot_qty * lot_cost
                     weighted_buy_date_sum += lot_qty * (sell_date - buy_date).days
@@ -380,7 +381,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
 
         elif "SELL" in tx_type and ticker and (is_cfd_tx or is_cfd_scope):
             # CFD SELL: can close longs and/or open shorts
-            sell_date = datetime.strptime(date_str, "%Y-%m-%d")
+            sell_date = datetime.fromisoformat(date_str)
             remaining = qty
 
             # Close long positions first (FIFO)
@@ -390,7 +391,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     if remaining <= 0:
                         new_lots.append((l_qty, l_pps, l_date_str))
                         continue
-                    buy_date = datetime.strptime(l_date_str, "%Y-%m-%d")
+                    buy_date = datetime.fromisoformat(l_date_str)
                     matched = min(l_qty, remaining)
                     gain = (pps_eur - l_pps) * matched
                     holding_days = (sell_date - buy_date).days
@@ -428,7 +429,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
         elif "SELL" in tx_type and ticker:
             # Stock SELL: always closes a long
             holdings[ticker] -= qty
-            sell_date = datetime.strptime(date_str, "%Y-%m-%d")
+            sell_date = datetime.fromisoformat(date_str)
 
             remaining = qty
             total_cost = 0.0
@@ -440,7 +441,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                     new_lots.append((lot_qty, lot_cost, lot_date_str))
                     continue
 
-                buy_date = datetime.strptime(lot_date_str, "%Y-%m-%d")
+                buy_date = datetime.fromisoformat(lot_date_str)
 
                 if lot_qty <= remaining:
                     total_cost += lot_qty * lot_cost
@@ -484,7 +485,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
                 ]
 
         elif tx_type in ("DIVIDEND", "BOND COUPON") and amount:
-            if datetime.strptime(date_str, "%Y-%m-%d").year == year:
+            if date_str.startswith(year_prefix):
                 total_dividends += amount_eur
 
         elif tx_type in ("STAKING REWARD", "LEARN REWARD") and ticker:
@@ -492,17 +493,17 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
             if qty and qty > 0:
                 holdings[ticker] += qty
                 fifo_lots[ticker].append((qty, 0.0, date_str))
-            if amount_eur > 0 and datetime.strptime(date_str, "%Y-%m-%d").year == year:
+            if amount_eur > 0 and date_str.startswith(year_prefix):
                 total_dividends += amount_eur
 
         elif tx_type == "INTEREST PAID" and is_savings_tx:
             # Savings interest: taxable as dividend income
-            if amount_eur > 0 and datetime.strptime(date_str, "%Y-%m-%d").year == year:
+            if amount_eur > 0 and date_str.startswith(year_prefix):
                 total_dividends += amount_eur
 
         elif tx_type == "SERVICE FEE" and is_savings_tx:
             # Savings service fee
-            if datetime.strptime(date_str, "%Y-%m-%d").year == year:
+            if date_str.startswith(year_prefix):
                 total_fees -= amount_eur
 
         elif tx_type in ("INTEREST REINVESTED", "INTEREST WITHDRAWN") and is_savings_tx:
@@ -510,7 +511,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
             pass
 
         elif tx_type in ("COMMISSION CHARGE", "OVERNIGHT FEE"):
-            if datetime.strptime(date_str, "%Y-%m-%d").year == year:
+            if date_str.startswith(year_prefix):
                 # Use actual signed amount (negative = cost, positive = income)
                 fee_eur = amount / fx if fx > 0 else amount
                 total_fees += fee_eur
@@ -547,7 +548,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
             holdings[ticker] = 0
             if "CASH" in tx_type:
                 # CASH leg: record the gain/loss using whatever lots remain
-                if datetime.strptime(date_str, "%Y-%m-%d").year == year:
+                if date_str.startswith(year_prefix):
                     cost = sum(lq * lc for lq, lc, _ in fifo_lots.get(ticker, []))
                     gain = amount_eur - cost
                     is_cfd_tx = tx.get("asset_class") == "cfd"
@@ -622,7 +623,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
 
             # Weighted average holding period
             weighted_days = sum(
-                lq * (today - datetime.strptime(ld, "%Y-%m-%d")).days
+                lq * (today - datetime.fromisoformat(ld)).days
                 for lq, lc, ld in lots
             )
             total_qty = sum(lq for lq, _, _ in lots)
@@ -679,7 +680,7 @@ def compute_tax_report(conn: sqlite3.Connection, year: int,
 
         # Weighted average holding period
         weighted_days = sum(
-            lq * (today - datetime.strptime(ld, "%Y-%m-%d")).days
+            lq * (today - datetime.fromisoformat(ld)).days
             for lq, lc, ld in lots
         )
         total_qty = sum(lq for lq, _, _ in lots)

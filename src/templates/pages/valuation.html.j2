@@ -6,23 +6,29 @@
 <style>
 /* ── Valuation Workbench Styles ────────────────────────────────────────── */
 .vw-page { max-width: 1400px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+.vw-hero { margin-bottom: 1rem; }
+.vw-hero h1 { margin: 0; font-size: clamp(1.45rem, 3vw, 2rem); color: var(--text, #111); letter-spacing: -.025em; }
+.vw-hero p { margin: .35rem 0 0; max-width: 48rem; color: var(--muted, #6b7280); font-size: .9rem; line-height: 1.5; }
 
 .vw-toolbar {
   display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
   margin-bottom: 1.25rem; padding: .75rem 1rem;
-  background: var(--card-bg, #fff); border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff); border: 1px solid var(--border, #e5e7eb);
   border-radius: 10px;
 }
+.vw-search-group { display: flex; align-items: end; gap: .5rem; }
+.vw-search-field { display: flex; flex-direction: column; gap: .25rem; }
+.vw-search-field > label { color: var(--muted, #6b7280); font-size: .72rem; font-weight: 650; text-transform: none; letter-spacing: 0; margin: 0; }
 .vw-ticker-input {
   font-size: 1rem; font-weight: 600; padding: .4rem .75rem; width: 9rem;
   border: 1.5px solid var(--border, #e5e7eb); border-radius: 6px;
-  background: var(--bg, #fff); color: var(--text, #111); text-transform: uppercase;
+  background: var(--bg, #fff); color: var(--text, #111); text-transform: uppercase; margin: 0;
 }
 .vw-ticker-input:focus { outline: none; border-color: #4f46e5; }
 .vw-ticker-wrap { position: relative; }
 .vw-suggest {
   position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
-  background: var(--card-bg, #fff); border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff); border: 1px solid var(--border, #e5e7eb);
   border-radius: 0 0 8px 8px; box-shadow: 0 4px 12px rgba(0,0,0,.15);
   max-height: 240px; overflow-y: auto; display: none;
 }
@@ -31,17 +37,19 @@
   font-size: .85rem; border-bottom: 1px solid var(--border, #e5e7eb);
 }
 .vw-suggest-item:last-child { border-bottom: none; }
-.vw-suggest-item:hover, .vw-suggest-item.active { background: var(--bg2, #f3f4f6); }
+.vw-suggest-item:hover, .vw-suggest-item.active { background: var(--raised, #f3f4f6); }
 .vw-suggest-sym { font-weight: 700; color: var(--text, #111); }
 .vw-suggest-name { color: var(--muted, #6b7280); margin-left: .5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vw-btn {
   padding: .4rem .9rem; border: none; border-radius: 6px; cursor: pointer;
   font-size: .85rem; font-weight: 600; transition: opacity .15s;
 }
-.vw-btn:hover { opacity: .85; }
+.vw-btn:hover:not(:disabled) { opacity: .85; }
+.vw-btn:focus-visible, .model-btn:focus-visible, .tab-btn:focus-visible, .advanced-toggle:focus-visible { outline: 3px solid rgba(79,70,229,.3); outline-offset: 2px; }
+.vw-btn:disabled { cursor: not-allowed; opacity: .55; }
 .vw-btn-primary { background: #4f46e5; color: #fff; }
 .vw-btn-secondary {
-  background: var(--bg2, #f3f4f6); color: var(--text, #111);
+  background: var(--raised, #f3f4f6); color: var(--text, #111);
   border: 1px solid var(--border, #e5e7eb);
 }
 .vw-btn-sm { padding: .25rem .6rem; font-size: .78rem; }
@@ -54,7 +62,7 @@
 .model-selector { display: flex; gap: .25rem; }
 .model-btn {
   padding: .3rem .7rem; border: 1.5px solid var(--border, #e5e7eb);
-  border-radius: 6px; background: var(--bg2, #f3f4f6); color: var(--text, #111);
+  border-radius: 6px; background: var(--raised, #f3f4f6); color: var(--text, #111);
   cursor: pointer; font-size: .8rem; font-weight: 500; transition: all .15s;
 }
 .model-btn.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
@@ -67,10 +75,15 @@
 
 /* ── Assumptions panel ── */
 .vw-assumptions {
-  background: var(--card-bg, #fff); border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff); border: 1px solid var(--border, #e5e7eb);
   border-radius: 10px; padding: 1rem; display: flex; flex-direction: column; gap: .6rem;
   max-height: 85vh; overflow-y: auto;
 }
+.vw-assumptions-header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.vw-assumptions-header h2 { margin: 0; font-size: 1rem; color: var(--text, #111); }
+.vw-assumptions-header p { margin: .15rem 0 0; color: var(--muted, #6b7280); font-size: .72rem; }
+.vw-assumptions-toggle { display: none; }
+.vw-assumptions-body { display: flex; flex-direction: column; gap: .6rem; }
 .vw-assumptions h3 {
   margin: 0 0 .15rem; font-size: .78rem; font-weight: 700;
   color: var(--muted, #6b7280); text-transform: uppercase; letter-spacing: .05em;
@@ -113,9 +126,14 @@ hr.vw-sep { border: none; border-top: 1px solid var(--border, #e5e7eb); margin: 
 .vw-results { display: flex; flex-direction: column; gap: 1rem; }
 .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: .7rem; }
 .summary-card {
-  background: var(--card-bg, #fff); border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff); border: 1px solid var(--border, #e5e7eb);
   border-radius: 10px; padding: .7rem 1rem;
 }
+.summary-card.primary { border-top: 3px solid #4f46e5; padding-top: .55rem; }
+.vw-company { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .8rem 1rem; background: var(--surface, #fff); border: 1px solid var(--border, #e5e7eb); border-radius: 10px; }
+.vw-company h2 { margin: 0; font-size: 1.05rem; color: var(--text, #111); }
+.vw-company-meta { margin-top: .15rem; color: var(--muted, #6b7280); font-size: .76rem; }
+.vw-company-ticker { padding: .25rem .55rem; border-radius: 6px; background: var(--raised, #f3f4f6); color: var(--text, #111); font-size: .78rem; font-weight: 700; }
 .sc-label { font-size: .73rem; color: var(--muted, #6b7280); margin-bottom: .2rem; }
 .sc-value { font-size: 1.2rem; font-weight: 700; color: var(--text, #111); }
 .sc-sub { font-size: .72rem; color: var(--muted, #6b7280); margin-top: .1rem; }
@@ -136,7 +154,7 @@ hr.vw-sep { border: none; border-top: 1px solid var(--border, #e5e7eb); margin: 
 .vw-lower { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
 @media (max-width: 900px) { .vw-lower { grid-template-columns: 1fr; } }
 .chart-card {
-  background: var(--card-bg, #fff); border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff); border: 1px solid var(--border, #e5e7eb);
   border-radius: 10px; padding: 1rem;
 }
 .chart-card h4 { margin: 0 0 .7rem; font-size: .88rem; font-weight: 600; color: var(--text, #111); }
@@ -146,7 +164,7 @@ hr.vw-sep { border: none; border-top: 1px solid var(--border, #e5e7eb); margin: 
 .sensitivity-table th, .sensitivity-table td {
   padding: .22rem .38rem; text-align: center; border: 1px solid var(--border, #e5e7eb);
 }
-.sensitivity-table th { background: var(--bg2, #f3f4f6); font-weight: 600; }
+.sensitivity-table th { background: var(--raised, #f3f4f6); font-weight: 600; }
 .base-cell { outline: 2px solid #4f46e5; outline-offset: -2px; font-weight: 700; }
 .cell-up { background: rgba(5,150,105,.15); color: #065f46; }
 .cell-down { background: rgba(220,38,38,.1); color: #991b1b; }
@@ -162,7 +180,7 @@ hr.vw-sep { border: none; border-top: 1px solid var(--border, #e5e7eb); margin: 
 .explain-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: .35rem; }
 .explain-item {
   padding: .38rem .65rem; border-radius: 6px; font-size: .8rem;
-  background: var(--bg2, #f3f4f6); color: var(--muted, #555);
+  background: var(--raised, #f3f4f6); color: var(--muted, #555);
   border-left: 3px solid #4f46e5;
 }
 
@@ -176,6 +194,12 @@ hr.vw-sep { border: none; border-top: 1px solid var(--border, #e5e7eb); margin: 
 /* ── Empty / loading ── */
 .vw-empty { text-align: center; padding: 3rem 1rem; color: var(--muted, #6b7280); font-size: .95rem; }
 .vw-loading { display: flex; align-items: center; justify-content: center; gap: .5rem; padding: 2rem; color: var(--muted, #6b7280); }
+.vw-page.is-loading .vw-main, .vw-page.is-loading #vwLowerArea { opacity: .55; transition: opacity .15s; pointer-events: none; }
+.vw-empty h2 { margin: 0 0 .45rem; color: var(--text, #111); font-size: 1.1rem; }
+.vw-empty p { margin: 0 auto; max-width: 34rem; line-height: 1.55; }
+.vw-quick-picks { display: flex; justify-content: center; flex-wrap: wrap; gap: .4rem; margin-top: 1rem; }
+.vw-quick-pick { border: 1px solid var(--border, #e5e7eb); background: var(--surface, #fff); color: var(--text, #111); border-radius: 999px; padding: .35rem .7rem; cursor: pointer; font: inherit; font-size: .78rem; font-weight: 650; }
+.vw-quick-pick:hover { border-color: #4f46e5; color: #4f46e5; }
 .spinner {
   width: 20px; height: 20px; border: 2.5px solid var(--border, #e5e7eb);
   border-top-color: #4f46e5; border-radius: 50%; animation: spin .7s linear infinite;
@@ -193,24 +217,58 @@ hr.vw-sep { border: none; border-top: 1px solid var(--border, #e5e7eb); margin: 
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 .tab-panel canvas { max-height: 240px; }
+
+@media (max-width: 900px) {
+  .vw-page { padding: 1rem .75rem 5rem; }
+  .vw-toolbar { align-items: end; }
+  .vw-search-group { width: 100%; }
+  .vw-search-field, .vw-ticker-wrap, .vw-ticker-input { flex: 1; width: 100%; }
+  .model-selector { width: 100%; order: 3; }
+  .model-btn { flex: 1; min-height: 40px; }
+  .vw-spacer { display: none; }
+  .budget-note { margin-left: auto; }
+  .vw-results { order: 1; }
+  .vw-assumptions { order: 2; max-height: none; overflow: visible; }
+  .vw-assumptions-toggle { display: inline-flex; }
+  .vw-assumptions.collapsed .vw-assumptions-body { display: none; }
+  .summary-cards { grid-template-columns: 1fr 1fr; }
+  .summary-card { padding: .65rem .75rem; }
+  .sc-value { font-size: 1.05rem; }
+  .tab-bar { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .tab-btn { white-space: nowrap; min-height: 42px; }
+}
+@media (max-width: 430px) {
+  .provider-badge, .budget-note { font-size: .68rem; }
+  .vw-btn-secondary { min-height: 38px; }
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="vw-page">
 
+  <header class="vw-hero">
+    <h1>Valuation Workbench</h1>
+    <p>Estimate intrinsic value with a transparent discounted cash flow model. Start with market data, then test your own growth, margin, and risk assumptions.</p>
+  </header>
+
   {# ── Toolbar ── #}
   <div class="vw-toolbar">
-    <div class="vw-ticker-wrap">
-      <input id="vwTicker" class="vw-ticker-input" type="text" placeholder="AAPL" maxlength="10" autocomplete="off" spellcheck="false">
-      <div id="vwSuggest" class="vw-suggest"></div>
+    <div class="vw-search-group">
+      <div class="vw-search-field">
+        <label for="vwTicker">Company ticker</label>
+        <div class="vw-ticker-wrap">
+          <input id="vwTicker" class="vw-ticker-input" type="text" placeholder="e.g. AAPL" maxlength="10" autocomplete="off" spellcheck="false" aria-autocomplete="list" aria-controls="vwSuggest" {% if not has_fmp_key %}disabled{% endif %}>
+          <div id="vwSuggest" class="vw-suggest" role="listbox"></div>
+        </div>
+      </div>
+      <button id="vwLoadBtn" class="vw-btn vw-btn-primary" {% if not has_fmp_key %}disabled{% endif %}>Value company</button>
     </div>
-    <button id="vwLoadBtn" class="vw-btn vw-btn-primary">Load</button>
 
-    <div class="model-selector">
-      <button class="model-btn active" data-model="auto">Auto</button>
-      <button class="model-btn" data-model="mature">Mature DCF</button>
-      <button class="model-btn" data-model="speculative">Speculative DCF</button>
+    <div class="model-selector" role="group" aria-label="Valuation model">
+      <button class="model-btn active" data-model="auto" aria-pressed="true">Auto</button>
+      <button class="model-btn" data-model="mature" aria-pressed="false">Mature</button>
+      <button class="model-btn" data-model="speculative" aria-pressed="false">Speculative</button>
     </div>
 
     <div class="vw-spacer"></div>
@@ -230,10 +288,10 @@ hr.vw-sep { border: none; border-top: 1px solid var(--border, #e5e7eb); margin: 
   </div>
 
   {# ── Warnings ── #}
-  <div id="vwWarnings" class="vw-warnings"></div>
+  <div id="vwWarnings" class="vw-warnings" role="status" aria-live="polite"></div>
 
   {# ── Loading ── #}
-  <div id="vwLoadingState" class="vw-loading" style="display:none">
+  <div id="vwLoadingState" class="vw-loading" style="display:none" role="status" aria-live="polite">
     <div class="spinner"></div><span>Fetching from FMP&#8230;</span>
   </div>
 
@@ -242,6 +300,11 @@ hr.vw-sep { border: none; border-top: 1px solid var(--border, #e5e7eb); margin: 
 
     {# Left: Assumptions #}
     <aside class="vw-assumptions">
+      <div class="vw-assumptions-header">
+        <div><h2>Assumptions</h2><p>Changes update valuation instantly</p></div>
+        <button id="vwAssumptionsToggle" class="vw-btn vw-btn-secondary vw-btn-sm vw-assumptions-toggle" type="button" aria-expanded="true" aria-controls="vwAssumptionsBody">Hide</button>
+      </div>
+      <div id="vwAssumptionsBody" class="vw-assumptions-body">
       <h3>Core</h3>
 
       <div class="assumption-row">
@@ -393,7 +456,7 @@ hr.vw-sep { border: none; border-top: 1px solid var(--border, #e5e7eb); margin: 
         <div><label>Bull</label><input type="number" id="wBull" min="0" max="1" step="0.05" value="0.25" data-asmp="wBull" data-unit=""></div>
       </div>
 
-      <button class="advanced-toggle" id="advToggle">&#9660; Advanced Options</button>
+      <button class="advanced-toggle" id="advToggle" type="button" aria-expanded="false" aria-controls="advPanel">&#9660; Advanced Options</button>
       <div class="advanced-panel" id="advPanel">
         <div class="adv-row"><input type="checkbox" id="useAnalystEstimates" checked><label for="useAnalystEstimates">Use analyst estimates when available</label></div>
         <div class="adv-row"><input type="checkbox" id="useTTM" checked><label for="useTTM">Use TTM basis (vs last annual)</label></div>
@@ -403,15 +466,20 @@ hr.vw-sep { border: none; border-top: 1px solid var(--border, #e5e7eb); margin: 
           <select id="interpMethod"><option value="linear">Linear</option><option value="stepped">Stepped</option></select>
         </div>
       </div>
+      </div>
     </aside>
 
     {# Right: Summary + charts #}
     <div class="vw-results">
+      <div class="vw-company">
+        <div><h2 id="vwCompanyName">Company</h2><div class="vw-company-meta" id="vwCompanyMeta"></div></div>
+        <span class="vw-company-ticker" id="vwCompanyTicker">—</span>
+      </div>
       <div class="summary-cards">
-        <div class="summary-card"><div class="sc-label">Current Price</div><div class="sc-value" id="scCurrentPrice">&#8212;</div></div>
-        <div class="summary-card"><div class="sc-label">Intrinsic Value</div><div class="sc-value" id="scIntrinsicValue">&#8212;</div></div>
-        <div class="summary-card"><div class="sc-label">Premium / Discount</div><div class="sc-value" id="scPremiumDiscount">&#8212;</div></div>
-        <div class="summary-card"><div class="sc-label">Implied Upside</div><div class="sc-value" id="scUpside">&#8212;</div></div>
+        <div class="summary-card primary"><div class="sc-label">Current Price</div><div class="sc-value" id="scCurrentPrice">&#8212;</div></div>
+        <div class="summary-card primary"><div class="sc-label">Intrinsic Value</div><div class="sc-value" id="scIntrinsicValue">&#8212;</div></div>
+        <div class="summary-card primary"><div class="sc-label">Premium / Discount</div><div class="sc-value" id="scPremiumDiscount">&#8212;</div></div>
+        <div class="summary-card primary"><div class="sc-label">Implied Upside</div><div class="sc-value" id="scUpside">&#8212;</div></div>
         <div class="summary-card"><div class="sc-label">Enterprise Value</div><div class="sc-value" id="scEV">&#8212;</div></div>
         <div class="summary-card"><div class="sc-label">Equity Value</div><div class="sc-value" id="scEquityValue">&#8212;</div></div>
         <div class="summary-card"><div class="sc-label">Terminal Value %</div><div class="sc-value" id="scTVShare">&#8212;</div></div>
@@ -423,12 +491,12 @@ hr.vw-sep { border: none; border-top: 1px solid var(--border, #e5e7eb); margin: 
       </div>
 
       <div class="chart-card">
-        <div class="tab-bar">
-          <button class="tab-btn active" data-tab="price">Price</button>
-          <button class="tab-btn" data-tab="revenue">Revenue</button>
-          <button class="tab-btn" data-tab="fcf">FCF</button>
-          <button class="tab-btn" data-tab="scenario">Scenarios</button>
-          <button class="tab-btn" data-tab="iv">vs. Intrinsic</button>
+        <div class="tab-bar" role="tablist" aria-label="Valuation charts">
+          <button class="tab-btn active" data-tab="price" role="tab" aria-selected="true">Price</button>
+          <button class="tab-btn" data-tab="revenue" role="tab" aria-selected="false">Revenue</button>
+          <button class="tab-btn" data-tab="fcf" role="tab" aria-selected="false">FCF</button>
+          <button class="tab-btn" data-tab="scenario" role="tab" aria-selected="false">Scenarios</button>
+          <button class="tab-btn" data-tab="iv" role="tab" aria-selected="false">vs. Intrinsic</button>
         </div>
         <div class="tab-panel active" data-tab="price"><canvas id="chartPrice"></canvas></div>
         <div class="tab-panel" data-tab="revenue"><canvas id="chartRevenue"></canvas></div>
@@ -465,9 +533,18 @@ hr.vw-sep { border: none; border-top: 1px solid var(--border, #e5e7eb); margin: 
   {# Empty state #}
   <div id="vwEmptyState" class="vw-empty">
     <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style="margin:0 auto 1rem;display:block;opacity:.3"><rect x="4" y="8" width="40" height="32" rx="4" stroke="currentColor" stroke-width="2.5"/><path d="M12 28l8-8 6 6 8-10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    Enter a ticker and click <strong>Load</strong> to run a DCF valuation.
     {% if not has_fmp_key %}
-    <br><br><span style="color:#b45309">&#9888; Set <code>FMP_API_KEY</code> as an environment variable to enable live data fetching.</span>
+      <h2>Market data is not configured</h2>
+      <p>Set <code>FMP_API_KEY</code> in server environment and restart app to enable company valuations.</p>
+    {% else %}
+      <h2>Choose a company to value</h2>
+      <p>Search by ticker or start with one of these widely followed companies.</p>
+      <div class="vw-quick-picks" aria-label="Example tickers">
+        <button class="vw-quick-pick" data-ticker="AAPL">AAPL</button>
+        <button class="vw-quick-pick" data-ticker="MSFT">MSFT</button>
+        <button class="vw-quick-pick" data-ticker="GOOGL">GOOGL</button>
+        <button class="vw-quick-pick" data-ticker="NVDA">NVDA</button>
+      </div>
     {% endif %}
   </div>
 
@@ -485,6 +562,7 @@ const VW = {
   assumptions: {},
   _charts: {},
   _lastFetched: null,
+  _requestId: 0,
 };
 
 // ── In-memory cache with TTL ──────────────────────────────────────────────
@@ -551,9 +629,9 @@ function renderSuggestions(results) {
   _suggest.items = results;
   _suggest.active = -1;
   box.innerHTML = results.map((r, i) =>
-    '<div class="vw-suggest-item" data-idx="' + i + '">' +
-    '<span class="vw-suggest-sym">' + r.symbol + '</span>' +
-    '<span class="vw-suggest-name">' + (r.name || '') + '</span></div>'
+    '<div class="vw-suggest-item" role="option" data-idx="' + i + '">' +
+    '<span class="vw-suggest-sym">' + esc(r.symbol) + '</span>' +
+    '<span class="vw-suggest-name">' + esc(r.name || '') + '</span></div>'
   ).join('');
   box.style.display = 'block';
   box.querySelectorAll('.vw-suggest-item').forEach(el => {
@@ -882,6 +960,9 @@ function updateCards(result, market) {
   setText('scTVShare',    fmt.pct(result.tvShare * 100));
   setText('scModel',      VW.assumptions.effectiveModel === 'mature' ? 'Mature DCF' : 'Speculative DCF');
   setText('scModelSub',   market.snapshot.provider + (market.snapshot.sector ? ' · ' + market.snapshot.sector : ''));
+  setText('vwCompanyName', market.snapshot.companyName || market.snapshot.ticker);
+  setText('vwCompanyTicker', market.snapshot.ticker);
+  setText('vwCompanyMeta', [market.snapshot.sector, market.snapshot.industry, market.snapshot.currency].filter(Boolean).join(' · '));
 }
 
 function updateWarningsDOM(warnings) {
@@ -1086,6 +1167,7 @@ function recompute() {
 async function loadTicker(ticker, force) {
   ticker = ticker.trim().toUpperCase();
   if (!ticker) return;
+  const requestId = ++VW._requestId;
   if (force) _cache.forEach((_, k) => { if (k.includes(':' + ticker + ':') || k.endsWith(':' + ticker)) _cache.delete(k); });
   setLoading(true);
   document.getElementById('vwWarnings').innerHTML = '';
@@ -1097,29 +1179,39 @@ async function loadTicker(ticker, force) {
     const [isQ, bsQ, cfQ] = await Promise.all([
       FMP.isQ(ticker).catch(() => []), FMP.bsQ(ticker).catch(() => []), FMP.cfQ(ticker).catch(() => []),
     ]);
+    if (requestId !== VW._requestId) return;
     const market = normalize({ profile, quote, history, isA, bsA, cfA, isQ, bsQ, cfQ, ae });
     if (!market.snapshot.latestPrice && !market.derived.ttmRevenue)
       throw new Error('No data found for "' + ticker + '". Check the ticker symbol.');
     VW.market = market;
     VW.query.ticker = ticker;
+    document.getElementById('vwTicker').value = ticker;
     VW._lastFetched = new Date();
     seedFromMarket(market);
     chartPrice(market);
     showMain();
     recompute();
     setText('vwLastFetched', 'fetched ' + VW._lastFetched.toLocaleTimeString());
+    const url = new URL(window.location.href);
+    url.searchParams.set('ticker', ticker);
+    history.replaceState(null, '', url);
   } catch (err) {
-    showErr(err.message || String(err));
+    if (requestId === VW._requestId) showErr(err.message || String(err));
   }
-  setLoading(false);
+  if (requestId === VW._requestId) setLoading(false);
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────
 function setLoading(on) {
   VW.query.loading = on;
+  const page = document.querySelector('.vw-page');
+  if (page) page.classList.toggle('is-loading', on && !!VW.market);
   document.getElementById('vwLoadingState').style.display = on ? 'flex' : 'none';
-  document.getElementById('vwLoadBtn').disabled = on;
-  if (on) {
+  const loadBtn = document.getElementById('vwLoadBtn');
+  loadBtn.disabled = on;
+  loadBtn.textContent = on ? 'Loading…' : 'Value company';
+  loadBtn.setAttribute('aria-busy', on ? 'true' : 'false');
+  if (on && !VW.market) {
     document.getElementById('vwMainGrid').style.display = 'none';
     document.getElementById('vwLowerArea').style.display = 'none';
     document.getElementById('vwEmptyState').style.display = 'none';
@@ -1132,7 +1224,7 @@ function showMain() {
   document.getElementById('vwRefreshBtn').style.display = '';
 }
 function showErr(msg) {
-  document.getElementById('vwEmptyState').style.display = 'block';
+  if (!VW.market) document.getElementById('vwEmptyState').style.display = 'block';
   document.getElementById('vwWarnings').innerHTML = '<div class="warning-item error">&#9888; ' + esc(msg) + '</div>';
 }
 
@@ -1197,8 +1289,22 @@ function wireInputs() {
   if (advT && advP) {
     advT.addEventListener('click', () => {
       advP.classList.toggle('open');
-      advT.textContent = (advP.classList.contains('open') ? '▲' : '▼') + ' Advanced Options';
+      const open = advP.classList.contains('open');
+      advT.textContent = (open ? '▲' : '▼') + ' Advanced Options';
+      advT.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
+  }
+
+  const assumptions = document.querySelector('.vw-assumptions');
+  const assumptionsToggle = document.getElementById('vwAssumptionsToggle');
+  if (assumptions && assumptionsToggle) {
+    const setAssumptionsOpen = open => {
+      assumptions.classList.toggle('collapsed', !open);
+      assumptionsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      assumptionsToggle.textContent = open ? 'Hide' : 'Edit';
+    };
+    if (window.matchMedia('(max-width: 900px)').matches) setAssumptionsOpen(false);
+    assumptionsToggle.addEventListener('click', () => setAssumptionsOpen(assumptions.classList.contains('collapsed')));
   }
 }
 
@@ -1207,7 +1313,9 @@ function wireModel() {
   document.querySelectorAll('.model-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.model-btn').forEach(b => b.setAttribute('aria-pressed', 'false'));
       btn.classList.add('active');
+      btn.setAttribute('aria-pressed', 'true');
       VW.assumptions.modelType = btn.dataset.model;
       if (VW.market) { VW.assumptions.effectiveModel = VW.assumptions.modelType === 'auto' ? detectModel(VW.market.derived) : VW.assumptions.modelType; recompute(); }
     });
@@ -1220,8 +1328,10 @@ function wireTabs() {
     btn.addEventListener('click', () => {
       const tab = btn.dataset.tab;
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.setAttribute('aria-selected', 'false'));
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
       const panel = document.querySelector('.tab-panel[data-tab="' + tab + '"]');
       if (panel) panel.classList.add('active');
       Object.values(VW._charts).forEach(c => { try { c.resize(); } catch {} });
@@ -1245,6 +1355,12 @@ function wireToolbar() {
     if (VW.market) seedFromMarket(VW.market); else applyToUI();
     if (VW.market) recompute();
   });
+  document.querySelectorAll('.vw-quick-pick').forEach(btn => {
+    btn.addEventListener('click', () => {
+      tickerEl.value = btn.dataset.ticker;
+      loadTicker(btn.dataset.ticker, false);
+    });
+  });
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────
@@ -1256,7 +1372,11 @@ function wireToolbar() {
   wireTabs();
   applyToUI();
   const t = document.getElementById('vwTicker');
-  if (t) setTimeout(() => t.focus(), 80);
+  if (t && !t.disabled) {
+    const initialTicker = new URLSearchParams(window.location.search).get('ticker');
+    if (initialTicker) { t.value = initialTicker; loadTicker(initialTicker, false); }
+    else setTimeout(() => t.focus(), 80);
+  }
 })();
 </script>
 {% endblock %}

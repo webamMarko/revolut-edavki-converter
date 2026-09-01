@@ -17,7 +17,7 @@ def position_cagr(cost: float, value: float, first_date: str | None, end_date: s
     if not first_date or cost <= 0 or value <= 0:
         return None
     end = end_date or datetime.now().strftime("%Y-%m-%d")
-    days = (datetime.strptime(end, "%Y-%m-%d") - datetime.strptime(first_date, "%Y-%m-%d")).days
+    days = (datetime.fromisoformat(end) - datetime.fromisoformat(first_date)).days
     if days < min_days:
         return None
     years = days / 365.25
@@ -328,8 +328,8 @@ def _compute_analytics_inner(conn: sqlite3.Connection, year: int | None,
             tx_by_date[d].append(tx)
 
     # Generate date range from first transaction to today/period_end
-    current = datetime.strptime(first_date, "%Y-%m-%d")
-    end = datetime.strptime(min(period_end, today), "%Y-%m-%d")
+    current = datetime.fromisoformat(first_date)
+    end = datetime.fromisoformat(min(period_end, today))
 
     while current <= end:
         date_str = current.strftime("%Y-%m-%d")
